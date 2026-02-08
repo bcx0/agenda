@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background: #000000;
+}
+
+body {
+  background: #000000;
+  color: #ffffff;
+  min-height: 100vh;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+@layer components {
+  .title-gm {
+    @apply font-playfair text-3xl uppercase tracking-wider text-white font-medium;
+  }
+
+  .title-gm-lg {
+    @apply font-playfair text-4xl uppercase tracking-wider text-white font-semibold;
+  }
+
+  .subtitle-gm {
+    @apply text-sm text-white/70 font-normal;
+  }
+
+  .pill {
+    @apply inline-block px-3 py-1.5 text-xs font-medium rounded-full uppercase tracking-wide;
+    background: rgba(200, 160, 96, 0.15);
+    color: #c8a060;
+  }
+
+  .status-confirmed {
+    @apply bg-green-900/30 text-green-400 pill border border-green-800;
+  }
+
+  .status-cancelled {
+    @apply bg-red-900/30 text-red-400 pill border border-red-800;
+  }
+
+  .status-noshow {
+    @apply bg-orange-900/30 text-orange-400 pill border border-orange-800;
+  }
+
+  .status-done {
+    @apply bg-[#C8A060]/20 text-[#C8A060] pill border border-[#C8A060]/50;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center px-5 py-3 rounded-md text-sm font-medium tracking-wider transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-[#C8A060] text-black px-6 py-3 rounded-md font-medium hover:bg-[#E8D7BE] transition-all duration-200 uppercase tracking-wider text-sm shadow-lg shadow-[#C8A060]/20 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply border-2 border-[#C8A060] text-[#C8A060] px-5 py-2.5 rounded-md font-medium hover:bg-[#C8A060] hover:text-black transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply border-2 border-red-500 text-red-400 px-5 py-2.5 rounded-md font-medium hover:bg-red-500 hover:text-white transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply text-white/70 px-4 py-2 rounded-md hover:bg-white/5 transition-all duration-200 text-sm;
+  }
+
+  .input {
+    @apply w-full px-4 py-2.5 border border-gray-800 rounded-md focus:border-[#C8A060] focus:ring-2 focus:ring-[#C8A060]/20 transition-all text-sm bg-[#0F0F0F] text-white placeholder:text-white/40 disabled:bg-black disabled:cursor-not-allowed disabled:text-white/30;
+  }
+
+  .card {
+    @apply border border-gray-800 rounded-lg p-6 space-y-4 bg-[#0F0F0F] hover:border-[#C8A060]/30 transition-all duration-200;
+  }
+
+  .card-gm {
+    @apply border border-gray-800 rounded-lg p-6 space-y-4 bg-[#0F0F0F] hover:border-[#C8A060]/30 transition-all duration-200;
+  }
+
+  .card-gm-compact {
+    @apply border border-gray-800 rounded-md p-4 space-y-3 bg-[#0F0F0F];
+  }
+
+  .section-gm {
+    @apply space-y-6;
+  }
+
+  .calendar-day {
+    @apply aspect-square flex flex-col items-center justify-center rounded-md p-2 bg-[#C8A060] text-black font-semibold hover:bg-[#E8D7BE] transition-all cursor-pointer;
+  }
+
+  .calendar-day-disabled {
+    @apply opacity-40 cursor-not-allowed bg-gray-800 text-white/50 rounded-md p-2 aspect-square flex flex-col items-center justify-center;
+  }
+
+  .calendar-day-selected {
+    @apply bg-[#A68850] text-white font-bold shadow-lg rounded-md p-2 aspect-square flex flex-col items-center justify-center;
+  }
+
+  .calendar-day-today {
+    @apply ring-2 ring-white bg-[#C8A060] text-black rounded-md p-2 aspect-square flex flex-col items-center justify-center font-semibold;
+  }
+
+  .nav-link {
+    @apply px-4 py-2 rounded-md text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white transition-all duration-200;
+  }
+
+  .nav-link-active {
+    @apply bg-[#C8A060]/20 text-[#C8A060] font-semibold border border-[#C8A060]/30;
+  }
+
+  .alert-success {
+    @apply bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-md text-sm;
+  }
+
+  .alert-error {
+    @apply bg-red-900/30 border border-red-800 text-red-400 px-4 py-3 rounded-md text-sm;
+  }
+
+  .alert-warning {
+    @apply bg-orange-900/30 border border-orange-800 text-orange-400 px-4 py-3 rounded-md text-sm;
+  }
+
+  .alert-info {
+    @apply bg-[#C8A060]/20 border border-[#C8A060]/50 text-[#C8A060] px-4 py-3 rounded-md text-sm;
+  }
+}

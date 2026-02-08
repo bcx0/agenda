@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Client {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  name            String
+  passwordHash    String
+  creditsPerMonth Int
+  isActive        Boolean   @default(true)
+  bookings        Booking[]
+  recurringBlocks RecurringBlock[]
+  createdAt       DateTime  @default(now())
+}
+
+model Booking {
+  id                    Int       @id @default(autoincrement())
+  clientId              Int
+  client                Client    @relation(fields: [clientId], references: [id])
+  startAt               DateTime
+  endAt                 DateTime
+  status                String    @default("CONFIRMED")
+  mode                  String    @default("VISIO")
+  cancelReason          String?
+  rescheduleReason      String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt          // ✅ UNE SEULE FOIS
+  manageToken           String?   @unique            // ✅ UNE SEULE FOIS
+  manageTokenExpiresAt  DateTime?                    // ✅ UNE SEULE FOIS
+}
+
+model Block {
+  id        Int      @id @default(autoincrement())
+  startAt   DateTime
+  endAt     DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+enum AvailabilityOverrideType {
+  BLOCK
+  OPEN
+}
+
+model AvailabilityRule {
+  id        Int      @id @default(autoincrement())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+}
+
+model AvailabilityOverride {
+  id        Int                      @id @default(autoincrement())
+  date      DateTime
+  startTime String
+  endTime   String
+  type      AvailabilityOverrideType
+  note      String?
+  createdAt DateTime                 @default(now())
+}
+
+model RecurringBlock {
+  id        Int      @id @default(autoincrement())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  clientId  Int?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model EmailLog {
+  id        Int      @id @default(autoincrement())
+  to        String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Settings {
+  id                 Int         @id @default(1)
+  location           String      @default("MIAMI") // MIAMI | BELGIUM
+  presentielLocation String      @default("Vander Valk")
+  presentielNote     String?
+  defaultMode        String      @default("VISIO") // VISIO | PRESENTIEL
+  updatedAt          DateTime    @updatedAt
+}

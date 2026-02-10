@@ -7,6 +7,7 @@ import type { SlotView } from "../../../lib/booking";
 import { BRUSSELS_TZ, MIAMI_TZ } from "../../../lib/time";
 import { CalendarViewToggle, type ViewMode } from "../../../components/CalendarViewToggle";
 import { MonthCalendar } from "../../../components/MonthCalendar";
+import AdminDaySlotsPanel from "./AdminDaySlotsPanel";
 import {
   setGeneralAvailabilityForDateAction,
   setGeneralRecurringForDayAction,
@@ -161,6 +162,7 @@ export default function AdminGeneralAvailability({ slots, rules, overrides }: Pr
             month={monthFocus}
             daySlots={new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots]))}
             onChangeMonth={setMonthFocus}
+            allowEmptySelection={true}
             onSelectDay={(d) => {
               openDay(d);
               const inMiami = d.setZone(MIAMI_TZ);
@@ -506,6 +508,13 @@ export default function AdminGeneralAvailability({ slots, rules, overrides }: Pr
           </div>
         </div>
       ) : null}
+
+      <AdminDaySlotsPanel
+        open={!!selectedDay}
+        dateLabel={selectedDay?.label ?? ""}
+        slots={selectedDay?.slots ?? []}
+        onClose={() => setSelectedDay(null)}
+      />
     </div>
   );
 }

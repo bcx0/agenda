@@ -9,11 +9,18 @@ type Props = {
   daySlots: Map<string, SlotView[]>;
   onChangeMonth: (next: DateTime) => void;
   onSelectDay: (day: DateTime) => void;
+  allowEmptySelection?: boolean;
 };
 
 const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-export function MonthCalendar({ month, daySlots, onChangeMonth, onSelectDay }: Props) {
+export function MonthCalendar({
+  month,
+  daySlots,
+  onChangeMonth,
+  onSelectDay,
+  allowEmptySelection = false
+}: Props) {
   const startOfMonth = month.startOf("month");
   const daysFromMonday = (startOfMonth.weekday + 6) % 7;
   const gridStart = startOfMonth.minus({ days: daysFromMonday });
@@ -96,18 +103,20 @@ export function MonthCalendar({ month, daySlots, onChangeMonth, onSelectDay }: P
             availableCount
           );
 
+          const isSelectable = hasSlots || allowEmptySelection;
+
           return (
             <button
               key={key}
               type="button"
               onClick={() => onSelectDay(day)}
               className={`min-h-[100px] rounded-xl px-3 py-3 text-left transition ${
-                hasSlots
+                isSelectable
                   ? "bg-[#0F0F0F] border-4 border-[#C8A060] text-white font-semibold hover:border-[#E8D7BE] hover:bg-[#1A1A1A]"
                   : "bg-[#0F0F0F] border-4 border-gray-700 text-white/30 opacity-40 cursor-not-allowed"
               } ${isToday ? "ring-2 ring-white" : ""}`}
               aria-label={`Selectionner le ${day.toFormat("dd LLLL")}`}
-              disabled={!hasSlots}
+              disabled={!isSelectable}
             >
               <div className="flex items-center justify-between text-sm font-semibold">
                 <span>{day.day}</span>

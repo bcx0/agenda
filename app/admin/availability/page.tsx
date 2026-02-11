@@ -1,8 +1,10 @@
-export const runtime = "nodejs";
+﻿export const runtime = "nodejs";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  blockDateForClientAction,
+  cancelBlockedDateAction,
   createAvailabilityOverrideAction,
   createAvailabilityRuleAction,
   deleteAvailabilityOverrideAction,
@@ -15,12 +17,14 @@ import {
   listAvailabilityOverrides,
   listAvailabilityRules,
   listBlocks,
+  clientUsageThisMonth,
   listClients,
   listRecurringBlocks
 } from "../../../lib/admin";
 import { BRUSSELS_TZ, MIAMI_TZ, formatInZone } from "../../../lib/time";
 import { getAdminSession } from "../../../lib/session";
 import { getAvailability } from "../../../lib/booking";
+import { prisma } from "../../../lib/prisma";
 import AdminGeneralAvailability from "./AdminGeneralAvailability";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +44,8 @@ const WEEK_DAYS = [
   { value: 6, label: "Samedi" },
   { value: 7, label: "Dimanche" }
 ];
+
+const ADMIN_BLOCK_NOTE_PREFIX = "[ADMIN_BLOCK]";
 
 function tabLink(tab: string, label: string, active: boolean) {
   const base =
@@ -72,13 +78,24 @@ export default async function AdminAvailabilityPage({
   const successMessage = rawSuccess ? decodeURIComponent(rawSuccess) : undefined;
   const tab = searchParams?.tab ?? "weekly";
 
-  const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots] = await Promise.all([
+  const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates] = await Promise.all([
     listAvailabilityRules(),
     listAvailabilityOverrides(),
     listRecurringBlocks(),
     listBlocks(),
     listClients(),
-    getAvailability()
+    getAvailability(),
+    clientUsageThisMonth(),
+    prisma.booking.findMany({
+      where: {
+        status: "CONFIRMED",
+        startAt: { gte: new Date() },
+        rescheduleReason: { startsWith: ADMIN_BLOCK_NOTE_PREFIX }
+      },
+      include: { client: true },
+      orderBy: { startAt: "asc" },
+      take: 30
+    })
   ]);
 
   return (
@@ -99,8 +116,9 @@ export default async function AdminAvailabilityPage({
       <div className="flex flex-wrap gap-2">
         {tabLink("general", "Disponibilités générales", tab === "general")}
         {tabLink("weekly", "Règles hebdo", tab === "weekly")}
-        {tabLink("overrides", "Exceptions", tab === "overrides")}
+        {tabLink("single-block", "Bloquer une date unique", tab === "single-block")}
         {tabLink("recurring", "Blocs récurrents", tab === "recurring")}
+        {tabLink("overrides", "Exceptions", tab === "overrides")}
       </div>
 
       {tab === "general" ? (
@@ -174,6 +192,103 @@ export default async function AdminAvailabilityPage({
                     </form>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "single-block" ? (
+        <div className="space-y-5">
+          <div className="card space-y-4 p-6">
+            <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
+              Bloquer une date unique pour un client
+            </h2>
+            <form action={blockDateForClientAction} className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs uppercase tracking-widest text-white/60">Client</label>
+                <select name="clientId" required className="input">
+                  <option value="">Selectionner un client</option>
+                  {clients.map((client) => {
+                    const used = usageMap.get(client.id) ?? 0;
+                    const remaining = Math.max(client.creditsPerMonth - used, 0);
+                    return (
+                      <option key={client.id} value={client.id}>
+                        {client.name} ({remaining} credits restants)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-widest text-white/60">Date</label>
+                <input type="date" name="date" className="input" required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-widest text-white/60">
+                  Heure de debut
+                </label>
+                <input type="time" name="startTime" className="input" required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-widest text-white/60">Heure de fin</label>
+                <input type="time" name="endTime" className="input" required />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs uppercase tracking-widest text-white/60">
+                  Notes (optionnel)
+                </label>
+                <textarea
+                  name="note"
+                  rows={3}
+                  className="input"
+                  placeholder="Note interne (optionnel)"
+                />
+              </div>
+              <button type="submit" className="btn btn-primary md:col-span-2">
+                BLOQUER CE CRENEAU
+              </button>
+            </form>
+          </div>
+
+          <div className="card space-y-4 p-6">
+            <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
+              Prochaines dates bloquees
+            </h3>
+            {upcomingBlockedDates.length === 0 ? (
+              <p className="text-sm text-white/60">Aucune date bloquee.</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingBlockedDates.map((booking) => {
+                  const rawNote = booking.rescheduleReason ?? "";
+                  const note = rawNote.replace(ADMIN_BLOCK_NOTE_PREFIX, "").trim();
+                  return (
+                    <div
+                      key={booking.id}
+                      className="rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm md:flex md:items-center md:justify-between"
+                    >
+                      <div>
+                        <p className="font-semibold">{booking.client.name}</p>
+                        <p className="text-sm text-white/70">
+                          {formatInZone(booking.startAt, "dd LLL yyyy", BRUSSELS_TZ)} •{" "}
+                          {formatInZone(booking.startAt, "HH:mm", BRUSSELS_TZ)} -{" "}
+                          {formatInZone(booking.endAt, "HH:mm", BRUSSELS_TZ)} (Brussels)
+                        </p>
+                        <p className="text-xs text-white/60">
+                          {formatInZone(booking.startAt, "HH:mm", MIAMI_TZ)} -{" "}
+                          {formatInZone(booking.endAt, "HH:mm", MIAMI_TZ)} (Miami)
+                        </p>
+                        {note ? <p className="mt-1 text-sm text-white/50">{note}</p> : null}
+                      </div>
+                      <form action={cancelBlockedDateAction} className="mt-3 md:mt-0">
+                        <input type="hidden" name="bookingId" value={booking.id} />
+                        <button type="submit" className="btn-ghost text-red-500 text-sm">
+                          Annuler
+                        </button>
+                      </form>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -359,4 +474,6 @@ export default async function AdminAvailabilityPage({
     </section>
   );
 }
+
+
 

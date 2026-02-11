@@ -20,20 +20,18 @@ export default function LoginPage() {
             <li>— Quotas mensuels pris en compte automatiquement.</li>
             <li>— Créneaux Brussels / Miami affichés en temps réel.</li>
           </ul>
-          <Link href="/" className="text-sm underline underline-offset-4">
-            Retour à l&apos;accueil
-          </Link>
-          <Link
-            href="/admin"
-            className="text-xs uppercase tracking-widest text-white/50 underline underline-offset-4"
-          >
-            Admin
-          </Link>
+          <div className="space-y-4">
+            <p>Retour à l&apos;accueil</p>
+            <Link href="/admin" className="text-[#C8A060] block">
+              ADMIN
+            </Link>
+          </div>
         </div>
         <LoginForm />
       </div>
     </section>
   );
 }
+
 
 

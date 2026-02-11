@@ -485,3 +485,83 @@ export async function updateBookingModeAction(formData: FormData) {
   await updateBookingMode(bookingId, mode);
   revalidatePath("/admin/bookings");
 }
+
+const ADMIN_BLOCK_NOTE_PREFIX = "[ADMIN_BLOCK]";
+
+export async function blockDateForClientAction(formData: FormData) {
+  assertAdmin();
+  const clientId = Number(formData.get("clientId"));
+  const date = formData.get("date")?.toString() ?? "";
+  const startTime = formData.get("startTime")?.toString() ?? "";
+  const endTime = formData.get("endTime")?.toString() ?? "";
+  const note = formData.get("note")?.toString().trim() ?? "";
+
+  if (!clientId || !date || !startTime || !endTime) {
+    redirect("/admin/availability?tab=single-block&error=Champs%20invalides");
+  }
+
+  assertValidTimeRange(startTime, endTime, "/admin/availability?tab=single-block");
+
+  const startBrussels = DateTime.fromISO(`${date}T${startTime}`, { zone: BRUSSELS_TZ });
+  const endBrussels = DateTime.fromISO(`${date}T${endTime}`, { zone: BRUSSELS_TZ });
+  if (!startBrussels.isValid || !endBrussels.isValid || endBrussels <= startBrussels) {
+    redirect("/admin/availability?tab=single-block&error=Date%20ou%20horaire%20invalide");
+  }
+
+  const startAt = startBrussels.toUTC().toJSDate();
+  const endAt = endBrussels.toUTC().toJSDate();
+
+  const overlap = await prisma.booking.findFirst({
+    where: {
+      status: { not: "CANCELLED" },
+      startAt: { lt: endAt },
+      endAt: { gt: startAt }
+    },
+    select: { id: true }
+  });
+
+  if (overlap) {
+    redirect("/admin/availability?tab=single-block&error=Conflit%20avec%20un%20rendez-vous%20existant");
+  }
+
+  await prisma.booking.create({
+    data: {
+      clientId,
+      startAt,
+      endAt,
+      status: "CONFIRMED",
+      mode: "VISIO",
+      rescheduleReason: note
+        ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
+        : ADMIN_BLOCK_NOTE_PREFIX
+    }
+  });
+
+  revalidatePath("/admin/availability");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/clients");
+  redirect("/admin/availability?tab=single-block&success=Cr%C3%A9neau%20bloqu%C3%A9%20avec%20succ%C3%A8s");
+}
+
+export async function cancelBlockedDateAction(formData: FormData) {
+  assertAdmin();
+  const bookingId = Number(formData.get("bookingId"));
+  if (!bookingId) {
+    redirect("/admin/availability?tab=single-block&error=Rendez-vous%20introuvable");
+  }
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { rescheduleReason: true }
+  });
+
+  if (!booking?.rescheduleReason?.startsWith(ADMIN_BLOCK_NOTE_PREFIX)) {
+    redirect("/admin/availability?tab=single-block&error=Ce%20cr%C3%A9neau%20n%27est%20pas%20g%C3%A9r%C3%A9%20ici");
+  }
+
+  await adminCancelBooking(bookingId);
+  revalidatePath("/admin/availability");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/clients");
+  redirect("/admin/availability?tab=single-block&success=Cr%C3%A9neau%20annul%C3%A9");
+}

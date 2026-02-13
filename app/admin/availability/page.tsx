@@ -46,6 +46,32 @@ const WEEK_DAYS = [
 ];
 
 const ADMIN_BLOCK_NOTE_PREFIX = "[ADMIN_BLOCK]";
+const HALF_HOUR_OPTIONS = [
+  "00:00",
+  "01:00",
+  "02:00",
+  "03:00",
+  "04:00",
+  "05:00",
+  "06:00",
+  "07:00",
+  "08:00",
+  "09:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "19:00",
+  "20:00",
+  "21:00",
+  "22:00",
+  "23:00"
+];
 
 function tabLink(tab: string, label: string, active: boolean) {
   const base =
@@ -78,7 +104,7 @@ export default async function AdminAvailabilityPage({
   const successMessage = rawSuccess ? decodeURIComponent(rawSuccess) : undefined;
   const tab = searchParams?.tab ?? "weekly";
 
-  const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates] = await Promise.all([
+  const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates, upcomingBookings] = await Promise.all([
     listAvailabilityRules(),
     listAvailabilityOverrides(),
     listRecurringBlocks(),
@@ -95,6 +121,13 @@ export default async function AdminAvailabilityPage({
       include: { client: true },
       orderBy: { startAt: "asc" },
       take: 30
+    }),
+    prisma.booking.findMany({
+      where: {
+        status: "CONFIRMED"
+      },
+      include: { client: true },
+      orderBy: { startAt: "asc" }
     })
   ]);
 
@@ -114,16 +147,17 @@ export default async function AdminAvailabilityPage({
       {successMessage ? <div className="alert-success">{successMessage}</div> : null}
 
       <div className="flex flex-wrap gap-2">
-        {tabLink("general", "Disponibilités générales", tab === "general")}
-        {tabLink("weekly", "Règles hebdo", tab === "weekly")}
-        {tabLink("single-block", "Bloquer une date unique", tab === "single-block")}
-        {tabLink("recurring", "Blocs récurrents", tab === "recurring")}
-        {tabLink("overrides", "Exceptions", tab === "overrides")}
+        {tabLink("general", "Voir le calendrier", tab === "general")}
+        {tabLink("weekly", "Mes horaires fixes", tab === "weekly")}
+        {tabLink("single-block", "Réserver un RDV", tab === "single-block")}
+        {tabLink("recurring", "RDV réguliers", tab === "recurring")}
+        {tabLink("overrides", "RDV bloqués", tab === "overrides")}
       </div>
 
       {tab === "general" ? (
         <AdminGeneralAvailability
           slots={slots}
+          bookings={upcomingBookings}
           rules={rules}
           overrides={overrides
             .filter((o) => o.type === "OPEN")
@@ -141,7 +175,7 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Ajouter une règle hebdo
+              Mes horaires fixes
             </h2>
             <form action={createAvailabilityRuleAction} className="grid gap-3 md:grid-cols-3">
               <select name="dayOfWeek" className="input" required>
@@ -202,7 +236,7 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Bloquer une date unique pour un client
+              Réserver un RDV
             </h2>
             <form action={blockDateForClientAction} className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
@@ -299,7 +333,7 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Exception ponctuelle
+              RDV bloqués
             </h2>
             <form action={createAvailabilityOverrideAction} className="grid gap-3 md:grid-cols-5">
               <input type="date" name="date" className="input" required />
@@ -401,7 +435,7 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Ajouter un bloc récurrent
+              RDV réguliers
             </h2>
             <form action={createRecurringBlockAction} className="grid gap-3 md:grid-cols-4">
               <select name="dayOfWeek" className="input" required>
@@ -411,8 +445,22 @@ export default async function AdminAvailabilityPage({
                   </option>
                 ))}
               </select>
-              <input type="time" name="startTime" className="input" required />
-              <input type="time" name="endTime" className="input" required />
+              <select name="startTime" className="input" required>
+                <option value="">Sélectionner une heure</option>
+                {HALF_HOUR_OPTIONS.map((time) => (
+                  <option key={`start-${time}`} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
+              <select name="endTime" className="input" required>
+                <option value="">Sélectionner une heure</option>
+                {HALF_HOUR_OPTIONS.map((time) => (
+                  <option key={`end-${time}`} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
               <select name="clientId" className="input">
                 <option value="">Aucun client</option>
                 {clients.map((client) => (

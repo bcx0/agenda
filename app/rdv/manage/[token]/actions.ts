@@ -26,12 +26,8 @@ async function getBookingForToken(token: string) {
 
 export async function cancelAppointmentAction(formData: FormData) {
   const token = formData.get("token")?.toString();
-  const reason = formData.get("reason")?.toString().trim();
 
   if (!token) redirect("/rdv/manage/invalid");
-  if (!reason) {
-    redirect(buildRedirect(token, { error: "Motif d'annulation obligatoire." }));
-  }
 
   const booking = await getBookingForToken(token);
   if (!booking) {
@@ -42,7 +38,7 @@ export async function cancelAppointmentAction(formData: FormData) {
     redirect(buildRedirect(token, { error: "Ce rendez-vous est déjà annulé." }));
   }
 
-  const result = await cancelBooking(booking.id, reason);
+  const result = await cancelBooking(booking.id);
   if (result && "error" in result && result.error) {
     redirect(buildRedirect(token, { error: result.error }));
   }
@@ -54,14 +50,10 @@ export async function cancelAppointmentAction(formData: FormData) {
 export async function rescheduleAppointmentAction(formData: FormData) {
   const token = formData.get("token")?.toString();
   const startIso = formData.get("start")?.toString();
-  const reason = formData.get("reason")?.toString().trim();
 
   if (!token) redirect("/rdv/manage/invalid");
   if (!startIso) {
     redirect(buildRedirect(token, { error: "Créneau manquant." }));
-  }
-  if (!reason) {
-    redirect(buildRedirect(token, { error: "Motif de modification obligatoire." }));
   }
 
   const startUtc = new Date(startIso);
@@ -95,7 +87,7 @@ export async function rescheduleAppointmentAction(formData: FormData) {
       startAt: startUtc,
       endAt: endUtc,
       status: "CONFIRMED",
-      rescheduleReason: reason
+      rescheduleReason: null
     }
   });
 

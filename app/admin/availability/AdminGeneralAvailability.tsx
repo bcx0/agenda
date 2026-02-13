@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import { useFormState } from "react-dom";
 import { DateTime } from "luxon";
+import Link from "next/link";
 import type { SlotView } from "../../../lib/booking";
 import { BRUSSELS_TZ, MIAMI_TZ } from "../../../lib/time";
 import { CalendarViewToggle, type ViewMode } from "../../../components/CalendarViewToggle";
 import { MonthCalendar } from "../../../components/MonthCalendar";
-import AdminDaySlotsPanel from "./AdminDaySlotsPanel";
 import {
   setGeneralAvailabilityForDateAction,
   setGeneralRecurringForDayAction,
@@ -41,6 +41,12 @@ type DayGroup = {
 
 type Props = {
   slots: SlotView[];
+  bookings: {
+    id: number;
+    startAt: Date | string;
+    endAt: Date | string;
+    client: { id: number; name: string };
+  }[];
   rules: AvailabilityRule[];
   overrides: AvailabilityOverride[];
 };
@@ -80,7 +86,7 @@ function toRangeJson(ranges: Range[]) {
 }
 
 
-export default function AdminGeneralAvailability({ slots, rules, overrides }: Props) {
+export default function AdminGeneralAvailability({ slots, bookings, rules, overrides }: Props) {
   const normalized = useMemo(() => normalizeSlots(slots), [slots]);
   const dayMap = useMemo(() => groupSlotsByDay(normalized), [normalized]);
   const [view, setView] = useState<ViewMode>("month");
@@ -146,10 +152,31 @@ export default function AdminGeneralAvailability({ slots, rules, overrides }: Pr
   const bookedSlots = selectedDay
     ? selectedDay.slots.filter((slot) => slot.status === "booked")
     : [];
+  const availabilitiesForDay = selectedDay
+    ? selectedDay.slots.filter((slot) => slot.status === "available")
+    : [];
+  const bookingsForDay = useMemo(() => {
+    if (!selectedDay) return [];
+    return bookings
+      .map((booking) => ({
+        ...booking,
+        startDate: new Date(booking.startAt),
+        endDate: new Date(booking.endAt)
+      }))
+      .filter((booking) => {
+        const dayKey =
+          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
+          DateTime.fromJSDate(booking.startDate, { zone: "utc" })
+            .setZone(MIAMI_TZ)
+            .toFormat("yyyy-LL-dd");
+        return dayKey === selectedDay.key;
+      });
+  }, [bookings, selectedDay]);
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-background-elevated p-6">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="space-y-6 lg:col-span-8">
+        <div className="rounded-2xl border border-border bg-background-elevated p-6">
         <div className="flex items-center justify-between">
           <CalendarViewToggle value={view} onChange={setView} />
           <span className="text-xs uppercase tracking-widest text-white/50">
@@ -163,6 +190,7 @@ export default function AdminGeneralAvailability({ slots, rules, overrides }: Pr
             daySlots={new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots]))}
             onChangeMonth={setMonthFocus}
             allowEmptySelection={true}
+            selectedDayKey={selectedDay?.key ?? null}
             onSelectDay={(d) => {
               openDay(d);
               const inMiami = d.setZone(MIAMI_TZ);
@@ -285,236 +313,106 @@ export default function AdminGeneralAvailability({ slots, rules, overrides }: Pr
             ))}
           </div>
         )}
+        </div>
       </div>
 
-      {selectedDay ? (
-        <div className="rounded-2xl border border-border bg-background-elevated p-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs uppercase tracking-widest text-white/50">
-                Date sélectionnée
-              </div>
-              <div className="text-lg font-semibold">{selectedDay.label}</div>
-              <div className="text-sm text-white/60">
-                Brussels: {selectedDay.date.setZone(BRUSSELS_TZ).toFormat("dd LLL yyyy")}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="text-sm text-white/60 hover:text-white"
-              onClick={() => setSelectedDay(null)}
-            >
-              Fermer
-            </button>
-          </div>
-
-          {bookedSlots.length > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Des créneaux sont déjà réservés ce jour. Ils resteront bloqués côté client.
-            </div>
-          ) : null}
-
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-4">
-              <div className="text-sm font-semibold uppercase tracking-widest text-white/60">
-                Disponibilité ponctuelle
-              </div>
-              <form action={dateAction} className="space-y-3">
-                <input
-                  type="hidden"
-                  name="date"
-                  value={selectedDay.date.setZone(BRUSSELS_TZ).toISODate() ?? ""}
-                />
-                <input type="hidden" name="ranges" value={toRangeJson(dateRanges)} />
-                {dateState?.success ? (
-                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
-                    {dateState.message ?? "Enregistré."}
-                  </div>
-                ) : null}
-                {dateState?.error ? (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                    {dateState.error}
-                  </div>
-                ) : null}
-                <div className="space-y-2">
-                  {dateRanges.map((range, idx) => (
-                    <div key={`date-${idx}`} className="flex items-center gap-2">
-                      <input
-                        type="time"
-                        className="input"
-                        value={range.startTime}
-                        onChange={(e) => {
-                          const next = [...dateRanges];
-                          next[idx] = { ...next[idx], startTime: e.target.value };
-                          setDateRanges(next);
-                        }}
-                      />
-                      <input
-                        type="time"
-                        className="input"
-                        value={range.endTime}
-                        onChange={(e) => {
-                          const next = [...dateRanges];
-                          next[idx] = { ...next[idx], endTime: e.target.value };
-                          setDateRanges(next);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="rounded-md border border-border px-2 py-2 text-xs hover:bg-red-50 hover:text-red-700"
-                        onClick={() => {
-                          const next = dateRanges.filter((_, i) => i !== idx);
-                          setDateRanges(next.length ? next : [{ startTime: "", endTime: "" }]);
-                        }}
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  ))}
+      <div className="space-y-6 lg:col-span-4">
+        <div className="rounded-2xl border border-border bg-background-elevated p-6 lg:sticky lg:top-6">
+          {selectedDay ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Récapitulatif du {selectedDay.label}</h3>
+                  <p className="text-sm text-white/60">
+                    Brussels: {selectedDay.date.setZone(BRUSSELS_TZ).toFormat("dd LLL yyyy")}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-md border border-border px-3 py-2 text-xs"
-                    onClick={() =>
-                      setDateRanges([...dateRanges, { startTime: "09:00", endTime: "17:00" }])
-                    }
-                  >
-                    Ajouter une plage
-                  </button>
-                  <button type="submit" className="btn btn-primary text-xs">
-                    Enregistrer ce jour
-                  </button>
-                </div>
-              </form>
-              <form action={deleteDateAction} className="space-y-2">
-                <input
-                  type="hidden"
-                  name="date"
-                  value={selectedDay.date.setZone(BRUSSELS_TZ).toISODate() ?? ""}
-                />
-                {deleteDateState?.success ? (
-                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
-                    {deleteDateState.message ?? "Supprimé."}
-                  </div>
-                ) : null}
-                {deleteDateState?.error ? (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                    {deleteDateState.error}
-                  </div>
-                ) : null}
-                <button className="text-xs underline underline-offset-4 text-white/60 hover:text-white">
-                  Supprimer la disponibilité du jour
+                <button
+                  type="button"
+                  className="text-sm text-white/60 hover:text-white"
+                  onClick={() => setSelectedDay(null)}
+                >
+                  Fermer
                 </button>
-              </form>
-            </div>
-
-            <div className="space-y-4">
-              <div className="text-sm font-semibold uppercase tracking-widest text-white/60">
-                Disponibilité récurrente ({dayNames[selectedDay.date.setZone(BRUSSELS_TZ).weekday - 1]})
               </div>
-              <form action={recurringAction} className="space-y-3">
-                <input
-                  type="hidden"
-                  name="dayOfWeek"
-                  value={selectedDay.date.setZone(BRUSSELS_TZ).weekday}
-                />
-                <input type="hidden" name="ranges" value={toRangeJson(recurringRanges)} />
-                {recurringState?.success ? (
-                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
-                    {recurringState.message ?? "Enregistré."}
-                  </div>
-                ) : null}
-                {recurringState?.error ? (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                    {recurringState.error}
-                  </div>
-                ) : null}
-                <div className="space-y-2">
-                  {recurringRanges.map((range, idx) => (
-                    <div key={`rec-${idx}`} className="flex items-center gap-2">
-                      <input
-                        type="time"
-                        className="input"
-                        value={range.startTime}
-                        onChange={(e) => {
-                          const next = [...recurringRanges];
-                          next[idx] = { ...next[idx], startTime: e.target.value };
-                          setRecurringRanges(next);
-                        }}
-                      />
-                      <input
-                        type="time"
-                        className="input"
-                        value={range.endTime}
-                        onChange={(e) => {
-                          const next = [...recurringRanges];
-                          next[idx] = { ...next[idx], endTime: e.target.value };
-                          setRecurringRanges(next);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="rounded-md border border-border px-2 py-2 text-xs hover:bg-red-50 hover:text-red-700"
-                        onClick={() => {
-                          const next = recurringRanges.filter((_, i) => i !== idx);
-                          setRecurringRanges(next.length ? next : [{ startTime: "", endTime: "" }]);
-                        }}
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold uppercase tracking-widest text-[#C8A060]">
+                  Disponibilités
+                </h4>
+                {availabilitiesForDay.length > 0 ? (
+                  <div className="space-y-2">
+                    {availabilitiesForDay.map((slot) => (
+                      <div
+                        key={slot.start.toISOString()}
+                        className="rounded-lg border border-[#C8A060] bg-[#1A1A1A] px-3 py-2 text-sm"
                       >
-                        Supprimer
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-md border border-border px-3 py-2 text-xs"
-                    onClick={() =>
-                      setRecurringRanges([
-                        ...recurringRanges,
-                        { startTime: "09:00", endTime: "17:00" }
-                      ])
-                    }
-                  >
-                    Ajouter une plage
-                  </button>
-                  <button type="submit" className="btn btn-primary text-xs">
-                    Enregistrer la récurrence
-                  </button>
-                </div>
-              </form>
-              <form action={deleteRecurringAction} className="space-y-2">
-                <input
-                  type="hidden"
-                  name="dayOfWeek"
-                  value={selectedDay.date.setZone(BRUSSELS_TZ).weekday}
-                />
-                {deleteRecurringState?.success ? (
-                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
-                    {deleteRecurringState.message ?? "Supprimé."}
+                        <p className="font-semibold">{slot.brussels} (Brussels)</p>
+                        <p className="text-xs text-white/70">{slot.miami} (Miami)</p>
+                      </div>
+                    ))}
                   </div>
-                ) : null}
-                {deleteRecurringState?.error ? (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                    {deleteRecurringState.error}
+                ) : (
+                  <p className="text-sm text-white/50">Aucune disponibilité</p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold uppercase tracking-widest text-[#C8A060]">
+                  Réservations
+                </h4>
+                {bookingsForDay.length > 0 ? (
+                  <div className="space-y-2">
+                    {bookingsForDay.map((booking) => (
+                      <div
+                        key={booking.id}
+                        className="flex items-start justify-between gap-3 rounded-lg border border-green-600 bg-[#1A1A1A] px-3 py-2 text-sm"
+                      >
+                        <div className="flex-1">
+                          <p className="font-semibold">{booking.client.name}</p>
+                          <p className="text-xs text-white/70">
+                            {DateTime.fromJSDate(booking.startDate, { zone: "utc" })
+                              .setZone(BRUSSELS_TZ)
+                              .toFormat("HH:mm")}{" "}
+                            -{" "}
+                            {DateTime.fromJSDate(booking.endDate, { zone: "utc" })
+                              .setZone(BRUSSELS_TZ)
+                              .toFormat("HH:mm")}{" "}
+                            (Brussels)
+                          </p>
+                          <p className="text-xs text-white/60">
+                            {DateTime.fromJSDate(booking.startDate, { zone: "utc" })
+                              .setZone(MIAMI_TZ)
+                              .toFormat("HH:mm")}{" "}
+                            -{" "}
+                            {DateTime.fromJSDate(booking.endDate, { zone: "utc" })
+                              .setZone(MIAMI_TZ)
+                              .toFormat("HH:mm")}{" "}
+                            (Miami)
+                          </p>
+                        </div>
+                        <Link
+                          href={`/admin/bookings/${booking.id}`}
+                          className="whitespace-nowrap text-sm font-medium text-[#C8A060] transition-colors hover:text-[#E8D7BE]"
+                        >
+                          Voir →
+                        </Link>
+                      </div>
+                    ))}
                   </div>
-                ) : null}
-                <button className="text-xs underline underline-offset-4 text-white/60 hover:text-white">
-                  Supprimer la récurrence de ce jour
-                </button>
-              </form>
+                ) : (
+                  <p className="text-sm text-white/50">Aucune réservation</p>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex min-h-[240px] items-center justify-center text-center text-white/50">
+              Cliquez sur un jour du calendrier pour voir le récapitulatif.
+            </div>
+          )}
         </div>
-      ) : null}
 
-      <AdminDaySlotsPanel
-        open={!!selectedDay}
-        dateLabel={selectedDay?.label ?? ""}
-        slots={selectedDay?.slots ?? []}
-        onClose={() => setSelectedDay(null)}
-      />
+      </div>
     </div>
   );
 }

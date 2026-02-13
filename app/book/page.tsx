@@ -2,17 +2,54 @@ export const runtime = "nodejs";
 
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import DualClock from "../../components/DualClock";
+import { DateTime } from "luxon";
 import { BookingViews } from "../../components/BookingViews";
 import { getCurrentClient } from "../../lib/auth";
-import { getAvailability, getQuotaStatus, getUpcomingBookingForClient } from "../../lib/booking";
-import { BRUSSELS_TZ, MIAMI_TZ, formatInZone } from "../../lib/time";
+import { getAvailability, getQuotaStatus } from "../../lib/booking";
+import { BRUSSELS_TZ } from "../../lib/time";
 import { logoutAction } from "../login/actions";
-import { manageBookingAction } from "./actions";
+import { prisma } from "../../lib/prisma";
+import { getSettings } from "../../lib/settings";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = { error?: string; success?: string };
+
+function getModeForDate(
+  date: Date,
+  sessionModes: {
+    startDate: Date;
+    endDate: Date;
+    mode: string;
+    location: string | null;
+  }[],
+  defaultMode: "VISIO" | "PRESENTIEL",
+  defaultPresentielLocation: string
+) {
+  const day = DateTime.fromJSDate(date, { zone: "utc" }).setZone(BRUSSELS_TZ).startOf("day");
+
+  const match = sessionModes.find((sessionMode) => {
+    const start = DateTime.fromJSDate(sessionMode.startDate, { zone: "utc" })
+      .setZone(BRUSSELS_TZ)
+      .startOf("day");
+    const end = DateTime.fromJSDate(sessionMode.endDate, { zone: "utc" })
+      .setZone(BRUSSELS_TZ)
+      .endOf("day");
+    return day >= start && day <= end;
+  });
+
+  if (match) {
+    return {
+      mode: match.mode === "PRESENTIEL" ? "PRESENTIEL" : "VISIO",
+      presentielLocation: match.mode === "PRESENTIEL" ? match.location ?? defaultPresentielLocation : undefined
+    } as const;
+  }
+
+  return {
+    mode: defaultMode,
+    presentielLocation: defaultMode === "PRESENTIEL" ? defaultPresentielLocation : undefined
+  } as const;
+}
 
 export default async function BookPage({
   searchParams
@@ -22,11 +59,27 @@ export default async function BookPage({
   const client = await getCurrentClient();
   if (!client) redirect("/login");
 
-  const [slots, quota, upcomingBooking] = await Promise.all([
+  const [slots, quota, settings, sessionModes] = await Promise.all([
     getAvailability(),
     getQuotaStatus(client.id),
-    getUpcomingBookingForClient(client.id)
+    getSettings(),
+    prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } })
   ]);
+
+  const slotsWithModeByDate = slots.map((slot) => {
+    const modeForDate = getModeForDate(
+      slot.start,
+      sessionModes,
+      settings.defaultMode === "PRESENTIEL" ? "PRESENTIEL" : "VISIO",
+      settings.presentielLocation
+    );
+
+    return {
+      ...slot,
+      mode: modeForDate.mode,
+      presentielLocation: modeForDate.presentielLocation
+    };
+  });
 
   const quotaReached = quota.creditsUsedThisMonth >= quota.creditsPerMonth;
   const rawError = Array.isArray(searchParams?.error)
@@ -36,10 +89,6 @@ export default async function BookPage({
   const success = Array.isArray(searchParams?.success)
     ? searchParams?.success[0]
     : searchParams?.success;
-  const canManage = upcomingBooking
-    ? upcomingBooking.startAt.getTime() - Date.now() > 72 * 60 * 60 * 1000
-    : false;
-
   return (
     <section className="mx-auto max-w-6xl space-y-10 px-5 py-14 md:py-20">
       <div className="space-y-6">
@@ -56,24 +105,11 @@ export default async function BookPage({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="card space-y-3 p-5 md:p-6">
             <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-widest text-white/60">Heures locales</div>
-              <span className="rounded-full bg-background-elevated/5 px-2 py-1 text-[11px] text-white/60">
-                Disponibilités
-              </span>
-            </div>
-            <DualClock />
-            <p className="text-xs text-white/60">
-              Disponibilités basées sur les règles hebdo + exceptions. Les heures Brussels / Miami sont affichées en conversion.
-            </p>
-          </div>
-
-          <div className="card space-y-3 p-5 md:p-6">
-            <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs uppercase tracking-widest text-white/60">
+                <div className="text-base uppercase tracking-widest text-white/60">
                   Vos credits mensuels
                 </div>
-                <div className="text-2xl font-semibold text-white">
+                <div className="text-base font-semibold text-white">
                   {quota.creditsUsedThisMonth}/{quota.creditsPerMonth} utilises ce mois-ci
                 </div>
               </div>
@@ -101,56 +137,6 @@ export default async function BookPage({
 
       {success ? <div className="alert-success">Rendez-vous confirme.</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
-
-      <div className="card space-y-3 p-5 md:p-6">
-        <div className="flex items-center justify-between">
-          <div className="text-xs uppercase tracking-widest text-white/60">Mon rendez-vous</div>
-          {upcomingBooking ? (
-            <span className="text-xs uppercase tracking-widest text-white/50">
-              {upcomingBooking.mode}
-            </span>
-          ) : null}
-        </div>
-
-        {upcomingBooking ? (
-          <>
-            <div className="text-lg font-semibold">
-              {formatInZone(upcomingBooking.startAt, "EEEE dd LLL yyyy", BRUSSELS_TZ)} ·{" "}
-              {formatInZone(upcomingBooking.startAt, "HH:mm", BRUSSELS_TZ)} (Brussels) /{" "}
-              {formatInZone(upcomingBooking.startAt, "HH:mm", MIAMI_TZ)} (Miami)
-            </div>
-            <div className="text-xs uppercase tracking-widest text-white/60">
-              Statut : {upcomingBooking.status}
-            </div>
-            {upcomingBooking.status === "CANCELLED" ? (
-              <div className="text-sm text-white/60">Votre rendez-vous a été annulé.</div>
-            ) : (
-              <div className="space-y-2 pt-2">
-                <form action={manageBookingAction}>
-                  <button
-                    type="submit"
-                    className={`btn btn-secondary w-full ${
-                      canManage ? "" : "cursor-not-allowed opacity-50"
-                    }`}
-                    disabled={!canManage}
-                  >
-                    Modifier / Annuler mon RDV
-                  </button>
-                </form>
-                {!canManage ? (
-                  <p className="text-xs text-white/60">
-                    La modification ou l'annulation est possible uniquement jusqu'a 72h avant le
-                    rendez-vous.
-                  </p>
-                ) : null}
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-white/60">Aucun rendez-vous planifié.</p>
-        )}
-      </div>
-
       {quotaReached ? (
         <div className="alert-warning">
           Quota mensuel atteint. Contactez Geoffrey si vous avez besoin d’un créneau
@@ -158,7 +144,7 @@ export default async function BookPage({
         </div>
       ) : null}
 
-      <BookingViews slots={slots} quotaReached={quotaReached} />
+      <BookingViews slots={slotsWithModeByDate} quotaReached={quotaReached} />
     </section>
   );
 }

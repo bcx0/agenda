@@ -6,6 +6,7 @@ import { getAdminSession } from "../../lib/session";
 import { adminLoginAction, adminLogoutAction } from "./actions";
 import { countCancelledBookings, listClients, listUpcomingBookingsThisMonth } from "../../lib/admin";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
+import { prisma } from "../../lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +55,22 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
     );
   }
 
-  const [clients, bookings, cancelledCount] = await Promise.all([
+  const now = new Date();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  const [clients, bookings, cancelledCount, thisMonthUpcomingBookings] = await Promise.all([
     listClients(),
     listUpcomingBookingsThisMonth(),
-    countCancelledBookings()
+    countCancelledBookings(),
+    prisma.booking.count({
+      where: {
+        status: "CONFIRMED",
+        startAt: {
+          gte: now,
+          lte: endOfMonth
+        }
+      }
+    })
   ]);
   const upcoming = bookings.slice(0, 4);
 
@@ -78,7 +91,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
 
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Clients actifs" value={clients.filter((c) => c.isActive).length} />
-        <StatCard label="Rendez-vous" value={bookings.length} />
+        <StatCard label="Rendez-vous" value={thisMonthUpcomingBookings} />
         <StatCard label="Annulés" value={cancelledCount} />
       </div>
 

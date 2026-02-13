@@ -1,9 +1,9 @@
 export const runtime = "nodejs";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { adminRescheduleBookingAction, cancelBookingAction } from "../actions";
 import { listUpcomingBookingsThisMonth } from "../../../lib/admin";
-import { formatInZone, BRUSSELS_TZ } from "../../../lib/time";
 import { getAdminSession } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,12 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
   const errorMessage = rawError ? decodeURIComponent(rawError) : undefined;
 
   const bookings = await listUpcomingBookingsThisMonth();
+  const hdrs = headers();
+  const forwardedProto = hdrs.get("x-forwarded-proto");
+  const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host");
+  const originFromRequest = host ? `${forwardedProto ?? "https"}://${host}` : null;
+  const appUrl = process.env.APP_URL?.replace(/\/$/, "") ?? originFromRequest ?? "https://agenda-geoffreymahieu.vercel.app";
+  const feedUrl = `${appUrl}/api/calendar/feed`;
 
   return (
     <section className="space-y-6">
@@ -29,16 +35,34 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
           Bookings
         </h1>
         <p className="text-sm text-white/70">
-          Seuls les rendez-vous restants du mois en cours sont affichés. L’admin peut modifier ou annuler même à
+          Seuls les rendez-vous restants du mois en cours sont affichÃ©s. Lâ€™admin peut modifier ou annuler mÃªme Ã 
           moins de 72h.
         </p>
       </div>
 
       {errorMessage && <div className="alert-error">{errorMessage}</div>}
 
+      <div className="card space-y-4 p-6">
+        <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
+          S&apos;abonner au calendrier Apple
+        </h2>
+        <div className="space-y-3 text-sm text-white/70">
+          <p>URL du flux iCal:</p>
+          <code className="block rounded-md border border-border bg-background-elevated px-3 py-2 text-xs text-[#C8A060] break-all">
+            {feedUrl}
+          </code>
+          <ol className="space-y-1 list-decimal pl-5">
+            <li>iPhone: Reglages -&gt; Calendrier -&gt; Comptes</li>
+            <li>Ajouter un compte -&gt; Autre -&gt; S&apos;abonner a un calendrier</li>
+            <li>Coller l&apos;URL ci-dessus puis valider</li>
+            <li>Les reservations confirmees futures se synchronisent automatiquement</li>
+          </ol>
+        </div>
+      </div>
+
       <div className="space-y-4">
         {bookings.length === 0 ? (
-          <p className="text-white/50">Aucune réservation.</p>
+          <p className="text-white/50">Aucune rÃ©servation.</p>
         ) : (
           bookings.map((booking) => (
             <div key={booking.id} className="card-gm">
@@ -63,7 +87,21 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
               </div>
 
               <div className="text-sm space-y-1">
-                <p><strong>Date:</strong> {formatInZone(booking.startAt, "PPP 'à' HH:mm", BRUSSELS_TZ)} (Brussels)</p>
+                <p>
+                  <strong>Date:</strong>{" "}
+                  {new Date(booking.startAt).toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric"
+                  })}{" "}
+                  à{" "}
+                  {new Date(booking.startAt).toLocaleTimeString("fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  })}{" "}
+                  (Brussels)
+                </p>
                 <p><strong>Mode:</strong> {booking.mode}</p>
                 {booking.cancelReason && (
                   <p><strong>Raison annulation:</strong> {booking.cancelReason}</p>

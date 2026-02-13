@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import {
   addClientAction,
   toggleClientAction,
+  updateClientEmailAction,
   updateCreditsAction
 } from "../actions";
 import { clientUsageThisMonth, listClients } from "../../../lib/admin";
@@ -122,6 +123,19 @@ export default async function AdminClientsPage({ searchParams }: { searchParams?
                       </button>
                     </form>
                   </div>
+                  <form action={updateClientEmailAction} className="mt-2 flex items-center gap-2 text-xs">
+                    <input type="hidden" name="clientId" value={client.id} />
+                    <input
+                      type="email"
+                      name="email"
+                      required
+                      defaultValue={client.email}
+                      className="w-full rounded-md border border-border px-2 py-2"
+                    />
+                    <button className="rounded-md border border-border px-3 py-2 hover:bg-black hover:text-white">
+                      Mettre a jour email
+                    </button>
+                  </form>
                 </div>
               );
             })}
@@ -131,4 +145,5 @@ export default async function AdminClientsPage({ searchParams }: { searchParams?
     </section>
   );
 }
+
 

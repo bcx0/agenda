@@ -23,7 +23,7 @@ import {
 } from "../../lib/admin";
 import { checkAdminPassword } from "../../lib/auth";
 import { clearAdminSession, getAdminSession, setAdminSession } from "../../lib/session";
-import { BRUSSELS_TZ, MIAMI_WORK_START } from "../../lib/time";
+import { BRUSSELS_TZ, MIAMI_WORK_START, monthBoundsUtc } from "../../lib/time";
 import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 
@@ -162,6 +162,43 @@ export async function updateCreditsAction(formData: FormData) {
   const credits = Number(formData.get("creditsPerMonth"));
   if (!clientId || !credits) redirect("/admin/clients?error=Valeurs%20invalides");
   await updateCredits(clientId, credits);
+  revalidatePath("/admin/clients");
+}
+
+export async function updateClientEmailAction(formData: FormData) {
+  assertAdmin();
+  const clientId = Number(formData.get("clientId"));
+  const email = formData.get("email")?.toString().trim().toLowerCase() ?? "";
+
+  if (!clientId) {
+    redirect("/admin/clients?error=Client%20introuvable");
+  }
+  if (!email) {
+    redirect("/admin/clients?error=Email%20manquant");
+  }
+  if (!z.string().email().safeParse(email).success) {
+    redirect("/admin/clients?error=Email%20invalide");
+  }
+
+  const existingClient = await prisma.client.findFirst({
+    where: {
+      email,
+      id: { not: clientId }
+    },
+    select: { id: true }
+  });
+
+  if (existingClient) {
+    redirect(
+      `/admin/clients?error=${encodeURIComponent(`L'email ${email} est déjà utilisé par un autre client.`)}`
+    );
+  }
+
+  await prisma.client.update({
+    where: { id: clientId },
+    data: { email }
+  });
+
   revalidatePath("/admin/clients");
 }
 
@@ -424,14 +461,154 @@ export async function createRecurringBlockAction(formData: FormData) {
   }
   assertValidTimeRange(startTime, endTime, "/admin/availability");
   const clientId = clientIdRaw ? Number(clientIdRaw) : null;
-  await createRecurringBlock({
-    dayOfWeek,
-    startTime,
-    endTime,
-    clientId: clientId || null,
-    note: note || undefined
+  if (!clientId) {
+    await createRecurringBlock({
+      dayOfWeek,
+      startTime,
+      endTime,
+      clientId: null,
+      note: note || undefined
+    });
+    revalidatePath("/admin/availability");
+    return;
+  }
+
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, creditsPerMonth: true }
   });
+  if (!client) {
+    redirect("/admin/availability?error=Client%20introuvable");
+  }
+
+  const startMinutes = parseTimeToMinutes(startTime);
+  const endMinutes = parseTimeToMinutes(endTime);
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+    redirect("/admin/availability?error=Plage%20horaire%20invalide");
+  }
+
+  const horizonStart = DateTime.now().setZone(BRUSSELS_TZ).startOf("day");
+  const horizonEnd = horizonStart.plus({ days: 90 }).endOf("day");
+  const monthStart = horizonStart.startOf("month");
+  const monthEnd = horizonEnd.endOf("month");
+
+  const existingClientBookings = await prisma.booking.findMany({
+    where: {
+      clientId,
+      status: { not: "CANCELLED" },
+      startAt: {
+        gte: monthStart.toUTC().toJSDate(),
+        lte: monthEnd.toUTC().toJSDate()
+      }
+    },
+    select: { startAt: true }
+  });
+
+  const monthlyUsage = new Map<string, number>();
+  for (const booking of existingClientBookings) {
+    const key = DateTime.fromJSDate(booking.startAt, { zone: "utc" })
+      .setZone(BRUSSELS_TZ)
+      .toFormat("yyyy-LL");
+    monthlyUsage.set(key, (monthlyUsage.get(key) ?? 0) + 1);
+  }
+
+  const candidates: { startAt: Date; endAt: Date; monthKey: string }[] = [];
+  for (
+    let day = horizonStart;
+    day.toMillis() <= horizonEnd.toMillis();
+    day = day.plus({ days: 1 })
+  ) {
+    if (day.weekday !== dayOfWeek) continue;
+    const startBrussels = day.set({
+      hour: Math.floor(startMinutes / 60),
+      minute: startMinutes % 60,
+      second: 0,
+      millisecond: 0
+    });
+    const endBrussels = day.set({
+      hour: Math.floor(endMinutes / 60),
+      minute: endMinutes % 60,
+      second: 0,
+      millisecond: 0
+    });
+    if (endBrussels <= startBrussels) continue;
+    candidates.push({
+      startAt: startBrussels.toUTC().toJSDate(),
+      endAt: endBrussels.toUTC().toJSDate(),
+      monthKey: day.toFormat("yyyy-LL")
+    });
+  }
+
+  if (candidates.length === 0) {
+    redirect("/admin/availability?error=Aucune%20occurrence%20a%20creer");
+  }
+
+  const minStart = candidates[0].startAt;
+  const maxEnd = candidates[candidates.length - 1].endAt;
+  const existingConflicts = await prisma.booking.findMany({
+    where: {
+      status: { not: "CANCELLED" },
+      startAt: { lt: maxEnd },
+      endAt: { gt: minStart }
+    },
+    select: { startAt: true, endAt: true }
+  });
+
+  const overlaps = (
+    startA: Date,
+    endA: Date,
+    startB: Date,
+    endB: Date
+  ) => startA < endB && endA > startB;
+
+  const toCreate: {
+    clientId: number;
+    startAt: Date;
+    endAt: Date;
+    status: string;
+    mode: string;
+    rescheduleReason: string;
+  }[] = [];
+
+  for (const candidate of candidates) {
+    const conflict = existingConflicts.some((existing) =>
+      overlaps(existing.startAt, existing.endAt, candidate.startAt, candidate.endAt)
+    );
+    if (conflict) continue;
+
+    const conflictWithNew = toCreate.some((created) =>
+      overlaps(created.startAt, created.endAt, candidate.startAt, candidate.endAt)
+    );
+    if (conflictWithNew) continue;
+
+    const currentUsage = monthlyUsage.get(candidate.monthKey) ?? 0;
+    if (currentUsage >= client.creditsPerMonth) continue;
+
+    toCreate.push({
+      clientId,
+      startAt: candidate.startAt,
+      endAt: candidate.endAt,
+      status: "CONFIRMED",
+      mode: "VISIO",
+      rescheduleReason: note
+        ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
+        : ADMIN_BLOCK_NOTE_PREFIX
+    });
+    monthlyUsage.set(candidate.monthKey, currentUsage + 1);
+  }
+
+  if (toCreate.length === 0) {
+    redirect("/admin/availability?error=Aucun%20booking%20cree%20(conflits%20ou%20quota)");
+  }
+
+  await prisma.booking.createMany({ data: toCreate });
+
   revalidatePath("/admin/availability");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin");
+  revalidatePath("/book");
+  revalidatePath("/manage");
 }
 
 export async function deleteRecurringBlockAction(formData: FormData) {
@@ -511,6 +688,25 @@ export async function blockDateForClientAction(formData: FormData) {
   const startAt = startBrussels.toUTC().toJSDate();
   const endAt = endBrussels.toUTC().toJSDate();
 
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, creditsPerMonth: true }
+  });
+  if (!client) {
+    redirect("/admin/availability?tab=single-block&error=Client%20introuvable");
+  }
+  const { startUtc, endUtc } = monthBoundsUtc();
+  const usedThisMonth = await prisma.booking.count({
+    where: {
+      clientId,
+      status: { not: "CANCELLED" },
+      startAt: { gte: startUtc, lt: endUtc }
+    }
+  });
+  if (usedThisMonth >= client.creditsPerMonth) {
+    redirect("/admin/availability?tab=single-block&error=Plus%20de%20credits%20disponibles%20ce%20mois");
+  }
+
   const overlap = await prisma.booking.findFirst({
     where: {
       status: { not: "CANCELLED" },
@@ -540,6 +736,9 @@ export async function blockDateForClientAction(formData: FormData) {
   revalidatePath("/admin/availability");
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/clients");
+  revalidatePath("/admin");
+  revalidatePath("/book");
+  revalidatePath("/manage");
   redirect("/admin/availability?tab=single-block&success=Cr%C3%A9neau%20bloqu%C3%A9%20avec%20succ%C3%A8s");
 }
 
@@ -564,4 +763,57 @@ export async function cancelBlockedDateAction(formData: FormData) {
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/clients");
   redirect("/admin/availability?tab=single-block&success=Cr%C3%A9neau%20annul%C3%A9");
+}
+
+export async function createSessionModeAction(formData: FormData) {
+  assertAdmin();
+
+  const startDateRaw = formData.get("startDate")?.toString() ?? "";
+  const endDateRaw = formData.get("endDate")?.toString() ?? "";
+  const modeRaw = formData.get("mode")?.toString() ?? "";
+  const locationRaw = formData.get("location")?.toString().trim() ?? "";
+
+  if (!startDateRaw || !endDateRaw || !modeRaw) {
+    redirect("/admin/settings?error=Champs%20invalides");
+  }
+
+  const mode = modeRaw === "PRESENTIEL" ? "PRESENTIEL" : modeRaw === "VISIO" ? "VISIO" : null;
+  if (!mode) {
+    redirect("/admin/settings?error=Mode%20invalide");
+  }
+
+  const startDate = DateTime.fromISO(startDateRaw, { zone: BRUSSELS_TZ }).startOf("day");
+  const endDate = DateTime.fromISO(endDateRaw, { zone: BRUSSELS_TZ }).endOf("day");
+
+  if (!startDate.isValid || !endDate.isValid || endDate < startDate) {
+    redirect("/admin/settings?error=Plage%20de%20dates%20invalide");
+  }
+
+  await prisma.sessionMode.create({
+    data: {
+      startDate: startDate.toUTC().toJSDate(),
+      endDate: endDate.toUTC().toJSDate(),
+      mode,
+      location: locationRaw || null
+    }
+  });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/book");
+  redirect("/admin/settings?success=Plage%20ajoutee");
+}
+
+export async function deleteSessionModeAction(formData: FormData) {
+  assertAdmin();
+
+  const id = Number(formData.get("id"));
+  if (!id) {
+    redirect("/admin/settings?error=Plage%20introuvable");
+  }
+
+  await prisma.sessionMode.delete({ where: { id } });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/book");
+  redirect("/admin/settings?success=Plage%20supprimee");
 }

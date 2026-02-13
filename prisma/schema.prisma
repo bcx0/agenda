@@ -101,3 +101,14 @@ model Settings {
   defaultMode        String      @default("VISIO") // VISIO | PRESENTIEL
   updatedAt          DateTime    @updatedAt
 }
+
+model SessionMode {
+  id        Int      @id @default(autoincrement())
+  startDate DateTime
+  endDate   DateTime
+  mode      String
+  location  String?
+  createdAt DateTime @default(now())
+
+  @@map("session_modes")
+}

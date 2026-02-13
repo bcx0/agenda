@@ -10,6 +10,7 @@ type Props = {
   onChangeMonth: (next: DateTime) => void;
   onSelectDay: (day: DateTime) => void;
   allowEmptySelection?: boolean;
+  selectedDayKey?: string | null;
 };
 
 const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -19,7 +20,8 @@ export function MonthCalendar({
   daySlots,
   onChangeMonth,
   onSelectDay,
-  allowEmptySelection = false
+  allowEmptySelection = false,
+  selectedDayKey = null
 }: Props) {
   const startOfMonth = month.startOf("month");
   const daysFromMonday = (startOfMonth.weekday + 6) % 7;
@@ -81,6 +83,7 @@ export function MonthCalendar({
           const hasSlots = totalSlots > 0;
           const isCurrentMonth = day.month === month.month;
           const isToday = key === todayKey;
+          const isSelected = selectedDayKey === key;
           const statusLabel =
             availableCount > 0
               ? availableCount === 1
@@ -114,7 +117,7 @@ export function MonthCalendar({
                 isSelectable
                   ? "bg-[#0F0F0F] border-4 border-[#C8A060] text-white font-semibold hover:border-[#E8D7BE] hover:bg-[#1A1A1A]"
                   : "bg-[#0F0F0F] border-4 border-gray-700 text-white/30 opacity-40 cursor-not-allowed"
-              } ${isToday ? "ring-2 ring-white" : ""}`}
+              } ${isToday || isSelected ? "ring-2 ring-white" : ""}`}
               aria-label={`Selectionner le ${day.toFormat("dd LLLL")}`}
               disabled={!isSelectable}
             >

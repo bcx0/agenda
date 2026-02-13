@@ -108,13 +108,6 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
               Merci d'indiquer le motif de l'annulation.
             </p>
             <input type="hidden" name="token" value={token} />
-            <textarea
-              name="reason"
-              required
-              rows={4}
-              placeholder="Motif d'annulation"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            />
             <button className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 hover:bg-red-100">
               Confirmer l'annulation
             </button>
@@ -149,13 +142,6 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
             {availableSlots.length === 0 ? (
               <p className="text-sm text-white/60">Aucun créneau disponible pour le moment.</p>
             ) : null}
-            <textarea
-              name="reason"
-              required
-              rows={4}
-              placeholder="Motif de la modification"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            />
             <button className="rounded-md border border-border px-4 py-2 text-sm hover:bg-black hover:text-white">
               Confirmer la modification
             </button>

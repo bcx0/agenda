@@ -402,13 +402,28 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     };
   }
 
+  const sessionMode = await prisma.sessionMode.findFirst({
+    where: {
+      startDate: { lte: startUtc },
+      endDate: { gte: startUtc }
+    },
+    orderBy: { startDate: "desc" }
+  });
+
+  const bookingMode =
+    sessionMode?.mode === "PRESENTIEL"
+      ? "PRESENTIEL"
+      : sessionMode?.mode === "VISIO"
+      ? "VISIO"
+      : settings.defaultMode;
+
   const booking = await prisma.booking.create({
     data: {
       clientId,
       startAt: startUtc,
       endAt: endUtc,
       status: "CONFIRMED",
-      mode: settings.defaultMode,
+      mode: bookingMode,
       manageToken: crypto.randomBytes(32).toString("hex"),
       manageTokenExpiresAt: addDays(new Date(), 7)
     }

@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { memo, useMemo } from "react";
 import { DateTime } from "luxon";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
@@ -15,7 +16,7 @@ type Props = {
 
 const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-export function MonthCalendar({
+function MonthCalendarComponent({
   month,
   daySlots,
   onChangeMonth,
@@ -23,17 +24,21 @@ export function MonthCalendar({
   allowEmptySelection = false,
   selectedDayKey = null
 }: Props) {
-  const startOfMonth = month.startOf("month");
-  const daysFromMonday = (startOfMonth.weekday + 6) % 7;
-  const gridStart = startOfMonth.minus({ days: daysFromMonday });
-  const days: DateTime[] = [];
-  for (let i = 0; i < 42; i++) {
-    days.push(gridStart.plus({ days: i }));
-  }
+  const days = useMemo(() => {
+    const startOfMonth = month.startOf("month");
+    const daysFromMonday = (startOfMonth.weekday + 6) % 7;
+    const gridStart = startOfMonth.minus({ days: daysFromMonday });
+    const nextDays: DateTime[] = [];
+    for (let i = 0; i < 42; i++) {
+      nextDays.push(gridStart.plus({ days: i }));
+    }
+    return nextDays;
+  }, [month]);
 
-  const todayKey =
-    DateTime.now().setZone(MIAMI_TZ).toISODate() ??
-    DateTime.now().setZone(MIAMI_TZ).toFormat("yyyy-LL-dd");
+  const todayKey = useMemo(() => {
+    const nowMiami = DateTime.now().setZone(MIAMI_TZ);
+    return nowMiami.toISODate() ?? nowMiami.toFormat("yyyy-LL-dd");
+  }, []);
   const monthLabel = month.setLocale("fr").toFormat("LLLL yyyy");
 
   return (
@@ -78,8 +83,12 @@ export function MonthCalendar({
           const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
           const slots = daySlots.get(key) ?? [];
           const totalSlots = slots.length;
-          const bookedCount = slots.filter((s) => s.status === "booked").length;
-          const availableCount = slots.filter((s) => s.status === "available").length;
+          let bookedCount = 0;
+          let availableCount = 0;
+          for (const slot of slots) {
+            if (slot.status === "booked") bookedCount++;
+            if (slot.status === "available") availableCount++;
+          }
           const hasSlots = totalSlots > 0;
           const isCurrentMonth = day.month === month.month;
           const isToday = key === todayKey;
@@ -94,17 +103,6 @@ export function MonthCalendar({
               : hasSlots
               ? "Occupé"
               : "Aucun creneau";
-
-          console.log(
-            "Jour:",
-            key,
-            "Slots totaux:",
-            totalSlots,
-            "Reservations:",
-            bookedCount,
-            "Disponibles:",
-            availableCount
-          );
 
           const isSelectable = hasSlots || allowEmptySelection;
 
@@ -147,4 +145,6 @@ export function MonthCalendar({
     </div>
   );
 }
+
+export const MonthCalendar = memo(MonthCalendarComponent);
 

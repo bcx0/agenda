@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { memo } from "react";
 import { clsx } from "clsx";
 import { bookSlotAction } from "../app/book/actions";
 
@@ -17,7 +18,7 @@ type Props = {
   quotaReached?: boolean;
 };
 
-export default function SlotButton({
+function SlotButtonComponent({
   startIso,
   brussels,
   miami,
@@ -91,4 +92,7 @@ export default function SlotButton({
     </form>
   );
 }
+
+const SlotButton = memo(SlotButtonComponent);
+export default SlotButton;
 

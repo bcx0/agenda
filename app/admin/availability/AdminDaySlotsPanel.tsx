@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import type { SlotView } from "../../../lib/booking";
 
 type Props = {
@@ -22,7 +22,7 @@ function statusClass(status: SlotView["status"]) {
   return "bg-white/10 text-white/60";
 }
 
-export default function AdminDaySlotsPanel({ open, dateLabel, slots, onClose }: Props) {
+function AdminDaySlotsPanel({ open, dateLabel, slots, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -88,3 +88,5 @@ export default function AdminDaySlotsPanel({ open, dateLabel, slots, onClose }: 
     </div>
   );
 }
+
+export default memo(AdminDaySlotsPanel);

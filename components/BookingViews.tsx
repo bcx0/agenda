@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { DateTime } from "luxon";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
@@ -35,6 +35,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
 
   const dayMap = useMemo(() => groupSlotsByDay(normalizedSlots), [normalizedSlots]);
   const [view, setView] = useState<ViewMode>("month");
+  const [, startTransition] = useTransition();
   const [monthFocus, setMonthFocus] = useState<DateTime>(
     DateTime.now().setZone(MIAMI_TZ).startOf("month")
   );
@@ -47,8 +48,12 @@ export function BookingViews({ slots, quotaReached }: Props) {
     () => Array.from(dayMap.values()).sort((a, b) => a.date.toMillis() - b.date.toMillis()),
     [dayMap]
   );
+  const daySlotsMap = useMemo(
+    () => new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots])),
+    [dayMap]
+  );
 
-  const handleSelectDay = (day: DateTime) => {
+  const handleSelectDay = useCallback((day: DateTime) => {
     const key = day.setZone(MIAMI_TZ).toISODate() ?? day.toFormat("yyyy-LL-dd");
     const group = dayMap.get(key);
     setSelectedDay(
@@ -59,7 +64,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
         date: day
       }
     );
-  };
+  }, [dayMap]);
 
   return (
     <div className="space-y-6">
@@ -70,12 +75,14 @@ export function BookingViews({ slots, quotaReached }: Props) {
       {view === "month" && (
         <MonthCalendar
           month={monthFocus}
-          daySlots={new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots]))}
+          daySlots={daySlotsMap}
           onChangeMonth={setMonthFocus}
           onSelectDay={(d) => {
             const inMiami = d.setZone(MIAMI_TZ);
-            handleSelectDay(inMiami);
-            setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
+            startTransition(() => {
+              handleSelectDay(inMiami);
+              setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
+            });
           }}
         />
       )}
@@ -83,11 +90,13 @@ export function BookingViews({ slots, quotaReached }: Props) {
       {view === "week" && (
         <WeekCalendar
           weekStart={weekStart}
-          daySlots={new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots]))}
+          daySlots={daySlotsMap}
           quotaReached={quotaReached}
           onChangeWeek={(next) => {
-            setWeekStart(next);
-            setMonthFocus(next.setZone(MIAMI_TZ).startOf("month"));
+            startTransition(() => {
+              setWeekStart(next);
+              setMonthFocus(next.setZone(MIAMI_TZ).startOf("month"));
+            });
           }}
         />
       )}

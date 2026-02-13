@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import SlotButton from "./SlotButton";
 import type { SlotView } from "../lib/booking";
 
@@ -12,7 +12,7 @@ type Props = {
   onClose: () => void;
 };
 
-export function DaySlotsPanel({ open, dateLabel, slots, quotaReached, onClose }: Props) {
+function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -66,4 +66,6 @@ export function DaySlotsPanel({ open, dateLabel, slots, quotaReached, onClose }:
     </div>
   );
 }
+
+export const DaySlotsPanel = memo(DaySlotsPanelComponent);
 

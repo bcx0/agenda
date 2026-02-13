@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { memo, useMemo } from "react";
 import { DateTime } from "luxon";
 import SlotButton from "./SlotButton";
 import type { SlotView } from "../lib/booking";
@@ -14,12 +15,19 @@ type Props = {
 
 const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
-export function WeekCalendar({ weekStart, daySlots, quotaReached, onChangeWeek }: Props) {
-  const days = Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i }));
-  const weekLabel = `${weekStart.setLocale("fr").toFormat("dd LLL")} - ${weekStart
-    .plus({ days: 6 })
-    .setLocale("fr")
-    .toFormat("dd LLL")}`;
+function WeekCalendarComponent({ weekStart, daySlots, quotaReached, onChangeWeek }: Props) {
+  const days = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i })),
+    [weekStart]
+  );
+  const weekLabel = useMemo(
+    () =>
+      `${weekStart.setLocale("fr").toFormat("dd LLL")} - ${weekStart
+        .plus({ days: 6 })
+        .setLocale("fr")
+        .toFormat("dd LLL")}`,
+    [weekStart]
+  );
 
   return (
     <div className="space-y-4">
@@ -94,4 +102,6 @@ export function WeekCalendar({ weekStart, daySlots, quotaReached, onChangeWeek }
     </div>
   );
 }
+
+export const WeekCalendar = memo(WeekCalendarComponent);
 

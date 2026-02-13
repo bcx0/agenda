@@ -187,16 +187,6 @@ export async function getAvailability() {
   const { rules, overrides, recurringBlocks, legacyBlocks, bookings } =
     await getAvailabilityData(rangeStart, rangeEnd);
 
-  console.log("Availability debug:", {
-    rules: rules.length,
-    overrides: overrides.length,
-    recurringBlocks: recurringBlocks.length,
-    legacyBlocks: legacyBlocks.length,
-    bookings: bookings.length,
-    rangeStart,
-    rangeEnd
-  });
-
   const hasRules = rules.length > 0;
   const hasOpenOverrides = overrides.some((override) => override.type === "OPEN");
   const useFallback = !(hasRules || hasOpenOverrides);
@@ -215,14 +205,6 @@ export async function getAvailability() {
       ? dayRules
       : [];
     const activeRanges = openOverrides.length ? openOverrides : baseRanges;
-
-    if (dayRules.length || openOverrides.length) {
-      console.log("Rules pour ce jour:", {
-        day: day.toISODate(),
-        dayRules,
-        openOverrides
-      });
-    }
 
     const addSlotsFromRange = (startTime: string, endTime: string) => {
       const startMinutes = parseTimeToMinutes(startTime);
@@ -247,15 +229,6 @@ export async function getAvailability() {
 
     activeRanges.forEach((range) => addSlotsFromRange(range.startTime, range.endTime));
 
-    if (activeRanges.length) {
-      console.log("Créneaux générés:", {
-        day: day.toISODate(),
-        activeRanges,
-        slotsForDay: Array.from(slots.values()).filter((s) =>
-          sameBrusselsDate(s.start, day)
-        ).length
-      });
-    }
   }
 
   const slotEntries = Array.from(slots.values()).sort(
@@ -298,9 +271,6 @@ export async function getAvailability() {
       presentielNote: settings.presentielNote
     };
   });
-
-  console.log("Réservations existantes:", bookings);
-  console.log("Disponibles:", slotViews.filter((slot) => slot.status === "available").length);
 
   return slotViews;
 }

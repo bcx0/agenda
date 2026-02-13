@@ -154,6 +154,7 @@ export async function addClientAction(formData: FormData) {
   }
 
   revalidatePath("/admin/clients");
+  redirect("/admin/clients?success=Client%20cree%20avec%20succes");
 }
 
 export async function updateCreditsAction(formData: FormData) {
@@ -163,6 +164,7 @@ export async function updateCreditsAction(formData: FormData) {
   if (!clientId || !credits) redirect("/admin/clients?error=Valeurs%20invalides");
   await updateCredits(clientId, credits);
   revalidatePath("/admin/clients");
+  redirect("/admin/clients?success=Credits%20mis%20a%20jour");
 }
 
 export async function updateClientEmailAction(formData: FormData) {
@@ -200,6 +202,7 @@ export async function updateClientEmailAction(formData: FormData) {
   });
 
   revalidatePath("/admin/clients");
+  redirect("/admin/clients?success=Email%20mis%20a%20jour");
 }
 
 export async function toggleClientAction(formData: FormData) {
@@ -208,6 +211,7 @@ export async function toggleClientAction(formData: FormData) {
   const active = formData.get("active") === "true";
   await setClientActive(clientId, active);
   revalidatePath("/admin/clients");
+  redirect("/admin/clients?success=Statut%20client%20mis%20a%20jour");
 }
 
 export async function createBlockAction(formData: FormData) {
@@ -227,6 +231,7 @@ export async function createBlockAction(formData: FormData) {
     redirect(`/admin/availability?error=${encodeURIComponent(message)}`);
   }
   revalidatePath("/admin/availability");
+  redirect("/admin/availability?success=Blocage%20ajoute");
 }
 
 export async function deleteBlockAction(formData: FormData) {
@@ -235,6 +240,7 @@ export async function deleteBlockAction(formData: FormData) {
   if (!blockId) redirect("/admin/availability?error=Blocage%20introuvable");
   await deleteBlock(blockId);
   revalidatePath("/admin/availability");
+  redirect("/admin/availability?success=Blocage%20supprime");
 }
 
 export async function setGeneralAvailabilityForDateAction(
@@ -340,8 +346,6 @@ export async function setGeneralRecurringForDayAction(
   }
   const ranges = parsed.ranges;
 
-  console.log("Saving recurring slots:", { dayOfWeek, ranges });
-
   const horizonStart = DateTime.now().setZone(BRUSSELS_TZ).startOf("day");
   const horizonEnd = horizonStart.plus({ days: 90 });
   const bookings = await prisma.booking.findMany({
@@ -406,6 +410,7 @@ export async function createAvailabilityRuleAction(formData: FormData) {
   assertValidTimeRange(startTime, endTime, "/admin/availability");
   await createAvailabilityRule(dayOfWeek, startTime, endTime);
   revalidatePath("/admin/availability");
+  redirect("/admin/availability?success=Regle%20hebdo%20ajoutee");
 }
 
 export async function deleteAvailabilityRuleAction(formData: FormData) {
@@ -414,6 +419,7 @@ export async function deleteAvailabilityRuleAction(formData: FormData) {
   if (!ruleId) redirect("/admin/availability?error=Règle%20introuvable");
   await deleteAvailabilityRule(ruleId);
   revalidatePath("/admin/availability");
+  redirect("/admin/availability?success=Regle%20hebdo%20supprimee");
 }
 
 export async function createAvailabilityOverrideAction(formData: FormData) {
@@ -439,6 +445,7 @@ export async function createAvailabilityOverrideAction(formData: FormData) {
     note: note || undefined
   });
   revalidatePath("/admin/availability");
+  redirect("/admin/availability?success=Exception%20ajoutee");
 }
 
 export async function deleteAvailabilityOverrideAction(formData: FormData) {
@@ -447,6 +454,7 @@ export async function deleteAvailabilityOverrideAction(formData: FormData) {
   if (!overrideId) redirect("/admin/availability?error=Exception%20introuvable");
   await deleteAvailabilityOverride(overrideId);
   revalidatePath("/admin/availability");
+  redirect("/admin/availability?success=Exception%20supprimee");
 }
 
 export async function createRecurringBlockAction(formData: FormData) {
@@ -470,7 +478,7 @@ export async function createRecurringBlockAction(formData: FormData) {
       note: note || undefined
     });
     revalidatePath("/admin/availability");
-    return;
+    redirect("/admin/availability?success=Bloc%20recurrent%20ajoute");
   }
 
   const client = await prisma.client.findUnique({
@@ -609,6 +617,11 @@ export async function createRecurringBlockAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/book");
   revalidatePath("/manage");
+  redirect(
+    `/admin/availability?success=${encodeURIComponent(
+      `${toCreate.length} rendez-vous créés avec succès`
+    )}`
+  );
 }
 
 export async function deleteRecurringBlockAction(formData: FormData) {
@@ -617,6 +630,7 @@ export async function deleteRecurringBlockAction(formData: FormData) {
   if (!blockId) redirect("/admin/availability?error=Bloc%20introuvable");
   await deleteRecurringBlock(blockId);
   revalidatePath("/admin/availability");
+  redirect("/admin/availability?success=Bloc%20recurrent%20supprime");
 }
 
 export async function cancelBookingAction(formData: FormData) {
@@ -628,6 +642,7 @@ export async function cancelBookingAction(formData: FormData) {
     redirect(`/admin/bookings?error=${encodeURIComponent(result.error)}`);
   }
   revalidatePath("/admin/bookings");
+  redirect("/admin/bookings?success=Rendez-vous%20annule");
 }
 
 export async function adminRescheduleBookingAction(formData: FormData) {
@@ -643,6 +658,7 @@ export async function adminRescheduleBookingAction(formData: FormData) {
     redirect(`/admin/bookings?error=${encodeURIComponent(result.error)}`);
   }
   revalidatePath("/admin/bookings");
+  redirect("/admin/bookings?success=Rendez-vous%20modifie");
 }
 
 export async function setBookingStatusAction(formData: FormData) {
@@ -652,6 +668,7 @@ export async function setBookingStatusAction(formData: FormData) {
   if (!bookingId || !status) redirect("/admin/bookings?error=Statut%20manquant");
   await updateBookingStatus(bookingId, status);
   revalidatePath("/admin/bookings");
+  redirect("/admin/bookings?success=Statut%20mis%20a%20jour");
 }
 
 export async function updateBookingModeAction(formData: FormData) {
@@ -661,6 +678,7 @@ export async function updateBookingModeAction(formData: FormData) {
   if (!bookingId || !mode) redirect("/admin/bookings?error=Mode%20manquant");
   await updateBookingMode(bookingId, mode);
   revalidatePath("/admin/bookings");
+  redirect("/admin/bookings?success=Mode%20mis%20a%20jour");
 }
 
 const ADMIN_BLOCK_NOTE_PREFIX = "[ADMIN_BLOCK]";

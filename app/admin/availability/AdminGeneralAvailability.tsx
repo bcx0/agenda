@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { DateTime } from "luxon";
 import Link from "next/link";
@@ -89,6 +89,7 @@ function toRangeJson(ranges: Range[]) {
 export default function AdminGeneralAvailability({ slots, bookings, rules, overrides }: Props) {
   const normalized = useMemo(() => normalizeSlots(slots), [slots]);
   const dayMap = useMemo(() => groupSlotsByDay(normalized), [normalized]);
+  const [, startTransition] = useTransition();
   const [view, setView] = useState<ViewMode>("month");
   const [monthFocus, setMonthFocus] = useState<DateTime>(
     DateTime.now().setZone(MIAMI_TZ).startOf("month")
@@ -117,6 +118,10 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
     () => Array.from(dayMap.values()).sort((a, b) => a.date.toMillis() - b.date.toMillis()),
     [dayMap]
   );
+  const daySlotsMap = useMemo(
+    () => new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots])),
+    [dayMap]
+  );
 
   const openDay = (day: DateTime) => {
     const inMiami = day.setZone(MIAMI_TZ);
@@ -127,7 +132,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       slots: [],
       date: inMiami
     };
-    setSelectedDay(group);
+    startTransition(() => {
+      setSelectedDay(group);
+    });
 
     const brusselsDay = inMiami.setZone(BRUSSELS_TZ);
     const dayKey = brusselsDay.toISODate() ?? brusselsDay.toFormat("yyyy-LL-dd");
@@ -144,8 +151,10 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       .filter((r) => r.dayOfWeek === dayOfWeek)
       .map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
 
-    setDateRanges(dayOverrides.length ? dayOverrides : [{ startTime: "09:00", endTime: "17:00" }]);
-    setRecurringRanges(dayRules.length ? dayRules : [{ startTime: "09:00", endTime: "17:00" }]);
+    startTransition(() => {
+      setDateRanges(dayOverrides.length ? dayOverrides : [{ startTime: "09:00", endTime: "17:00" }]);
+      setRecurringRanges(dayRules.length ? dayRules : [{ startTime: "09:00", endTime: "17:00" }]);
+    });
 
   };
 
@@ -187,7 +196,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         {view === "month" && (
           <MonthCalendar
             month={monthFocus}
-            daySlots={new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots]))}
+            daySlots={daySlotsMap}
             onChangeMonth={setMonthFocus}
             allowEmptySelection={true}
             selectedDayKey={selectedDay?.key ?? null}

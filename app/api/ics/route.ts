@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import ical from "ical-generator";
-import { createClient } from "../../../../lib/supabase/server";
+import { createClient } from "../../../lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

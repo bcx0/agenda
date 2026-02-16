@@ -16,7 +16,15 @@ function escapeIcs(value: string) {
     .replace(/;/g, "\\;");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get("token");
+  const expectedToken = process.env.ADMIN_CALENDAR_TOKEN;
+
+  if (!expectedToken || token !== expectedToken) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const now = new Date();
 
   const bookings = await prisma.booking.findMany({

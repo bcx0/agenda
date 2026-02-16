@@ -25,7 +25,10 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
   const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host");
   const originFromRequest = host ? `${forwardedProto ?? "https"}://${host}` : null;
   const appUrl = process.env.APP_URL?.replace(/\/$/, "") ?? originFromRequest ?? "https://agenda-geoffreymahieu.vercel.app";
-  const feedUrl = `${appUrl}/api/calendar/feed`;
+  const feedToken = process.env.ADMIN_CALENDAR_TOKEN;
+  const feedUrl = feedToken
+    ? `${appUrl}/api/calendar/feed?token=${encodeURIComponent(feedToken)}`
+    : `${appUrl}/api/calendar/feed`;
 
   return (
     <section className="space-y-6">

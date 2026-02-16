@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.12.1",
+    "@supabase/supabase-js": "^2.95.3",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",

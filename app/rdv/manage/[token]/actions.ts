@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "../../../../lib/prisma";
 import { checkSlotAvailability, cancelBooking } from "../../../../lib/booking";
 import { sendBookingUpdatedEmail } from "../../../../lib/email/booking";
+import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../../../lib/makeWebhook";
 
 const TOKEN_ERROR = "Lien expiré ou invalide.";
 
@@ -81,7 +82,7 @@ export async function rescheduleAppointmentAction(formData: FormData) {
   const oldStartAt = booking.startAt;
   const oldEndAt = booking.endAt;
 
-  await prisma.booking.update({
+  const updated = await prisma.booking.update({
     where: { id: booking.id },
     data: {
       startAt: startUtc,
@@ -90,6 +91,16 @@ export async function rescheduleAppointmentAction(formData: FormData) {
       rescheduleReason: null
     }
   });
+
+  void sendMakeBookingWebhook(
+    makePayloadFromBooking({
+      clientName: booking.client.name,
+      service: updated.mode,
+      startAt: updated.startAt,
+      endAt: updated.endAt,
+      notes: updated.rescheduleReason
+    })
+  );
 
   await sendBookingUpdatedEmail({
     bookingId: booking.id,

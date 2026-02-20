@@ -19,6 +19,7 @@ import {
   sendBookingCancelledEmail,
   sendBookingConfirmationEmail
 } from "./email/booking";
+import { makePayloadFromBooking, sendMakeBookingWebhook } from "./makeWebhook";
 
 type AvailabilityStatus = "available" | "booked" | "blocked";
 
@@ -413,6 +414,15 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     timeZone: "Europe/Brussels",
     manageUrl
   });
+
+  void sendMakeBookingWebhook(
+    makePayloadFromBooking({
+      clientName: client.name,
+      service: booking.mode,
+      startAt: booking.startAt,
+      endAt: booking.endAt
+    })
+  );
 
   return { booking };
 }

@@ -26,6 +26,7 @@ import { clearAdminSession, getAdminSession, setAdminSession } from "../../lib/s
 import { BRUSSELS_TZ, MIAMI_WORK_START, monthBoundsUtc } from "../../lib/time";
 import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
+import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
 
 function assertAdmin() {
   const session = getAdminSession();
@@ -488,7 +489,7 @@ export async function createRecurringBlockAction(formData: FormData) {
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { id: true, creditsPerMonth: true }
+    select: { id: true, name: true, creditsPerMonth: true }
   });
   if (!client) {
     redirect("/admin/availability?error=Client%20introuvable");
@@ -617,6 +618,18 @@ export async function createRecurringBlockAction(formData: FormData) {
   }
 
   await prisma.booking.createMany({ data: toCreate });
+
+  toCreate.forEach((created) => {
+    void sendMakeBookingWebhook(
+      makePayloadFromBooking({
+        clientName: client.name,
+        service: created.mode,
+        startAt: created.startAt,
+        endAt: created.endAt,
+        notes: note
+      })
+    );
+  });
 
   revalidatePath("/admin/availability");
   revalidatePath("/admin/bookings");
@@ -778,7 +791,7 @@ export async function blockDateForClientAction(formData: FormData) {
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { id: true, creditsPerMonth: true }
+    select: { id: true, name: true, creditsPerMonth: true }
   });
   if (!client) {
     redirect("/admin/availability?tab=single-block&error=Client%20introuvable");
@@ -808,7 +821,7 @@ export async function blockDateForClientAction(formData: FormData) {
     redirect("/admin/availability?tab=single-block&error=Conflit%20avec%20un%20rendez-vous%20existant");
   }
 
-  await prisma.booking.create({
+  const createdBooking = await prisma.booking.create({
     data: {
       clientId,
       startAt,
@@ -820,6 +833,16 @@ export async function blockDateForClientAction(formData: FormData) {
         : ADMIN_BLOCK_NOTE_PREFIX
     }
   });
+
+  void sendMakeBookingWebhook(
+    makePayloadFromBooking({
+      clientName: client.name,
+      service: createdBooking.mode,
+      startAt: createdBooking.startAt,
+      endAt: createdBooking.endAt,
+      notes: note
+    })
+  );
 
   revalidatePath("/admin/availability");
   revalidatePath("/admin/bookings");

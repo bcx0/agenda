@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 import { BRUSSELS_TZ, MIAMI_TZ, isWithinMiamiWindow, monthBoundsUtc } from "./time";
 import { sendBookingConfirmationEmail, sendBookingUpdatedEmail } from "./email/booking";
 import { checkSlotAvailability, cancelBooking } from "./booking";
+import { makePayloadFromBooking, sendMakeBookingWebhook } from "./makeWebhook";
 
 export async function listClients() {
   return prisma.client.findMany({
@@ -267,7 +268,7 @@ export async function adminRescheduleBooking(
   const oldStartAt = booking.startAt;
   const oldEndAt = booking.endAt;
 
-  await prisma.booking.update({
+  const updated = await prisma.booking.update({
     where: { id },
     data: {
       startAt: startUtc,
@@ -276,6 +277,16 @@ export async function adminRescheduleBooking(
       rescheduleReason: reason ?? booking.rescheduleReason
     }
   });
+
+  void sendMakeBookingWebhook(
+    makePayloadFromBooking({
+      clientName: booking.client.name,
+      service: updated.mode,
+      startAt: updated.startAt,
+      endAt: updated.endAt,
+      notes: updated.rescheduleReason
+    })
+  );
 
   await sendBookingUpdatedEmail({
     bookingId: booking.id,

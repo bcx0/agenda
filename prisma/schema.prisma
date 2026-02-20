@@ -26,6 +26,7 @@ model Booking {
   client                Client    @relation(fields: [clientId], references: [id])
   startAt               DateTime
   endAt                 DateTime
+  timeZone              String    @default("Europe/Brussels")
   status                String    @default("CONFIRMED")
   mode                  String    @default("VISIO")
   cancelReason          String?
@@ -72,6 +73,7 @@ model RecurringBlock {
   dayOfWeek Int
   startTime String
   endTime   String
+  timeZone  String?
   clientId  Int?
   client    Client?  @relation(fields: [clientId], references: [id])
   note      String?

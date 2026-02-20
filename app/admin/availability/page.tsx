@@ -469,6 +469,10 @@ export default async function AdminAvailabilityPage({
                   </option>
                 ))}
               </select>
+              <select name="timeZone" className="input" required>
+                <option value="America/New_York">America/New_York (Miami)</option>
+                <option value="Europe/Brussels">Europe/Brussels (Bruxelles)</option>
+              </select>
               <input
                 type="text"
                 name="note"
@@ -497,7 +501,8 @@ export default async function AdminAvailabilityPage({
                     <div>
                       <div className="font-semibold">
                         {WEEK_DAYS.find((d) => d.value === block.dayOfWeek)?.label} ·{" "}
-                        {block.startTime} → {block.endTime} (Brussels)
+                        {block.startTime} → {block.endTime} (
+                        {block.timeZone === "America/New_York" ? "Miami" : "Bruxelles"})
                       </div>
                       <div className="text-white/60">
                         {block.client ? `Réservé pour ${block.client.name}` : "Réservé"}

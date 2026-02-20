@@ -347,7 +347,7 @@ export async function setGeneralRecurringForDayAction(
   const ranges = parsed.ranges;
 
   const horizonStart = DateTime.now().setZone(BRUSSELS_TZ).startOf("day");
-  const horizonEnd = horizonStart.plus({ days: 90 });
+  const horizonEnd = horizonStart.plus({ days: 364 });
   const bookings = await prisma.booking.findMany({
     where: {
       status: "CONFIRMED",
@@ -462,10 +462,14 @@ export async function createRecurringBlockAction(formData: FormData) {
   const dayOfWeek = Number(formData.get("dayOfWeek"));
   const startTime = formData.get("startTime")?.toString() ?? "";
   const endTime = formData.get("endTime")?.toString() ?? "";
+  const timeZone = formData.get("timeZone")?.toString() ?? "Europe/Brussels";
   const clientIdRaw = formData.get("clientId")?.toString();
   const note = formData.get("note")?.toString().trim() ?? "";
   if (!dayOfWeek || !startTime || !endTime) {
     redirect("/admin/availability?error=Champs%20invalides");
+  }
+  if (timeZone !== "America/New_York" && timeZone !== "Europe/Brussels") {
+    redirect("/admin/availability?error=Fuseau%20horaire%20invalide");
   }
   assertValidTimeRange(startTime, endTime, "/admin/availability");
   const clientId = clientIdRaw ? Number(clientIdRaw) : null;
@@ -474,6 +478,7 @@ export async function createRecurringBlockAction(formData: FormData) {
       dayOfWeek,
       startTime,
       endTime,
+      timeZone,
       clientId: null,
       note: note || undefined
     });
@@ -495,8 +500,8 @@ export async function createRecurringBlockAction(formData: FormData) {
     redirect("/admin/availability?error=Plage%20horaire%20invalide");
   }
 
-  const horizonStart = DateTime.now().setZone(BRUSSELS_TZ).startOf("day");
-  const horizonEnd = horizonStart.plus({ days: 90 }).endOf("day");
+  const horizonStart = DateTime.now().setZone(timeZone).startOf("day");
+  const horizonEnd = horizonStart.plus({ days: 364 }).endOf("day");
   const monthStart = horizonStart.startOf("month");
   const monthEnd = horizonEnd.endOf("month");
 
@@ -515,7 +520,7 @@ export async function createRecurringBlockAction(formData: FormData) {
   const monthlyUsage = new Map<string, number>();
   for (const booking of existingClientBookings) {
     const key = DateTime.fromJSDate(booking.startAt, { zone: "utc" })
-      .setZone(BRUSSELS_TZ)
+      .setZone(timeZone)
       .toFormat("yyyy-LL");
     monthlyUsage.set(key, (monthlyUsage.get(key) ?? 0) + 1);
   }
@@ -575,6 +580,7 @@ export async function createRecurringBlockAction(formData: FormData) {
     endAt: Date;
     status: string;
     mode: string;
+    timeZone: string;
     rescheduleReason: string;
   }[] = [];
 
@@ -598,6 +604,7 @@ export async function createRecurringBlockAction(formData: FormData) {
       endAt: candidate.endAt,
       status: "CONFIRMED",
       mode: "VISIO",
+      timeZone,
       rescheduleReason: note
         ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
         : ADMIN_BLOCK_NOTE_PREFIX
@@ -628,8 +635,71 @@ export async function deleteRecurringBlockAction(formData: FormData) {
   assertAdmin();
   const blockId = Number(formData.get("recurringBlockId"));
   if (!blockId) redirect("/admin/availability?error=Bloc%20introuvable");
+  const block = await prisma.recurringBlock.findUnique({
+    where: { id: blockId },
+    select: {
+      dayOfWeek: true,
+      startTime: true,
+      endTime: true,
+      timeZone: true,
+      clientId: true
+    }
+  });
+  if (!block) redirect("/admin/availability?error=Bloc%20introuvable");
+
+  if (block.clientId) {
+    const startMinutes = parseTimeToMinutes(block.startTime);
+    const endMinutes = parseTimeToMinutes(block.endTime);
+    if (startMinutes !== null && endMinutes !== null) {
+      const tz = block.timeZone ?? BRUSSELS_TZ;
+      const candidates = await prisma.booking.findMany({
+        where: {
+          clientId: block.clientId,
+          status: "CONFIRMED",
+          rescheduleReason: { startsWith: ADMIN_BLOCK_NOTE_PREFIX },
+          startAt: { gte: new Date() }
+        },
+        select: {
+          id: true,
+          startAt: true,
+          endAt: true
+        }
+      });
+
+      const matchingBookingIds = candidates
+        .filter((booking) => {
+          const startInZone = DateTime.fromJSDate(booking.startAt, { zone: "utc" }).setZone(tz);
+          const endInZone = DateTime.fromJSDate(booking.endAt, { zone: "utc" }).setZone(tz);
+          const bookingStartMinutes = startInZone.hour * 60 + startInZone.minute;
+          const bookingEndMinutes = endInZone.hour * 60 + endInZone.minute;
+          return (
+            startInZone.weekday === block.dayOfWeek &&
+            bookingStartMinutes === startMinutes &&
+            bookingEndMinutes === endMinutes
+          );
+        })
+        .map((booking) => booking.id);
+
+      if (matchingBookingIds.length > 0) {
+        await prisma.booking.updateMany({
+          where: {
+            id: { in: matchingBookingIds },
+            status: "CONFIRMED"
+          },
+          data: {
+            status: "CANCELLED",
+            cancelReason: "Annule via suppression du bloc recurrent"
+          }
+        });
+      }
+    }
+  }
+
   await deleteRecurringBlock(blockId);
   revalidatePath("/admin/availability");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin");
+  revalidatePath("/manage");
   redirect("/admin/availability?success=Bloc%20recurrent%20supprime");
 }
 

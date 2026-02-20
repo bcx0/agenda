@@ -97,6 +97,7 @@ export async function createRecurringBlock(input: {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  timeZone?: string;
   clientId?: number | null;
   note?: string;
 }) {
@@ -105,6 +106,7 @@ export async function createRecurringBlock(input: {
       dayOfWeek: input.dayOfWeek,
       startTime: input.startTime,
       endTime: input.endTime,
+      timeZone: input.timeZone ?? "Europe/Brussels",
       clientId: input.clientId ?? null,
       note: input.note ?? null
     }

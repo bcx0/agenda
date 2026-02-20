@@ -1,0 +1,5 @@
+ALTER TABLE "Booking"
+ADD COLUMN IF NOT EXISTS "timeZone" TEXT NOT NULL DEFAULT 'Europe/Brussels';
+
+ALTER TABLE "RecurringBlock"
+ADD COLUMN IF NOT EXISTS "timeZone" TEXT NOT NULL DEFAULT 'Europe/Brussels';

@@ -18,6 +18,9 @@ export function ToastProvider() {
   const lastKey = useRef<string>("");
 
   useEffect(() => {
+    if (!searchParams) return;
+    if (!pathname) return;
+
     const error = searchParams.get("error");
     const success = searchParams.get("success");
     if (!error && !success) return;
@@ -66,4 +69,3 @@ export function ToastProvider() {
     />
   );
 }
-

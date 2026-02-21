@@ -18,6 +18,9 @@ export function ToastFromSearchParams() {
   const router = useRouter();
 
   useEffect(() => {
+    if (!params) return;
+    if (!pathname) return;
+
     const successRaw = params.get("success");
     const errorRaw = params.get("error");
     const success = normalizeMessage(successRaw);

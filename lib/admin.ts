@@ -4,6 +4,7 @@ import { BRUSSELS_TZ, MIAMI_TZ, isWithinMiamiWindow, monthBoundsUtc } from "./ti
 import { sendBookingConfirmationEmail, sendBookingUpdatedEmail } from "./email/booking";
 import { checkSlotAvailability, cancelBooking } from "./booking";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "./makeWebhook";
+import { pushBookingToGoogle, pushBlockToGoogle } from "./sync-engine";
 
 export async function listClients() {
   return prisma.client.findMany({
@@ -131,17 +132,25 @@ export async function createBlock(
     throw new Error("Blocage hors plage autorisee (07:00-20:00 Miami).");
   }
 
-  return prisma.block.create({
+  const newBlock = await prisma.block.create({
     data: {
       startAt: startUtc,
       endAt: endUtc,
       reason
     }
   });
+  pushBlockToGoogle(newBlock.id, "create").catch((err) =>
+    console.error("[GoogleSync] Block create failed:", err)
+  );
+  return newBlock;
 }
 
 export async function deleteBlock(blockId: number) {
-  return prisma.block.delete({ where: { id: blockId } });
+  const deletedBlock = await prisma.block.delete({ where: { id: blockId } });
+  pushBlockToGoogle(blockId, "delete").catch((err) =>
+    console.error("[GoogleSync] Block delete failed:", err)
+  );
+  return deletedBlock;
 }
 
 export async function listUpcomingBookingsThisMonth() {
@@ -185,6 +194,15 @@ export async function updateBookingStatus(id: number, status: string) {
     where: { id },
     data: { status }
   });
+  if (status === 'CANCELLED') {
+    pushBookingToGoogle(updated.id, 'delete').catch((err) =>
+      console.error('[GoogleSync] Booking delete failed:', err)
+    )
+  } else {
+    pushBookingToGoogle(updated.id, 'update').catch((err) =>
+      console.error('[GoogleSync] Booking update failed:', err)
+    )
+  }
 
   if (status === "CONFIRMED" && booking.status !== "CONFIRMED") {
     await sendBookingConfirmationEmail({
@@ -221,6 +239,9 @@ export async function updateBookingMode(id: number, mode: string) {
     where: { id },
     data: { mode }
   });
+  pushBookingToGoogle(updated.id, "update").catch((err) =>
+    console.error("[GoogleSync] Booking update failed:", err)
+  );
 
   if (mode !== booking.mode) {
     await sendBookingUpdatedEmail({
@@ -277,6 +298,9 @@ export async function adminRescheduleBooking(
       rescheduleReason: reason ?? booking.rescheduleReason
     }
   });
+  pushBookingToGoogle(updated.id, "update").catch((err) =>
+    console.error("[GoogleSync] Booking update failed:", err)
+  );
 
   void sendMakeBookingWebhook(
     makePayloadFromBooking({

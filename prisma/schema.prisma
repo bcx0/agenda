@@ -35,6 +35,11 @@ model Booking {
   updatedAt             DateTime  @updatedAt          // ✅ UNE SEULE FOIS
   manageToken           String?   @unique            // ✅ UNE SEULE FOIS
   manageTokenExpiresAt  DateTime?                    // ✅ UNE SEULE FOIS
+  googleEventId         String?
+  googleEtag            String?
+  syncStatus            String    @default("pending")
+  syncSource            String    @default("app")
+  lastSyncedAt          DateTime?
 }
 
 model Block {
@@ -43,6 +48,11 @@ model Block {
   endAt     DateTime
   reason    String?
   createdAt DateTime @default(now())
+  googleEventId String?
+  googleEtag    String?
+  syncStatus    String   @default("pending")
+  syncSource    String   @default("app")
+  lastSyncedAt  DateTime?
 }
 
 enum AvailabilityOverrideType {
@@ -113,4 +123,34 @@ model SessionMode {
   createdAt DateTime @default(now())
 
   @@map("session_modes")
+}
+
+model GoogleToken {
+  id           Int      @id @default(autoincrement())
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  googleEmail  String?
+  syncToken    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model GoogleCalendarWatch {
+  id         Int      @id @default(autoincrement())
+  channelId  String   @unique
+  resourceId String
+  expiration DateTime
+  createdAt  DateTime @default(now())
+  renewedAt  DateTime @default(now())
+}
+
+model SyncLog {
+  id        Int      @id @default(autoincrement())
+  table     String
+  recordId  Int?
+  action    String
+  direction String
+  details   Json?
+  createdAt DateTime @default(now())
 }

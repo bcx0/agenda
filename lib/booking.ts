@@ -20,6 +20,7 @@ import {
   sendBookingConfirmationEmail
 } from "./email/booking";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "./makeWebhook";
+import { pushBookingToGoogle, pushBlockToGoogle } from "./sync-engine";
 
 type AvailabilityStatus = "available" | "booked" | "blocked";
 
@@ -399,6 +400,9 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
       manageTokenExpiresAt: addDays(new Date(), 7)
     }
   });
+  pushBookingToGoogle(booking.id, "create").catch((err) =>
+    console.error("[GoogleSync] Booking create failed:", err)
+  );
 
   const appUrl = process.env.APP_URL;
   const manageUrl = appUrl
@@ -465,6 +469,9 @@ export async function cancelBooking(bookingId: number, reason?: string) {
     endAt: booking.endAt,
     timeZone: "Europe/Brussels"
   });
+  pushBookingToGoogle(booking.id, "delete").catch((err) =>
+    console.error("[GoogleSync] Booking delete failed:", err)
+  );
 
 
   return result;

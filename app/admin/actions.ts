@@ -27,6 +27,7 @@ import { BRUSSELS_TZ, MIAMI_WORK_START, monthBoundsUtc } from "../../lib/time";
 import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
+import { pushBookingToGoogle, pushBlockToGoogle } from "@/lib/sync-engine";
 
 function assertAdmin() {
   const session = getAdminSession();
@@ -833,6 +834,9 @@ export async function blockDateForClientAction(formData: FormData) {
         : ADMIN_BLOCK_NOTE_PREFIX
     }
   });
+  pushBookingToGoogle(createdBooking.id, "create").catch((err) =>
+    console.error("[GoogleSync] Booking create failed:", err)
+  );
 
   void sendMakeBookingWebhook(
     makePayloadFromBooking({

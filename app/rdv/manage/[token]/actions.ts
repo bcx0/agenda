@@ -7,6 +7,7 @@ import { prisma } from "../../../../lib/prisma";
 import { checkSlotAvailability, cancelBooking } from "../../../../lib/booking";
 import { sendBookingUpdatedEmail } from "../../../../lib/email/booking";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../../../lib/makeWebhook";
+import { pushBookingToGoogle, pushBlockToGoogle } from "@/lib/sync-engine";
 
 const TOKEN_ERROR = "Lien expiré ou invalide.";
 
@@ -91,6 +92,9 @@ export async function rescheduleAppointmentAction(formData: FormData) {
       rescheduleReason: null
     }
   });
+  pushBookingToGoogle(updated.id, "update").catch((err) =>
+    console.error("[GoogleSync] Booking update failed:", err)
+  );
 
   void sendMakeBookingWebhook(
     makePayloadFromBooking({

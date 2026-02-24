@@ -504,9 +504,14 @@ export default async function AdminAvailabilityPage({
                         {block.startTime} → {block.endTime} (
                         {block.timeZone === "America/New_York" ? "Miami" : "Bruxelles"})
                       </div>
-                      <div className="text-white/60">
-                        {block.client ? `Réservé pour ${block.client.name}` : "Réservé"}
-                      </div>
+                      {block.client ? (
+                        <div className="mt-2 text-sm">
+                          <p className="text-[#C8A060]">Client : {block.client.name}</p>
+                          <p className="text-xs text-white/50">{block.client.email}</p>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm text-white/50">Client non attribué</p>
+                      )}
                       {block.note ? (
                         <div className="text-xs text-white/60">Note: {block.note}</div>
                       ) : null}

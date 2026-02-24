@@ -5,8 +5,9 @@ import Link from "next/link";
 import { DateTime } from "luxon";
 import { BookingViews } from "../../components/BookingViews";
 import { getCurrentClient } from "../../lib/auth";
-import { getAvailability, getQuotaStatus } from "../../lib/booking";
+import { getQuotaStatus } from "../../lib/booking";
 import { BRUSSELS_TZ } from "../../lib/time";
+import { formatTimeSlot, getAvailableTimeSlots } from "../../lib/timeSlots";
 import { logoutAction } from "../login/actions";
 import { prisma } from "../../lib/prisma";
 import { getSettings } from "../../lib/settings";
@@ -60,7 +61,7 @@ export default async function BookPage({
   if (!client) redirect("/login");
 
   const [slots, quota, settings, sessionModes] = await Promise.all([
-    getAvailability(),
+    getAvailableTimeSlots(),
     getQuotaStatus(client.id),
     getSettings(),
     prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } })
@@ -76,6 +77,7 @@ export default async function BookPage({
 
     return {
       ...slot,
+      label: formatTimeSlot({ startTime: slot.startTime, date: slot.date }),
       mode: modeForDate.mode,
       presentielLocation: modeForDate.presentielLocation
     };

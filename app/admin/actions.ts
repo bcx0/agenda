@@ -28,6 +28,7 @@ import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle } from "@/lib/sync-engine";
+import { Prisma } from "@prisma/client";
 
 function assertAdmin() {
   const session = getAdminSession();
@@ -46,6 +47,22 @@ function buildErrorUrl(base: string, message: string) {
   return base.includes("?")
     ? `${base}&error=${encodeURIComponent(message)}`
     : `${base}?error=${encodeURIComponent(message)}`;
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function buildClientsErrorUrl(
+  message: string,
+  defaults?: { name?: string; email?: string; creditsPerMonth?: string }
+) {
+  const params = new URLSearchParams();
+  params.set("error", message);
+  if (defaults?.name) params.set("name", defaults.name);
+  if (defaults?.email) params.set("email", defaults.email);
+  if (defaults?.creditsPerMonth) params.set("creditsPerMonth", defaults.creditsPerMonth);
+  return `/admin/clients?${params.toString()}`;
 }
 
 function assertValidTimeRange(startTime: string, endTime: string, redirectTo: string) {
@@ -114,45 +131,69 @@ export async function adminLogoutAction() {
 
 export async function addClientAction(formData: FormData) {
   assertAdmin();
-  const email = formData.get("email")?.toString().trim() ?? "";
   const name = formData.get("name")?.toString().trim() ?? "";
+  const emailRaw = formData.get("email")?.toString() ?? "";
+  const email = normalizeEmail(emailRaw);
   const password = formData.get("password")?.toString() ?? "";
   const creditsRaw = formData.get("creditsPerMonth")?.toString().trim() ?? "";
 
-  if (!email) redirect("/admin/clients?error=Email%20manquant");
+  if (!email) redirect(buildClientsErrorUrl("Email manquant", { name, creditsPerMonth: creditsRaw }));
   if (!z.string().email().safeParse(email).success) {
-    redirect("/admin/clients?error=Email%20invalide");
+    redirect(buildClientsErrorUrl("Email invalide", { name, email: emailRaw, creditsPerMonth: creditsRaw }));
   }
-  if (!name) redirect("/admin/clients?error=Nom%20manquant");
-  if (!password) redirect("/admin/clients?error=Mot%20de%20passe%20manquant");
+  if (!name) redirect(buildClientsErrorUrl("Nom manquant", { email: emailRaw, creditsPerMonth: creditsRaw }));
+  if (!password) redirect(buildClientsErrorUrl("Mot de passe manquant", { name, email: emailRaw, creditsPerMonth: creditsRaw }));
 
   if (!creditsRaw) {
-    redirect("/admin/clients?error=Credits%20mensuels%20manquants");
+    redirect(buildClientsErrorUrl("Credits mensuels manquants", { name, email: emailRaw }));
   }
   const creditsPerMonth = Number(creditsRaw);
   if (!Number.isFinite(creditsPerMonth) || creditsPerMonth < 0) {
-    redirect("/admin/clients?error=Credits%20mensuels%20invalides%20(>=%200)");
+    redirect(buildClientsErrorUrl("Credits mensuels invalides (>= 0)", { name, email: emailRaw, creditsPerMonth: creditsRaw }));
+  }
+
+  const existingClient = await prisma.client.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+    select: { id: true }
+  });
+  if (existingClient) {
+    redirect(
+      buildClientsErrorUrl("❌ Cette adresse email est déjà utilisée par un autre client.", {
+        name,
+        email: emailRaw,
+        creditsPerMonth: creditsRaw
+      })
+    );
   }
 
   const hashed = await bcrypt.hash(password, 10);
   try {
     await createClient({
-      email: email.toLowerCase(),
+      email,
       name,
       passwordHash: hashed,
       creditsPerMonth
     });
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      redirect(
+        buildClientsErrorUrl("❌ Cette adresse email est déjà utilisée par un autre client.", {
+          name,
+          email: emailRaw,
+          creditsPerMonth: creditsRaw
+        })
+      );
+    }
     if (err instanceof z.ZodError) {
-      redirect("/admin/clients?error=Champs%20invalides");
+      redirect(buildClientsErrorUrl("Champs invalides", { name, email: emailRaw, creditsPerMonth: creditsRaw }));
     }
     if (err && typeof err === "object" && "code" in err && "message" in err) {
       const code = String(err.code);
       const message = String(err.message);
-      redirect(`/admin/clients?error=${encodeURIComponent(`Prisma ${code}: ${message}`)}`);
+      redirect(buildClientsErrorUrl(`Prisma ${code}: ${message}`, { name, email: emailRaw, creditsPerMonth: creditsRaw }));
     }
     const message = err instanceof Error ? err.message : "Creation client impossible";
-    redirect(`/admin/clients?error=${encodeURIComponent(message)}`);
+    redirect(buildClientsErrorUrl(message, { name, email: emailRaw, creditsPerMonth: creditsRaw }));
   }
 
   revalidatePath("/admin/clients");
@@ -172,7 +213,7 @@ export async function updateCreditsAction(formData: FormData) {
 export async function updateClientEmailAction(formData: FormData) {
   assertAdmin();
   const clientId = Number(formData.get("clientId"));
-  const email = formData.get("email")?.toString().trim().toLowerCase() ?? "";
+  const email = normalizeEmail(formData.get("email")?.toString() ?? "");
 
   if (!clientId) {
     redirect("/admin/clients?error=Client%20introuvable");
@@ -186,22 +227,31 @@ export async function updateClientEmailAction(formData: FormData) {
 
   const existingClient = await prisma.client.findFirst({
     where: {
-      email,
+      email: { equals: email, mode: "insensitive" },
       id: { not: clientId }
     },
-    select: { id: true }
+    select: { id: true, name: true }
   });
 
   if (existingClient) {
     redirect(
-      `/admin/clients?error=${encodeURIComponent(`L'email ${email} est déjà utilisé par un autre client.`)}`
+      `/admin/clients?error=${encodeURIComponent(`❌ L'adresse email ${email} est déjà utilisée par ${existingClient.name}.`)}`
     );
   }
 
-  await prisma.client.update({
-    where: { id: clientId },
-    data: { email }
-  });
+  try {
+    await prisma.client.update({
+      where: { id: clientId },
+      data: { email }
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      redirect(
+        `/admin/clients?error=${encodeURIComponent("❌ Cette adresse email est déjà utilisée par un autre client.")}`
+      );
+    }
+    throw err;
+  }
 
   revalidatePath("/admin/clients");
   redirect("/admin/clients?success=Email%20mis%20a%20jour");

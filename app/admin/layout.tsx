@@ -15,13 +15,13 @@ const links = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black pb-16 text-white md:pb-0">
       <header className="border-b border-border bg-background-elevated">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
           <div className="font-[var(--font-playfair)] text-lg uppercase tracking-wider text-white">
             Admin Agenda
           </div>
-          <nav className="flex items-center gap-3 text-sm">
+          <nav className="hidden items-center gap-3 text-sm md:flex">
             {links.map((link) => {
               const active = pathname === link.href;
               return (

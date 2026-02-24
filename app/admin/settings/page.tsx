@@ -7,6 +7,7 @@ import { getSettings } from "../../../lib/settings";
 import { saveSettingsAction } from "./actions";
 import { createSessionModeAction, deleteSessionModeAction } from "../actions";
 import { prisma } from "../../../lib/prisma";
+import { GoogleCalendarConnect } from "../../../components/GoogleCalendarConnect";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,13 @@ export default async function AdminSettingsPage() {
   const session = getAdminSession();
   if (!session) redirect("/admin?error=unauthorized");
 
-  const [settings, sessionModes] = await Promise.all([
+  const [settings, sessionModes, googleToken] = await Promise.all([
     getSettings(),
     prisma.sessionMode.findMany({
       orderBy: { startDate: "asc" }
-    })
+    }),
+    // TODO: activer après migration Prisma (npx prisma migrate dev)
+    Promise.resolve<{ googleEmail?: string | null } | null>(null)
   ]);
 
   return (
@@ -98,6 +101,15 @@ export default async function AdminSettingsPage() {
             </button>
           </div>
         </form>
+      </div>
+
+      <div className="card space-y-4 p-6">
+        <div className="text-xs uppercase tracking-widest text-white/60">Google Calendar</div>
+        <div className="text-lg font-semibold">Connexion et synchronisation</div>
+        <GoogleCalendarConnect
+          isConnected={Boolean(googleToken)}
+          googleEmail={googleToken?.googleEmail ?? null}
+        />
       </div>
 
       <div className="card space-y-6 p-6">

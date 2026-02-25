@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Client {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  name            String
+  passwordHash    String
+  creditsPerMonth Int
+  isActive        Boolean   @default(true)
+  bookings        Booking[]
+  recurringBlocks RecurringBlock[]
+  createdAt       DateTime  @default(now())
+}
+
+model Booking {
+  id                    Int       @id @default(autoincrement())
+  clientId              Int
+  client                Client    @relation(fields: [clientId], references: [id])
+  startAt               DateTime
+  endAt                 DateTime
+  timeZone              String    @default("Europe/Brussels")
+  status                String    @default("CONFIRMED")
+  mode                  String    @default("VISIO")
+  cancelReason          String?
+  rescheduleReason      String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt          // ✅ UNE SEULE FOIS
+  manageToken           String?   @unique            // ✅ UNE SEULE FOIS
+  manageTokenExpiresAt  DateTime?                    // ✅ UNE SEULE FOIS
+  googleEventId         String?
+  googleEtag            String?
+  syncStatus            String    @default("pending")
+  syncSource            String    @default("app")
+  lastSyncedAt          DateTime?
+}
+
+model Block {
+  id        Int      @id @default(autoincrement())
+  startAt   DateTime
+  endAt     DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+  googleEventId String?
+  googleEtag    String?
+  syncStatus    String   @default("pending")
+  syncSource    String   @default("app")
+  lastSyncedAt  DateTime?
+}
+
+enum AvailabilityOverrideType {
+  BLOCK
+  OPEN
+}
+
+model AvailabilityRule {
+  id        Int      @id @default(autoincrement())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+}
+
+model AvailabilityOverride {
+  id        Int                      @id @default(autoincrement())
+  date      DateTime
+  startTime String
+  endTime   String
+  type      AvailabilityOverrideType
+  note      String?
+  createdAt DateTime                 @default(now())
+}
+
+model RecurringBlock {
+  id        Int      @id @default(autoincrement())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  timeZone  String?
+  clientId  Int?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model EmailLog {
+  id        Int      @id @default(autoincrement())
+  to        String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Settings {
+  id                 Int         @id @default(1)
+  location           String      @default("MIAMI") // MIAMI | BELGIUM
+  presentielLocation String      @default("Vander Valk")
+  presentielNote     String?
+  defaultMode        String      @default("VISIO") // VISIO | PRESENTIEL
+  updatedAt          DateTime    @updatedAt
+}
+
+model SessionMode {
+  id        Int      @id @default(autoincrement())
+  startDate DateTime
+  endDate   DateTime
+  mode      String
+  location  String?
+  createdAt DateTime @default(now())
+
+  @@map("session_modes")
+}
+
+model GoogleToken {
+  id           Int      @id @default(autoincrement())
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  googleEmail  String?
+  syncToken    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model GoogleCalendarWatch {
+  id         Int      @id @default(autoincrement())
+  channelId  String   @unique
+  resourceId String
+  expiration DateTime
+  createdAt  DateTime @default(now())
+  renewedAt  DateTime @default(now())
+}
+
+model SyncLog {
+  id        Int      @id @default(autoincrement())
+  table     String
+  recordId  Int?
+  action    String
+  direction String
+  details   Json?
+  createdAt DateTime @default(now())
+}

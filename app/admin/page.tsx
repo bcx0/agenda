@@ -58,20 +58,33 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
   const now = new Date();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  const [clients, bookings, cancelledCount, thisMonthUpcomingBookings] = await Promise.all([
-    listClients(),
-    listUpcomingBookingsThisMonth(),
-    countCancelledBookings(),
-    prisma.booking.count({
-      where: {
-        status: "CONFIRMED",
-        startAt: {
-          gte: now,
-          lte: endOfMonth
+  const [clients, bookings, cancelledCount, thisMonthUpcomingBookings, recurringBlocks] =
+    await Promise.all([
+      listClients(),
+      listUpcomingBookingsThisMonth(),
+      countCancelledBookings(),
+      prisma.booking.count({
+        where: {
+          status: "CONFIRMED",
+          startAt: { gte: now, lte: endOfMonth }
         }
-      }
-    })
-  ]);
+      }),
+      prisma.recurringBlock.findMany()
+    ]);
+  // Compter les occurrences de RecurringBlocks restantes ce mois
+  let recurringCount = 0;
+  const cursor = new Date(now);
+  cursor.setHours(0, 0, 0, 0);
+  while (cursor <= endOfMonth) {
+    // JS getDay() : 0=dim, 1=lun... on convertit en Prisma dayOfWeek (1=lun, 7=dim)
+    const jsDay = cursor.getDay();
+    const prismaDay = jsDay === 0 ? 7 : jsDay;
+    const todayBlocks = recurringBlocks.filter((b) => b.dayOfWeek === prismaDay);
+    recurringCount += todayBlocks.length;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const totalRdv = thisMonthUpcomingBookings + recurringCount;
   const upcoming = bookings.slice(0, 4);
 
   return (
@@ -91,7 +104,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
 
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Clients actifs" value={clients.filter((c) => c.isActive).length} />
-        <StatCard label="Rendez-vous" value={thisMonthUpcomingBookings} />
+        <StatCard label="Rendez-vous" value={totalRdv} />
         <StatCard label="Annulés" value={cancelledCount} />
       </div>
 
@@ -159,4 +172,3 @@ function StatCard({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-

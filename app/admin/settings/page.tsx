@@ -20,8 +20,7 @@ export default async function AdminSettingsPage() {
     prisma.sessionMode.findMany({
       orderBy: { startDate: "asc" }
     }),
-    // TODO: activer après migration Prisma (npx prisma migrate dev)
-    Promise.resolve<{ googleEmail?: string | null } | null>(null)
+    prisma.googleToken.findFirst()
   ]);
 
   return (
@@ -124,11 +123,23 @@ export default async function AdminSettingsPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-widest text-white/60">Date de début</label>
-              <input type="date" name="startDate" required className="input" />
+              <input
+                type="date"
+                name="startDate"
+                required
+                className="input"
+                min={new Date().toISOString().split('T')[0]}
+              />
             </div>
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-widest text-white/60">Date de fin</label>
-              <input type="date" name="endDate" required className="input" />
+              <input
+                type="date"
+                name="endDate"
+                required
+                className="input"
+                min={new Date().toISOString().split('T')[0]}
+              />
             </div>
           </div>
 
@@ -202,5 +213,4 @@ export default async function AdminSettingsPage() {
     </section>
   );
 }
-
 

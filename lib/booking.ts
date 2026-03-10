@@ -141,9 +141,7 @@ function slotOverlapsRecurring(
 function legacyBlocksWhere(rangeStart: Date, rangeEnd: Date) {
   return {
     startAt: { lt: rangeEnd },
-    endAt: { gt: rangeStart },
-    // Intentionally no syncSource filter: app + google blocks must both block slots.
-    syncStatus: { not: "cancelled" }
+    endAt: { gt: rangeStart }
   };
 }
 

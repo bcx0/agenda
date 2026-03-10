@@ -185,8 +185,20 @@ export default async function AdminAvailabilityPage({
                   </option>
                 ))}
               </select>
-              <input type="time" name="startTime" className="input" required />
-              <input type="time" name="endTime" className="input" required />
+              <select name="startTime" className="input" required>
+                {HALF_HOUR_OPTIONS.map((time) => (
+                  <option key={`weekly-start-${time}`} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
+              <select name="endTime" className="input" required>
+                {HALF_HOUR_OPTIONS.map((time) => (
+                  <option key={`weekly-end-${time}`} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
               <button type="submit" className="btn btn-primary md:col-span-3">
                 Ajouter
               </button>
@@ -532,6 +544,5 @@ export default async function AdminAvailabilityPage({
     </section>
   );
 }
-
 
 

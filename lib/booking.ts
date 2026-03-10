@@ -138,6 +138,15 @@ function slotOverlapsRecurring(
   return minutes.start < end && minutes.end > start;
 }
 
+function legacyBlocksWhere(rangeStart: Date, rangeEnd: Date) {
+  return {
+    startAt: { lt: rangeEnd },
+    endAt: { gt: rangeStart },
+    // Intentionally no syncSource filter: app + google blocks must both block slots.
+    syncStatus: { not: "cancelled" }
+  };
+}
+
 async function getAvailabilityData(rangeStart: Date, rangeEnd: Date) {
   const [rules, overrides, recurringBlocks, legacyBlocks, bookings] = await Promise.all([
     prisma.availabilityRule.findMany({ orderBy: { dayOfWeek: "asc" } }),
@@ -147,7 +156,7 @@ async function getAvailabilityData(rangeStart: Date, rangeEnd: Date) {
     }),
     prisma.recurringBlock.findMany({ orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] }),
     prisma.block.findMany({
-      where: { startAt: { lt: rangeEnd }, endAt: { gt: rangeStart } },
+      where: legacyBlocksWhere(rangeStart, rangeEnd),
       orderBy: { startAt: "asc" }
     }),
     prisma.booking.findMany({
@@ -297,7 +306,7 @@ export async function checkSlotAvailability(
     prisma.availabilityOverride.findMany({ where: { date: { gte: dayStart, lt: dayEnd } } }),
     prisma.recurringBlock.findMany({ where: { dayOfWeek: minutes.day.weekday } }),
     prisma.block.findMany({
-      where: { startAt: { lt: endUtc }, endAt: { gt: startUtc } }
+      where: legacyBlocksWhere(startUtc, endUtc)
     }),
     prisma.booking.findMany({
       where: {

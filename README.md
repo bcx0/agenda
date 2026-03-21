@@ -1,73 +1,139 @@
-﻿# Espace Client - Prise de rendez-vous (demo locale)
+# Agenda — Système de réservation coaching
 
-Demo Next.js 14 + Prisma SQLite. Agenda local avec conversions Brussels/Miami, quotas mensuels et espace admin protégé.
+![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js) ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue?logo=typescript) ![Prisma](https://img.shields.io/badge/Prisma-5.12-2D3748?logo=prisma) ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase) ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4-38BDF8?logo=tailwindcss) ![Vercel](https://img.shields.io/badge/Déployé-Vercel-000?logo=vercel)
 
-## Lancer le projet (Windows / PowerShell)
-- Prérequis : Node.js 18+, npm.
-- Installer : `npm install`
-- Config env : copiez `.env.example` vers `.env` et ajustez `SESSION_SECRET` + `ADMIN_PASSWORD` (défaut local : `220700mG`). `DATABASE_URL` est déjà en SQLite local (`file:./dev.db`).
-- Variables requises en local : `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_PASSWORD`.
-- Script local (PowerShell) pour automatiser migration + generate + dev :
-  - `.\scripts\setup-admin.ps1`
-  - Options : `-SkipMigrate`, `-SkipGenerate`, `-SkipDev`
+Système de prise de rendez-vous sur mesure pour Geoffrey Mahieu, coach. Permet à ses clients de réserver des séances (visio ou présentiel), avec synchronisation bidirectionnelle Google Calendar et notifications email automatiques.
 
-## Dépannage (Windows / Supabase)
-- Erreur `spawn EPERM` (Next/Prisma) :
-  - Fermer les terminaux Node ouverts.
-  - Relancer PowerShell en admin.
-  - Vérifier l'antivirus/Defender (fichiers Prisma/Next parfois bloqués).
-- Erreur `EPERM rename ...query_engine-windows.dll.node` :
-  - Fermer les processus Node.
-  - Supprimer `node_modules/.prisma` puis relancer `npx prisma generate`.
-- Erreur `P1001 Can't reach database server` :
-  - Vérifier la connexion réseau.
-  - Vérifier que `DATABASE_URL` pointe vers le bon projet Supabase.
-  - Tester l'accès avec un client SQL (psql/pgAdmin).
-- Règles horaires :
-  - Miami 07:00 → 20:00 (dernier créneau commence à 20:00).
-  - Si localisation admin = Belgique : 09:00 → 18:00 (Brussels).
-- Règle 72h : annulation/modification impossible à moins de 72h du rendez-vous.
-- Mode de rendez-vous : VISIO (défaut) ou PRÉSENTIEL. Le lieu présentiel est affiché (défaut : Vander Valk).
-- Générer Prisma Client : `npx prisma generate`
-- Initialiser la base : `npx prisma db push`
-- Seed de démo (idempotent) : `npx prisma db seed`
-- Démarrer : `npm run dev` puis ouvrez `http://localhost:3000`
+---
 
-## Maintenance Prisma
-- Quand le schema change : `npx prisma generate`, `npx prisma db push`, `npx prisma db seed` (si besoin), puis `npm run dev`.
-- `DATABASE_URL` doit être défini même en SQLite local.
+## Stack technique
 
-## URLs & comptes de test
-- Accueil : `http://localhost:3000`
-- Login : `http://localhost:3000/login`
-- Agenda : `http://localhost:3000/book`
-- Admin : `http://localhost:3000/admin`
-  - Disponibilités : `http://localhost:3000/admin/availability`
-  - Clients : `http://localhost:3000/admin/clients`
-  - Bookings : `http://localhost:3000/admin/bookings`
-  - Settings : `http://localhost:3000/admin/settings`
+- **Framework** — Next.js 14 (App Router)
+- **Base de données** — PostgreSQL via Supabase + Prisma ORM
+- **Authentification** — Sessions cookie + bcryptjs
+- **Email** — Resend
+- **Calendrier** — Google Calendar API (OAuth2, webhooks, iCal feed)
+- **Validation** — Zod
+- **Dates** — Luxon + date-fns
+- **Style** — Tailwind CSS 3.4
 
-Clients :
-- `geoffrey.client1@test.com` / `Test1234!` / 2 crédits/mois
-- `geoffrey.client2@test.com` / `Test1234!` / 1 crédit/mois
+---
 
-Admin :
-- Mot de passe local (env `ADMIN_PASSWORD`) : `220700mG`
-- Switch localisation + mode par défaut + lieu présentiel dans `/admin/settings`.
+## Prérequis
 
-## Parcours utilisateur
-- `/login` : connexion email + mot de passe (clients actifs seulement).
-- `/book` : agenda protégé. Créneaux Brussels/Miami, règle lundi 17h Brussels bloqué, quotas mensuels, confirmation via modale/bandeau.
+- Node.js ≥ 18
+- Compte Supabase (PostgreSQL)
+- Compte Google Cloud (OAuth2 + Calendar API activée)
+- Compte Resend
 
-## Interface admin (`/admin`)
-- Protégé par `ADMIN_PASSWORD`.
-- Clients : ajouter, quotas, activer/désactiver.
-- Indisponibilités : ajouter/supprimer des blocages ponctuels.
-- Bookings : statut (DONE/NO_SHOW/CANCELLED/CONFIRMED), mode VISIO/PRÉSENTIEL, annulation (72h mini).
-- Settings : localisation Miami/Belgique, mode par défaut, lieu/notes présentiel.
+---
 
-## Tests manuels rapides
-- Quota atteint : client2 réserve 1 créneau, message quota.
-- Blocage récurrent lundi 17h : voir indisponibilité.
-- Blocage ponctuel : ajouter un bloc côté admin puis vérifier côté client.
-- Admin login : mot de passe `220700mG`, navigation settings et changement de localisation.
+## Installation
+
+```bash
+git clone <repo-url>
+cd agenda
+npm install
+cp .env.example .env.local
+# Remplir les variables d'environnement
+npx prisma generate
+npx prisma db push
+```
+
+---
+
+## Variables d'environnement
+
+| Variable | Description | Requis |
+|---|---|---|
+| `DATABASE_URL` | URL de connexion Prisma (pooling Supabase) | ✅ |
+| `DIRECT_URL` | URL directe Supabase (pour les migrations) | ✅ |
+| `SESSION_SECRET` | Secret pour les cookies de session admin | ✅ |
+| `ADMIN_PASSWORD` | Mot de passe du compte admin | ✅ |
+| `GOOGLE_CLIENT_ID` | Client ID Google OAuth2 | ✅ |
+| `GOOGLE_CLIENT_SECRET` | Secret Google OAuth2 | ✅ |
+| `GOOGLE_REDIRECT_URI` | URI de callback OAuth2 | ✅ |
+| `RESEND_API_KEY` | Clé API Resend pour les emails | ✅ |
+| `NEXT_PUBLIC_APP_URL` | URL publique de l'application | ✅ |
+
+---
+
+## Lancement en développement
+
+```bash
+npm run dev
+```
+
+Application disponible sur [http://localhost:3000](http://localhost:3000).
+
+Commandes Prisma utiles :
+
+```bash
+npm run prisma:generate   # Régénérer le client Prisma
+npm run prisma:push       # Pousser le schéma sans migration formelle
+npm run prisma:seed       # Alimenter la base avec des données de test
+```
+
+---
+
+## Structure des dossiers
+
+```
+agenda/
+├── app/
+│   ├── admin/          # Tableau de bord administrateur
+│   │   ├── availability/   # Gestion des disponibilités
+│   │   ├── bookings/       # Gestion des réservations
+│   │   ├── clients/        # Gestion des clients
+│   │   └── settings/       # Paramètres (localisation, mode)
+│   ├── api/            # Routes API (Google OAuth, Calendar, Email)
+│   ├── book/           # Page de réservation publique
+│   ├── login/          # Connexion client
+│   └── rdv/manage/     # Gestion de RDV par token (annulation/report)
+├── components/         # Composants React réutilisables
+├── lib/                # Logique métier (sync, slots, auth, email, Google)
+├── prisma/             # Schéma Prisma et migrations
+└── pages/api/          # Webhooks Google Calendar
+```
+
+---
+
+## Fonctionnalités principales
+
+- Réservation de créneaux en ligne (vue semaine / vue mois)
+- Gestion des disponibilités récurrentes et exceptions ponctuelles
+- Synchronisation bidirectionnelle Google Calendar (webhooks en temps réel)
+- Système de crédits mensuels par client
+- Notifications email (confirmation, annulation, report) via Resend
+- Modes de séance : VISIO ou PRÉSENTIEL (avec lieu configurable)
+- Support multi-timezone — Europe/Brussels ↔ America/New_York (Miami)
+- Règle 72h : annulation/report impossible à moins de 72h du RDV
+- Tableau de bord admin complet (clients, réservations, disponibilités, paramètres)
+- Liens de gestion sécurisés par token — le client peut annuler/reporter sans connexion
+
+---
+
+## Comptes de test (seed local)
+
+| Email | Mot de passe | Crédits/mois |
+|---|---|---|
+| `geoffrey.client1@test.com` | `Test1234!` | 2 |
+| `geoffrey.client2@test.com` | `Test1234!` | 1 |
+
+Admin : mot de passe défini dans la variable `ADMIN_PASSWORD`.
+
+---
+
+## Déploiement
+
+Configuré pour Vercel. Le `postinstall` (`prisma generate`) s'exécute automatiquement au build.
+
+```bash
+npm run build
+```
+
+---
+
+## Statut du projet
+
+**Production** — Déployé pour Geoffrey Mahieu.

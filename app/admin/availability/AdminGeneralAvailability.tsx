@@ -354,9 +354,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     {availabilitiesForDay.map((slot) => (
                       <div
                         key={slot.start.toISOString()}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+                        className="rounded-lg border border-gray-700 bg-[#0F0F0F] px-3 py-2 text-sm"
                       >
-                        <p className="font-semibold">{slot.brussels} (Brussels)</p>
+                        <p className="font-semibold text-white">{slot.brussels} (Brussels)</p>
                         <p className="text-xs text-white/70">{slot.miami} (Miami)</p>
                       </div>
                     ))}
@@ -375,10 +375,10 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     {bookingsForDay.map((booking) => (
                       <div
                         key={booking.id}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+                        className="flex items-start justify-between gap-3 rounded-lg border border-gray-700 bg-[#0F0F0F] px-3 py-2 text-sm"
                       >
                         <div className="flex-1">
-                          <p className="font-semibold">{booking.client.name}</p>
+                          <p className="font-semibold text-white">{booking.client.name}</p>
                           <p className="text-xs text-white/70">
                             {DateTime.fromJSDate(booking.startDate, { zone: "utc" })
                               .setZone(BRUSSELS_TZ)

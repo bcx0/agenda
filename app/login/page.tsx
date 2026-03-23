@@ -23,6 +23,15 @@ export default function LoginPage() {
         </div>
         <LoginForm />
       </div>
+
+      <div className="mt-8 text-center">
+        <Link
+          href="/admin"
+          className="text-xs uppercase tracking-widest text-white/40 hover:text-[#C8A060] transition-colors"
+        >
+          Admin
+        </Link>
+      </div>
     </section>
   );
 }

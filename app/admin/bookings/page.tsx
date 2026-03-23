@@ -92,12 +92,12 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
                 <span
                   className={`rounded px-3 py-1 text-xs font-semibold text-white ${
                     booking.status === "CONFIRMED"
-                      ? "bg-success"
+                      ? "bg-green-600"
                       : booking.status === "NO_SHOW"
-                      ? "bg-warning"
+                      ? "bg-yellow-600"
                       : booking.status === "DONE"
-                      ? "bg-primary"
-                      : "bg-danger"
+                      ? "bg-blue-600"
+                      : "bg-red-600"
                   }`}
                 >
                   {booking.status}

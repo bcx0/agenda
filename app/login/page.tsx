@@ -22,7 +22,7 @@ export default function LoginPage() {
           </ul>
           <div className="space-y-4">
             <p>Retour à l&apos;accueil</p>
-            <Link href="/admin" className="text-primary block hover:text-primary-light">
+            <Link href="/admin" className="text-[#C8A060] block">
               ADMIN
             </Link>
           </div>

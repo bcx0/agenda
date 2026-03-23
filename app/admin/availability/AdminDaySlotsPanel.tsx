@@ -11,15 +11,15 @@ type Props = {
 };
 
 function statusLabel(status: SlotView["status"]) {
-  if (status === "booked") return "Réservé";
+  if (status === "booked") return "Occupe";
   if (status === "blocked") return "Indisponible";
   return "Disponible";
 }
 
 function statusClass(status: SlotView["status"]) {
-  if (status === "available") return "bg-primary/10 text-primary";
-  if (status === "booked") return "bg-success/10 text-success";
-  return "bg-gray-100 text-gray-500";
+  if (status === "available") return "bg-[#C8A060] text-black";
+  if (status === "booked") return "bg-amber-100 text-amber-800";
+  return "bg-white/10 text-white/60";
 }
 
 function AdminDaySlotsPanel({ open, dateLabel, slots, onClose }: Props) {
@@ -59,7 +59,7 @@ function AdminDaySlotsPanel({ open, dateLabel, slots, onClose }: Props) {
             slots.map((slot) => (
               <div
                 key={slot.start.toISOString()}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-4 text-left shadow-sm"
+                className="w-full rounded-xl border border-gray-800 bg-[#0F0F0F] px-4 py-4 text-left"
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold">{slot.brussels} - Brussels</span>

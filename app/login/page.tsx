@@ -5,27 +5,21 @@ import LoginForm from "./LoginForm";
 
 export default function LoginPage() {
   return (
-    <section className="mx-auto max-w-5xl px-5 py-16 md:py-24">
-      <div className="grid gap-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
+    <section className="mx-auto max-w-5xl px-5 py-10 md:py-24">
+      <div className="flex flex-col gap-10 md:grid md:grid-cols-[1.1fr_0.9fr] md:items-center">
         <div className="space-y-6">
           <p className="pill">Connexion sécurisée</p>
-          <h1 className="font-[var(--font-playfair)] text-4xl uppercase tracking-wider text-white">
+          <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider text-white md:text-4xl">
             Espace client
           </h1>
-          <p className="italic text-lg text-white/70">
+          <p className="hidden italic text-lg text-white/70 md:block">
             « Une page privée, simple et claire pour réserver vos sessions. »
           </p>
-          <ul className="space-y-3 text-white/70">
+          <ul className="hidden space-y-3 text-white/70 md:block">
             <li>— Vérification par email + mot de passe.</li>
             <li>— Quotas mensuels pris en compte automatiquement.</li>
             <li>— Créneaux Brussels / Miami affichés en temps réel.</li>
           </ul>
-          <div className="space-y-4">
-            <p>Retour à l&apos;accueil</p>
-            <Link href="/admin" className="text-[#C8A060] block">
-              ADMIN
-            </Link>
-          </div>
         </div>
         <LoginForm />
       </div>

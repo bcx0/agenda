@@ -57,10 +57,10 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
             {feedUrl}
           </code>
           <ol className="list-decimal space-y-1 pl-5">
-            <li>iPhone: Reglages -&gt; Calendrier -&gt; Comptes</li>
-            <li>Ajouter un compte -&gt; Autre -&gt; S&apos;abonner a un calendrier</li>
+            <li>iPhone : Réglages → Calendrier → Comptes</li>
+            <li>Ajouter un compte → Autre → S&apos;abonner à un calendrier</li>
             <li>Coller l&apos;URL ci-dessus puis valider</li>
-            <li>Les reservations confirmees futures se synchronisent automatiquement</li>
+            <li>Les réservations confirmées futures se synchronisent automatiquement</li>
           </ol>
         </div>
       </div>

@@ -29,31 +29,57 @@ function SlotButtonComponent({
   status,
   quotaReached = false
 }: Props) {
-  const disabled = status !== "available" || quotaReached;
+  const isActionable = status === "available" && !quotaReached;
 
   const stateLabel = quotaReached && status === "available"
     ? "Quota atteint"
     : status === "booked"
-    ? "Occupe"
+    ? "Réservé"
     : status === "blocked"
     ? "Indisponible"
     : "Disponible";
 
   const badgeClass =
-    status === "available" && !disabled
-      ? "bg-[#C8A060] text-black"
+    status === "available" && isActionable
+      ? "bg-primary/10 text-primary"
       : status === "booked"
-      ? "bg-amber-100 text-amber-800"
-      : "bg-white/10 text-white/60";
+      ? "bg-primary/10 text-primary"
+      : "bg-gray-100 text-gray-500";
+
+  const content = (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold">{brussels} - Brussels</span>
+        <span className={clsx("rounded-full px-2 py-1 text-[11px] font-semibold", badgeClass)}>
+          {stateLabel}
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-xs text-white/70">
+        <span>{miami} - Miami</span>
+        <span className="rounded-full bg-white/5 px-2 py-1 text-[11px]">
+          {mode === "PRESENTIEL"
+            ? `Présentiel${presentielLocation ? " - " + presentielLocation : ""}`
+            : "Visio"}
+        </span>
+      </div>
+      {mode === "PRESENTIEL" && presentielNote ? (
+        <div className="mt-1 text-[11px] text-white/60">{presentielNote}</div>
+      ) : null}
+    </div>
+  )
+
+  if (!isActionable) {
+    return (
+      <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-left text-gray-500 opacity-80">
+        {content}
+      </div>
+    )
+  }
 
   return (
     <form
       action={bookSlotAction}
       onSubmit={(e) => {
-        if (disabled) {
-          e.preventDefault();
-          return;
-        }
         const ok = window.confirm(
           `Confirmer ce rendez vous ?\n${brussels} (Brussels)\n${miami} (Miami)`
         );
@@ -63,31 +89,12 @@ function SlotButtonComponent({
       <input type="hidden" name="start" value={startIso} />
       <button
         type="submit"
-        disabled={disabled}
         className={clsx(
           "w-full rounded-xl border px-4 py-4 text-left transition focus:outline-none focus:ring-2",
-          disabled
-            ? "cursor-not-allowed border-gray-800 bg-[#0F0F0F] text-white/30 opacity-50 hover:translate-y-0 hover:shadow-none"
-            : "border-gray-800 bg-[#0F0F0F] text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#C8A060]/20 hover:border-[#C8A060] hover:bg-[#C8A060]/10 focus:ring-[#C8A060]/30"
+          "border-gray-200 bg-white text-gray-700 shadow-sm hover:-translate-y-0.5 hover:shadow-md hover:border-primary hover:bg-primary-50 focus:ring-primary/30"
         )}
       >
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-semibold">{brussels} - Brussels</span>
-          <span className={clsx("rounded-full px-2 py-1 text-[11px] font-semibold", badgeClass)}>
-            {stateLabel}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-xs text-white/70">
-          <span>{miami} - Miami</span>
-          <span className="rounded-full bg-white/5 px-2 py-1 text-[11px]">
-            {mode === "PRESENTIEL"
-              ? `Présentiel${presentielLocation ? " - " + presentielLocation : ""}`
-              : "Visio"}
-          </span>
-        </div>
-        {mode === "PRESENTIEL" && presentielNote ? (
-          <div className="mt-1 text-[11px] text-white/60">{presentielNote}</div>
-        ) : null}
+        {content}
       </button>
     </form>
   );

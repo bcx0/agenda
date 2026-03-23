@@ -881,7 +881,8 @@ export async function blockDateForClientAction(formData: FormData) {
       mode: "VISIO",
       rescheduleReason: note
         ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
-        : ADMIN_BLOCK_NOTE_PREFIX
+        : ADMIN_BLOCK_NOTE_PREFIX,
+      bookedBy: "admin"
     }
   });
   pushBookingToGoogle(createdBooking.id, "create").catch((err) =>

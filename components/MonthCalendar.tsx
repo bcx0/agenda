@@ -113,9 +113,9 @@ function MonthCalendarComponent({
               onClick={() => onSelectDay(day)}
               className={`min-h-[100px] rounded-xl px-3 py-3 text-left transition ${
                 isSelectable
-                  ? "bg-[#0F0F0F] border-4 border-[#C8A060] text-white font-semibold hover:border-[#E8D7BE] hover:bg-[#1A1A1A]"
-                  : "bg-[#0F0F0F] border-4 border-gray-700 text-white/30 opacity-40 cursor-not-allowed"
-              } ${isToday || isSelected ? "ring-2 ring-white" : ""}`}
+                  ? "bg-white border border-gray-200 text-gray-700 font-semibold hover:border-primary"
+                  : "bg-gray-50 border border-gray-200 text-gray-500 opacity-40 cursor-not-allowed"
+              } ${isToday || isSelected ? "ring-2 ring-primary" : ""}`}
               aria-label={`Selectionner le ${day.toFormat("dd LLLL")}`}
               disabled={!isSelectable}
             >
@@ -131,8 +131,8 @@ function MonthCalendarComponent({
                 <span
                   className={`inline-flex rounded-full px-2 py-1 text-[11px] ${
                     availableCount > 0
-                      ? "bg-[#C8A060] text-black"
-                      : "bg-white/10 text-white/60"
+                      ? "bg-primary/10 text-primary"
+                      : "bg-gray-100 text-gray-500"
                   }`}
                 >
                   {statusLabel}

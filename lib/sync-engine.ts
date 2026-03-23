@@ -1,14 +1,41 @@
 import { PrismaClient } from '@prisma/client'
+import * as crypto from 'crypto'
 import {
   createGoogleEvent,
   updateGoogleEvent,
   deleteGoogleEvent,
   GoogleCalendarEvent,
 } from './google-calendar'
+import { parseGoogleEventSummary } from './parse-google-event'
 
 const prisma = new PrismaClient()
 const APP_SOURCE_TAG = 'your-saas-app'
 const DEFAULT_TIMEZONE = 'Europe/Paris'
+
+async function findOrCreateGoogleClient(clientName: string) {
+  const normalizedName = clientName.trim().replace(/\s+/g, ' ')
+  const existingClient = await prisma.client.findFirst({ where: { name: normalizedName } })
+  if (existingClient) return existingClient
+
+  const safeSlug = normalizedName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '')
+    .replace(/^-+/g, '')
+  const email = `google-${safeSlug || 'client'}-${Date.now()}@import.local`
+
+  return prisma.client.create({
+    data: {
+      name: normalizedName,
+      email,
+      passwordHash: crypto.randomBytes(16).toString('hex'),
+      creditsPerMonth: 0,
+      isActive: true,
+    },
+  })
+}
 
 export async function pushBookingToGoogle(
   bookingId: number,
@@ -266,13 +293,42 @@ export async function pullFromGoogle(
     return { action: 'skipped_all_day' }
   }
 
+  const parsed = parseGoogleEventSummary(googleEvent.summary)
+
+  if (parsed.type === 'booking') {
+    const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')
+
+    const newBooking = await prisma.booking.create({
+      data: {
+        clientId: client.id,
+        startAt: new Date(googleEvent.start.dateTime),
+        endAt: new Date(googleEvent.end.dateTime!),
+        status: 'CONFIRMED',
+        mode: 'VISIO',
+        googleEventId,
+        syncSource: 'google',
+        syncStatus: 'synced',
+        lastSyncedAt: new Date(),
+        bookedBy: 'google',
+      },
+    })
+
+    await logSync('Booking', newBooking.id, 'pull_create', 'google_to_app', {
+      source: 'google_external_event',
+      summary: googleEvent.summary,
+      parsedType: parsed.type,
+      parsedClientName: parsed.clientName,
+    })
+
+    return { action: 'booking_created', id: newBooking.id, clientName: parsed.clientName }
+  }
+
   const newBlock = await prisma.block.create({
     data: {
       startAt: new Date(googleEvent.start.dateTime),
       endAt: new Date(googleEvent.end.dateTime!),
-      reason: googleEvent.summary ?? 'Importé depuis Google Calendar',
+      reason: parsed.reason,
       googleEventId,
-      googleEtag: googleEvent.etag,
       syncSource: 'google',
       syncStatus: 'synced',
       lastSyncedAt: new Date(),
@@ -284,7 +340,7 @@ export async function pullFromGoogle(
     source: 'google_external_event',
     summary: googleEvent.summary,
   })
-  return { action: 'block_created', blockId: newBlock.id }
+  return { action: 'block_created', id: newBlock.id, type: parsed.type }
 }
 
 async function logSync(

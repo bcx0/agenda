@@ -58,7 +58,7 @@ export function MobileNav() {
   if (!pathname?.startsWith("/admin")) return null;
 
   return (
-    <nav className="safe-area-inset-bottom fixed bottom-0 left-0 right-0 z-50 border-t border-gray-800 bg-[#0F0F0F] md:hidden">
+    <nav className="safe-area-inset-bottom fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white md:hidden">
       <div className="flex h-16 items-center justify-around">
         {links.map((link) => {
           const active =
@@ -69,7 +69,7 @@ export function MobileNav() {
               key={link.href}
               href={link.href}
               className={`touch-target flex h-full flex-1 flex-col items-center justify-center text-xs ${
-                active ? "text-[#C8A060]" : "text-white/50"
+                active ? "text-primary" : "text-gray-500"
               }`}
             >
               <Icon kind={link.icon} />

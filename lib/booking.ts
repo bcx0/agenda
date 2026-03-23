@@ -21,6 +21,7 @@ import {
 } from "./email/booking";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "./makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle } from "./sync-engine";
+import { checkBookingLimit } from "./booking-limits";
 
 type AvailabilityStatus = "available" | "booked" | "blocked";
 
@@ -366,6 +367,12 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     return { error: "Acces reserve aux clients sous contrat." };
   }
 
+  // Check booking limit for this week
+  const limitCheck = await checkBookingLimit(client.email, startUtc);
+  if (!limitCheck.allowed) {
+    return { error: limitCheck.reason || "Limite atteinte." };
+  }
+
   const settings = await getSettings();
   const location = settings.location === "BELGIUM" ? "BELGIUM" : "MIAMI";
   const availability = await checkSlotAvailability(startUtc, endUtc);
@@ -404,7 +411,8 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
       status: "CONFIRMED",
       mode: bookingMode,
       manageToken: crypto.randomBytes(32).toString("hex"),
-      manageTokenExpiresAt: addDays(new Date(), 7)
+      manageTokenExpiresAt: addDays(new Date(), 7),
+      bookedBy: "client"
     }
   });
   pushBookingToGoogle(booking.id, "create").catch((err) =>

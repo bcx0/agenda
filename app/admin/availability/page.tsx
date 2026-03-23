@@ -518,8 +518,8 @@ export default async function AdminAvailabilityPage({
                       </div>
                       {block.client ? (
                         <div className="mt-2 text-sm">
-                          <p className="text-[#C8A060]">Client : {block.client.name}</p>
-                          <p className="text-xs text-white/50">{block.client.email}</p>
+                          <p className="text-primary">Client : {block.client.name}</p>
+                          <p className="text-xs text-gray-500">{block.client.email}</p>
                         </div>
                       ) : (
                         <p className="mt-2 text-sm text-white/50">Client non attribué</p>

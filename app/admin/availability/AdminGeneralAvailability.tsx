@@ -346,7 +346,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold uppercase tracking-widest text-[#C8A060]">
+                <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">
                   Disponibilités
                 </h4>
                 {availabilitiesForDay.length > 0 ? (
@@ -354,7 +354,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     {availabilitiesForDay.map((slot) => (
                       <div
                         key={slot.start.toISOString()}
-                        className="rounded-lg border border-[#C8A060] bg-[#1A1A1A] px-3 py-2 text-sm"
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
                       >
                         <p className="font-semibold">{slot.brussels} (Brussels)</p>
                         <p className="text-xs text-white/70">{slot.miami} (Miami)</p>
@@ -367,7 +367,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold uppercase tracking-widest text-[#C8A060]">
+                <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">
                   Réservations
                 </h4>
                 {bookingsForDay.length > 0 ? (
@@ -375,7 +375,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     {bookingsForDay.map((booking) => (
                       <div
                         key={booking.id}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-green-600 bg-[#1A1A1A] px-3 py-2 text-sm"
+                        className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
                       >
                         <div className="flex-1">
                           <p className="font-semibold">{booking.client.name}</p>
@@ -402,7 +402,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                         </div>
                         <Link
                           href={`/admin/bookings/${booking.id}`}
-                          className="whitespace-nowrap text-sm font-medium text-[#C8A060] transition-colors hover:text-[#E8D7BE]"
+                          className="whitespace-nowrap text-sm font-medium text-primary transition-colors hover:text-primary-light"
                         >
                           Voir →
                         </Link>

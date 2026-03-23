@@ -46,7 +46,7 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
       <div className="space-y-2">
         <Link
           href="/admin/availability?tab=general"
-          className="text-sm text-[#C8A060] underline underline-offset-4 hover:text-[#E8D7BE]"
+          className="text-sm text-primary underline underline-offset-4 hover:text-primary-light"
         >
           â† Retour aux disponibilitÃ©s
         </Link>

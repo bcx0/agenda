@@ -139,20 +139,20 @@ export default function ClientsList({
                 <article key={client.id} className="card-gm p-4">
                   <h3 className="text-lg font-semibold">{client.name}</h3>
                   <p className="text-sm text-white/50">ID: {client.id} • {client.email}</p>
-                  <p className="mt-1 text-sm text-[#C8A060]">
+                  <p className="mt-1 text-sm text-primary">
                     {client.usedThisMonth}/{client.creditsPerMonth} crédits
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <form action={toggleClientAction}>
                       <input type="hidden" name="clientId" value={client.id} />
                       <input type="hidden" name="active" value={(!client.isActive).toString()} />
-                      <button className="touch-target w-full rounded-md border border-gray-800 bg-[#1A1A1A] py-3 text-sm">
+                      <button className="touch-target w-full rounded-md border border-gray-200 bg-gray-50 py-3 text-sm text-gray-700 hover:border-primary hover:bg-primary-50">
                         {client.isActive ? "Désactiver" : "Activer"}
                       </button>
                     </form>
                     <Link
                       href={`/admin/clients/${client.id}/bookings`}
-                      className="touch-target w-full rounded-md bg-[#C8A060] py-3 text-center text-sm font-semibold text-black"
+                      className="touch-target w-full rounded-md bg-accent py-3 text-center text-sm font-semibold text-white hover:bg-accent-light"
                     >
                       Voir RDV
                     </Link>
@@ -195,7 +195,7 @@ export default function ClientsList({
                   <div className="mt-2">
                     <Link
                       href={`/admin/clients/${client.id}/bookings`}
-                      className="text-sm text-[#C8A060] transition-colors hover:text-[#E8D7BE]"
+                      className="text-sm text-primary transition-colors hover:text-primary-light"
                     >
                       Voir les RDV →
                     </Link>
@@ -210,7 +210,7 @@ export default function ClientsList({
                         min={1}
                         inputMode="numeric"
                         defaultValue={client.creditsPerMonth}
-                        className="w-full rounded-md border border-border bg-[#0F0F0F] px-3 py-3 text-base"
+                        className="w-full rounded-md border border-border bg-white px-3 py-3 text-base text-gray-700"
                       />
                       <button className="touch-target rounded-md border border-border px-3 py-2 hover:bg-black hover:text-white">
                         Mettre à jour
@@ -236,7 +236,7 @@ export default function ClientsList({
                       inputMode="email"
                       required
                       defaultValue={client.email}
-                      className="w-full rounded-md border border-border bg-[#0F0F0F] px-3 py-3 text-base"
+                      className="w-full rounded-md border border-border bg-white px-3 py-3 text-base text-gray-700"
                     />
                     <button className="touch-target rounded-md border border-border px-3 py-2 hover:bg-black hover:text-white">
                       Mettre à jour email

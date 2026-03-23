@@ -12,10 +12,10 @@ type Props = {
 };
 
 function getStatusClasses(status: string) {
-  if (status === "CONFIRMED") return "bg-green-600";
-  if (status === "DONE") return "bg-blue-600";
-  if (status === "NO_SHOW") return "bg-yellow-600";
-  if (status === "CANCELLED") return "bg-red-600";
+  if (status === "CONFIRMED") return "bg-success";
+  if (status === "DONE") return "bg-primary";
+  if (status === "NO_SHOW") return "bg-warning";
+  if (status === "CANCELLED") return "bg-danger";
   return "bg-white/20";
 }
 
@@ -48,7 +48,7 @@ export default async function ClientBookingsPage({ params }: Props) {
       <div>
         <Link
           href="/admin/clients"
-          className="text-sm text-[#C8A060] transition-colors hover:text-[#E8D7BE]"
+          className="text-sm text-primary transition-colors hover:text-primary-light"
         >
           ← Retour aux clients
         </Link>
@@ -101,7 +101,7 @@ export default async function ClientBookingsPage({ params }: Props) {
                   </span>
                   <Link
                     href={`/admin/bookings/${booking.id}`}
-                    className="text-sm text-[#C8A060] transition-colors hover:text-[#E8D7BE]"
+                    className="text-sm text-primary transition-colors hover:text-primary-light"
                   >
                     Modifier →
                   </Link>

@@ -46,17 +46,17 @@ export function ToastProvider() {
       toastOptions={{
         duration: 3000,
         style: {
-          background: "#0F0F0F",
-          color: "#fff",
-          border: "2px solid #C8A060",
+          background: "#f5f7fa",
+          color: "#1a1a2e",
+          border: "2px solid #1d4567",
           borderRadius: "8px",
           padding: "16px",
           fontSize: "14px"
         },
         success: {
           iconTheme: {
-            primary: "#C8A060",
-            secondary: "#000"
+            primary: "#27ae60",
+            secondary: "#fff"
           }
         },
         error: {

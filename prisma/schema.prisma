@@ -40,6 +40,7 @@ model Booking {
   syncStatus            String    @default("pending")
   syncSource            String    @default("app")
   lastSyncedAt          DateTime?
+  bookedBy              String    @default("client") @map("booked_by")
 }
 
 model Block {

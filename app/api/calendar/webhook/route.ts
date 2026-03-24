@@ -13,8 +13,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Initial sync verification from Google — just acknowledge
+    // Initial sync notification from Google — do a full sync to catch up
+    // This fires when a watch is first registered and ensures we capture
+    // events that existed before the watch was created
     if (resourceState === "sync") {
+      const token = await prisma.googleToken.findFirst();
+      if (token) {
+        try {
+          const { items, nextSyncToken } = await fetchChangedEvents(token.syncToken);
+
+          if (nextSyncToken) {
+            await prisma.googleToken.update({
+              where: { id: token.id },
+              data: { syncToken: nextSyncToken },
+            });
+          }
+
+          const results: Array<{ eventId: string; action: string }> = [];
+          for (const event of items) {
+            try {
+              const result = await pullFromGoogle(
+                event.status === "cancelled" ? null : event,
+                event.id
+              );
+              results.push({ eventId: event.id, action: result.action });
+            } catch (err: any) {
+              results.push({ eventId: event.id, action: `error: ${err.message}` });
+            }
+          }
+          console.log(`[Webhook:sync] Processed ${items.length} events:`, JSON.stringify(results));
+        } catch (err: any) {
+          console.error("[Webhook:sync] Error during initial sync:", err);
+        }
+      }
       return NextResponse.json({ ok: true });
     }
 

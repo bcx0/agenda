@@ -35,7 +35,7 @@ model Booking {
   updatedAt             DateTime  @updatedAt          // ✅ UNE SEULE FOIS
   manageToken           String?   @unique            // ✅ UNE SEULE FOIS
   manageTokenExpiresAt  DateTime?                    // ✅ UNE SEULE FOIS
-  googleEventId         String?
+  googleEventId         String?   @unique
   googleEtag            String?
   syncStatus            String    @default("pending")
   syncSource            String    @default("app")
@@ -49,7 +49,7 @@ model Block {
   endAt     DateTime
   reason    String?
   createdAt DateTime @default(now())
-  googleEventId String?
+  googleEventId String?  @unique
   googleEtag    String?
   syncStatus    String   @default("pending")
   syncSource    String   @default("app")

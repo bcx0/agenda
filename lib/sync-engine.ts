@@ -14,7 +14,9 @@ const DEFAULT_TIMEZONE = 'Europe/Paris'
 
 async function findOrCreateGoogleClient(clientName: string) {
   const normalizedName = clientName.trim().replace(/\s+/g, ' ')
-  const existingClient = await prisma.client.findFirst({ where: { name: normalizedName } })
+  const existingClient = await prisma.client.findFirst({
+    where: { name: { equals: normalizedName, mode: 'insensitive' } },
+  })
   if (existingClient) return existingClient
 
   const safeSlug = normalizedName

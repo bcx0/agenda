@@ -157,33 +157,47 @@ export async function fetchChangedEvents(syncToken?: string | null): Promise<{
 }> {
   const accessToken = await getValidAccessToken()
 
-  let url =
-    'https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true'
+  let allItems: GoogleCalendarEvent[] = []
+  let pageToken: string | undefined
+  let nextSyncToken: string | null = null
 
-  if (syncToken) {
-    url += `&syncToken=${syncToken}`
-  } else {
-    const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    url += `&timeMin=${timeMin}`
-  }
+  do {
+    let url =
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&maxResults=250'
 
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
+    if (syncToken) {
+      url += `&syncToken=${syncToken}`
+    } else {
+      const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      url += `&timeMin=${timeMin}`
+    }
 
-  if (res.status === 410) {
-    return { items: [], nextSyncToken: null, fullSyncRequired: true }
-  }
+    if (pageToken) {
+      url += `&pageToken=${pageToken}`
+    }
 
-  if (!res.ok) {
-    throw new Error(`Google fetchChangedEvents failed: ${res.status}`)
-  }
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
 
-  const data = await res.json()
+    if (res.status === 410) {
+      return { items: [], nextSyncToken: null, fullSyncRequired: true }
+    }
+
+    if (!res.ok) {
+      const errText = await res.text()
+      throw new Error(`Google fetchChangedEvents failed: ${res.status} ${errText}`)
+    }
+
+    const data = await res.json()
+    allItems = allItems.concat(data.items ?? [])
+    pageToken = data.nextPageToken
+    nextSyncToken = data.nextSyncToken ?? null
+  } while (pageToken)
 
   return {
-    items: data.items ?? [],
-    nextSyncToken: data.nextSyncToken ?? null,
+    items: allItems,
+    nextSyncToken,
     fullSyncRequired: false,
   }
 }

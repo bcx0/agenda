@@ -25,7 +25,7 @@ export async function loginAction(_: LoginState, formData: FormData): Promise<Lo
     name: result.client.name
   });
 
-  redirect("/manage");
+  redirect("/book");
 }
 
 export async function logoutAction() {

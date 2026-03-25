@@ -14,32 +14,39 @@ const DEFAULT_TIMEZONE = 'Europe/Paris'
 
 async function findOrCreateGoogleClient(clientName: string) {
   const normalizedName = clientName.trim().replace(/\s+/g, ' ')
+  const normalizedLower = normalizedName.toLowerCase()
 
-  // 1. Recherche exacte par nom (insensible à la casse)
-  const exactMatch = await prisma.client.findFirst({
-    where: { name: { equals: normalizedName, mode: 'insensitive' } },
-  })
-  if (exactMatch) return exactMatch
-
-  // 2. Recherche partielle : le nom Google contient le nom client ou inversement
-  const allClients = await prisma.client.findMany({
+  // Charger tous les vrais clients (exclure les auto-générés @import.local)
+  const realClients = await prisma.client.findMany({
     where: {
       isActive: true,
-      // Exclure les clients auto-générés par Google
       NOT: { email: { endsWith: '@import.local' } },
     },
     select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
   })
 
-  const normalizedLower = normalizedName.toLowerCase()
-  const partialMatch = allClients.find((c) => {
+  // 1. Recherche exacte parmi les VRAIS clients uniquement
+  const exactRealMatch = realClients.find(
+    (c) => c.name.toLowerCase() === normalizedLower
+  )
+  if (exactRealMatch) return exactRealMatch
+
+  // 2. Recherche partielle parmi les vrais clients :
+  //    le nom Google est contenu dans le nom client ou inversement
+  const partialMatch = realClients.find((c) => {
     const cLower = c.name.toLowerCase()
-    // Le nom Google est contenu dans le nom client ou inversement
     return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
   })
   if (partialMatch) return partialMatch
 
-  // 3. Aucun match → créer un nouveau client dans une transaction
+  // 3. Fallback : recherche exacte parmi TOUS les clients (y compris @import.local)
+  //    pour éviter de créer des doublons auto-générés
+  const exactAnyMatch = await prisma.client.findFirst({
+    where: { name: { equals: normalizedName, mode: 'insensitive' } },
+  })
+  if (exactAnyMatch) return exactAnyMatch
+
+  // 4. Aucun match → créer un nouveau client dans une transaction
   //    pour éviter les doublons dus aux race conditions
   const safeSlug = normalizedName
     .toLowerCase()
@@ -50,12 +57,24 @@ async function findOrCreateGoogleClient(clientName: string) {
     .replace(/^-+/g, '')
   const email = `google-${safeSlug || 'client'}-${Date.now()}@import.local`
 
-  // Re-vérifier dans une transaction pour éviter les race conditions
   return prisma.$transaction(async (tx) => {
-    const doubleCheck = await tx.client.findFirst({
+    // Re-vérifier pour éviter les race conditions
+    const realCheck = await tx.client.findMany({
+      where: {
+        isActive: true,
+        NOT: { email: { endsWith: '@import.local' } },
+      },
+    })
+    const lastChance = realCheck.find((c) => {
+      const cLower = c.name.toLowerCase()
+      return cLower === normalizedLower || cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
+    })
+    if (lastChance) return lastChance
+
+    const anyCheck = await tx.client.findFirst({
       where: { name: { equals: normalizedName, mode: 'insensitive' } },
     })
-    if (doubleCheck) return doubleCheck
+    if (anyCheck) return anyCheck
 
     return tx.client.create({
       data: {

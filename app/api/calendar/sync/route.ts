@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getValidAccessToken, type GoogleCalendarEvent } from "../../../../lib/google-calendar";
+import { pullFromGoogle } from "../../../../lib/sync-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +20,8 @@ async function listGoogleEvents(
     singleEvents: "true",
     orderBy: "startTime",
     maxResults: "250",
-    timeMin: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
-    timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    timeMin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    timeMax: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
   });
 
   if (pageToken) {
@@ -67,56 +68,49 @@ export async function POST() {
       pageToken = response.nextPageToken;
     } while (pageToken);
 
-    let imported = 0;
-    let skipped = 0;
+    const results: Array<{ eventId: string; action: string }> = [];
 
     for (const event of allEvents) {
-      if (!event.start?.dateTime && !event.start?.date) {
-        skipped++;
-        continue;
+      try {
+        const result = await pullFromGoogle(
+          event.status === "cancelled" ? null : event,
+          event.id
+        );
+        results.push({ eventId: event.id, action: result.action });
+      } catch (err: any) {
+        console.error(`[ManualSync] Error processing event ${event.id}:`, err);
+        results.push({ eventId: event.id, action: `error: ${err.message}` });
       }
-
-      const existing = await prisma.block.findFirst({
-        where: { googleEventId: event.id },
-      });
-
-      if (existing) {
-        skipped++;
-        continue;
-      }
-
-      const startAt = new Date(event.start.dateTime ?? event.start.date!);
-      const endAt = new Date(event.end.dateTime ?? event.end.date!);
-
-      if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
-        skipped++;
-        continue;
-      }
-
-      await prisma.block.create({
-        data: {
-          startAt,
-          endAt,
-          reason: event.summary || "Event Google Calendar",
-          googleEventId: event.id,
-          googleEtag: event.etag,
-          syncSource: "google",
-          syncStatus: "synced",
-          lastSyncedAt: new Date(),
-        },
-      });
-
-      imported++;
     }
+
+    const imported = results.filter(
+      (r) => r.action === "booking_created" || r.action === "block_created"
+    ).length;
+    const updated = results.filter(
+      (r) => r.action === "booking_updated" || r.action === "booking_cancelled"
+    ).length;
+    const skipped = results.filter(
+      (r) =>
+        r.action === "etag_updated" ||
+        r.action === "not_found" ||
+        r.action === "skipped_all_day" ||
+        r.action === "conflict_app_wins"
+    ).length;
+
+    console.log(
+      `[ManualSync] Processed ${allEvents.length} events: ${imported} imported, ${updated} updated, ${skipped} skipped`
+    );
 
     return NextResponse.json({
       success: true,
       imported,
+      updated,
       skipped,
       total: allEvents.length,
+      results,
     });
   } catch (error: unknown) {
-    console.error("[CalendarSync] Error:", error);
+    console.error("[ManualSync] Error:", error);
 
     return NextResponse.json(
       {

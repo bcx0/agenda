@@ -272,13 +272,27 @@ export default async function AdminAvailabilityPage({
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-widest text-white/60">
-                  Heure de debut
+                  Heure de début
                 </label>
-                <input type="time" name="startTime" className="input" required />
+                <select name="startTime" className="input" required>
+                  <option value="">Sélectionner</option>
+                  {HALF_HOUR_OPTIONS.map((time) => (
+                    <option key={`block-start-${time}`} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-widest text-white/60">Heure de fin</label>
-                <input type="time" name="endTime" className="input" required />
+                <select name="endTime" className="input" required>
+                  <option value="">Sélectionner</option>
+                  {HALF_HOUR_OPTIONS.map((time) => (
+                    <option key={`block-end-${time}`} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs uppercase tracking-widest text-white/60">
@@ -349,8 +363,22 @@ export default async function AdminAvailabilityPage({
             </h2>
             <form action={createAvailabilityOverrideAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
               <input type="date" name="date" className="input" required />
-              <input type="time" name="startTime" className="input" required />
-              <input type="time" name="endTime" className="input" required />
+              <select name="startTime" className="input" required>
+                <option value="">Heure de début</option>
+                {HALF_HOUR_OPTIONS.map((time) => (
+                  <option key={`override-start-${time}`} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
+              <select name="endTime" className="input" required>
+                <option value="">Heure de fin</option>
+                {HALF_HOUR_OPTIONS.map((time) => (
+                  <option key={`override-end-${time}`} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
               <select name="type" className="input" required>
                 <option value="BLOCK">Bloquer</option>
                 <option value="OPEN">Ouvrir</option>

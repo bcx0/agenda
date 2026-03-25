@@ -69,49 +69,46 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
 
       <div className="space-y-4 md:hidden">
         {bookings.map((booking) => (
-          <article key={booking.id} className="card-gm p-4">
-            <div className="mb-3 flex items-start justify-between gap-3">
+          <article key={booking.id} className="card p-5">
+            <div className="mb-4 flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-semibold">{booking.client.name}</h3>
-                <p className="mt-1 truncate text-sm text-white/70">{booking.client.email}</p>
-                <p className="mt-1 text-sm text-white/70">
+                <h3 className="text-base font-semibold">{booking.client.name}</h3>
+                <p className="mt-1 truncate text-sm text-white/60">{booking.client.email}</p>
+                <p className="mt-2 text-sm font-medium text-white/80">
                   {new Date(booking.startAt).toLocaleDateString("fr-FR", {
                     weekday: "short",
                     day: "numeric",
                     month: "short"
                   })}
-                </p>
-                <p className="text-sm text-white/70">
+                  {" à "}
                   {new Date(booking.startAt).toLocaleTimeString("fr-FR", {
                     hour: "2-digit",
                     minute: "2-digit"
                   })}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-end gap-1">
                 <span
-                  className={`rounded px-3 py-1 text-xs font-semibold text-white ${
+                  className={
                     booking.status === "CONFIRMED"
-                      ? "bg-green-600"
+                      ? "status-confirmed"
+                      : booking.status === "CANCELLED"
+                      ? "status-cancelled"
                       : booking.status === "NO_SHOW"
-                      ? "bg-yellow-600"
-                      : booking.status === "DONE"
-                      ? "bg-blue-600"
-                      : "bg-red-600"
-                  }`}
+                      ? "status-noshow"
+                      : "status-done"
+                  }
                 >
                   {booking.status}
                 </span>
                 {booking.googleEventId ? (
-                  <span className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white">
-                    via Google
-                  </span>
+                  <span className="pill text-[11px]">via Google</span>
                 ) : null}
               </div>
             </div>
             <Link
               href={`/admin/bookings/${booking.id}`}
-              className="touch-target block w-full rounded-md bg-accent py-3 text-center text-sm font-semibold text-white hover:bg-accent-light"
+              className="btn-secondary touch-target block w-full text-center"
             >
               Voir les détails
             </Link>

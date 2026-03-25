@@ -145,16 +145,16 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">Actions rapides</h2>
           </div>
           <div className="grid gap-2 text-sm">
-            <Link className="rounded-md border border-border bg-background-elevated px-3 py-2 hover:border-border" href="/admin/availability">
+            <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/availability">
               Gérer les disponibilités
             </Link>
-            <Link className="rounded-md border border-border bg-background-elevated px-3 py-2 hover:border-border" href="/admin/clients">
+            <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/clients">
               Gérer les clients
             </Link>
-            <Link className="rounded-md border border-border bg-background-elevated px-3 py-2 hover:border-border" href="/admin/bookings">
+            <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/bookings">
               Gérer les rendez-vous
             </Link>
-            <Link className="rounded-md border border-border bg-background-elevated px-3 py-2 hover:border-border" href="/admin/settings">
+            <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/settings">
               Paramètres
             </Link>
           </div>
@@ -166,9 +166,9 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="card space-y-1 p-4">
+    <div className="card space-y-1 p-5">
       <div className="text-xs uppercase tracking-widest text-white/60">{label}</div>
-      <div className="text-2xl font-semibold">{value}</div>
+      <div className="text-3xl font-semibold">{value}</div>
     </div>
   );
 }

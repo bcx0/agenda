@@ -133,26 +133,39 @@ export default function ClientsList({
 
           <div className="space-y-3 md:hidden">
             {filteredClients.length === 0 ? (
-              <div className="card-gm p-6 text-sm text-white/60">Aucun client trouvé.</div>
+              <div className="card p-6 text-sm text-white/60">Aucun client trouvé.</div>
             ) : (
               filteredClients.map((client) => (
-                <article key={client.id} className="card-gm p-4">
-                  <h3 className="text-lg font-semibold">{client.name}</h3>
-                  <p className="text-sm text-white/50">ID: {client.id} • {client.email}</p>
-                  <p className="mt-1 text-sm text-primary">
+                <article key={client.id} className="card p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold">{client.name}</h3>
+                      <p className="mt-0.5 text-sm text-white/50">{client.email}</p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                        client.isActive
+                          ? "bg-green-900/30 text-green-400 border border-green-800"
+                          : "bg-white/5 text-white/50 border border-gray-800"
+                      }`}
+                    >
+                      {client.isActive ? "Actif" : "Inactif"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-[#C8A060]">
                     {client.usedThisMonth}/{client.creditsPerMonth} crédits
                   </p>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="mt-4 grid grid-cols-2 gap-2">
                     <form action={toggleClientAction}>
                       <input type="hidden" name="clientId" value={client.id} />
                       <input type="hidden" name="active" value={(!client.isActive).toString()} />
-                      <button className="touch-target w-full rounded-md border border-gray-200 bg-gray-50 py-3 text-sm text-gray-700 hover:border-primary hover:bg-primary-50">
+                      <button className="btn-secondary touch-target w-full text-sm">
                         {client.isActive ? "Désactiver" : "Activer"}
                       </button>
                     </form>
                     <Link
                       href={`/admin/clients/${client.id}/bookings`}
-                      className="touch-target w-full rounded-md bg-accent py-3 text-center text-sm font-semibold text-white hover:bg-accent-light"
+                      className="btn-primary touch-target block w-full text-center text-sm"
                     >
                       Voir RDV
                     </Link>
@@ -210,9 +223,9 @@ export default function ClientsList({
                         min={1}
                         inputMode="numeric"
                         defaultValue={client.creditsPerMonth}
-                        className="w-full rounded-md border border-border bg-white px-3 py-3 text-base text-gray-700"
+                        className="input"
                       />
-                      <button className="touch-target rounded-md border border-border px-3 py-2 hover:bg-black hover:text-white">
+                      <button className="btn-secondary touch-target text-sm">
                         Mettre à jour
                       </button>
                     </form>
@@ -236,9 +249,9 @@ export default function ClientsList({
                       inputMode="email"
                       required
                       defaultValue={client.email}
-                      className="w-full rounded-md border border-border bg-white px-3 py-3 text-base text-gray-700"
+                      className="input"
                     />
-                    <button className="touch-target rounded-md border border-border px-3 py-2 hover:bg-black hover:text-white">
+                    <button className="btn-secondary touch-target text-sm">
                       Mettre à jour email
                     </button>
                   </form>

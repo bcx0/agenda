@@ -95,7 +95,7 @@ export default async function AdminSettingsPage() {
             />
           </div>
           <div className="md:col-span-2">
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary w-full md:w-auto">
               Enregistrer
             </button>
           </div>
@@ -164,7 +164,7 @@ export default async function AdminSettingsPage() {
             />
           </div>
 
-          <button type="submit" className="btn btn-primary">
+          <button type="submit" className="btn btn-primary w-full md:w-auto">
             AJOUTER CETTE PLAGE
           </button>
         </form>
@@ -176,30 +176,32 @@ export default async function AdminSettingsPage() {
               {sessionModes.map((sessionMode) => (
                 <div
                   key={sessionMode.id}
-                  className="flex items-center justify-between rounded-md border border-border bg-background-elevated p-4"
+                  className="card space-y-3 p-5"
                 >
-                  <div className="space-y-1">
-                    <p className="font-semibold">
-                      Du {new Date(sessionMode.startDate).toLocaleDateString("fr-FR")} au{" "}
-                      {new Date(sessionMode.endDate).toLocaleDateString("fr-FR")}
-                    </p>
-                    <p className="text-sm text-white/70">
-                      Mode :{" "}
-                      {sessionMode.mode === "VISIO"
-                        ? "En ligne (Visio)"
-                        : "Sur place (Présentiel)"}
-                    </p>
-                    {sessionMode.location ? (
-                      <p className="text-sm text-white/50">{sessionMode.location}</p>
-                    ) : null}
-                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="font-semibold">
+                        Du {new Date(sessionMode.startDate).toLocaleDateString("fr-FR")} au{" "}
+                        {new Date(sessionMode.endDate).toLocaleDateString("fr-FR")}
+                      </p>
+                      <p className="text-sm text-white/70">
+                        Mode :{" "}
+                        {sessionMode.mode === "VISIO"
+                          ? "En ligne (Visio)"
+                          : "Sur place (Présentiel)"}
+                      </p>
+                      {sessionMode.location ? (
+                        <p className="text-sm text-white/50">{sessionMode.location}</p>
+                      ) : null}
+                    </div>
 
-                  <form action={deleteSessionModeAction}>
-                    <input type="hidden" name="id" value={sessionMode.id} />
-                    <button type="submit" className="text-sm text-red-500 hover:text-red-400">
-                      Supprimer
-                    </button>
-                  </form>
+                    <form action={deleteSessionModeAction}>
+                      <input type="hidden" name="id" value={sessionMode.id} />
+                      <button type="submit" className="btn-danger touch-target text-sm">
+                        Supprimer
+                      </button>
+                    </form>
+                  </div>
                 </div>
               ))}
             </div>

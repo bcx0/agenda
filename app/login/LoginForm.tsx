@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useFormState } from "react-dom";
 import { loginAction } from "./actions";

@@ -1,4 +1,4 @@
-﻿export const runtime = "nodejs";
+export const runtime = "nodejs";
 
 import { cancelAppointmentAction, rescheduleAppointmentAction } from "./actions";
 import { prisma } from "../../../../lib/prisma";

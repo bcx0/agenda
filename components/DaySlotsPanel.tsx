@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { memo, useEffect } from "react";
 import SlotButton from "./SlotButton";

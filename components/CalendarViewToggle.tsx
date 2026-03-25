@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 type ViewMode = "month" | "week" | "list";
 

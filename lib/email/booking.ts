@@ -1,4 +1,4 @@
-﻿import { Resend } from "resend";
+import { Resend } from "resend";
 import { prisma } from "../prisma";
 
 const DEFAULT_TZ = "Europe/Brussels";
@@ -178,12 +178,12 @@ export async function sendBookingConfirmationEmail(booking: BookingEmailParams) 
 
   const subject = "Confirmation de rendez-vous";
   const html = `
-    <h1>Reservation confirmee</h1>
+    <h1>Réservation confirmée</h1>
     <p>Bonjour ${booking.clientName},</p>
-    <p>Votre rendez-vous est confirme.</p>
+    <p>Votre rendez-vous est confirmé.</p>
     <p><strong>${slotLine}</strong></p>
     ${link ? `<p><a href="${link}">Ouvrir l'agenda</a></p>` : ""}
-    ${manageLink ? `<p><a href="${manageLink}">Gerer ou modifier ce rendez-vous</a></p>` : ""}
+    ${manageLink ? `<p><a href="${manageLink}">Gérer ou modifier ce rendez-vous</a></p>` : ""}
   `;
 
   return sendBookingEmail({
@@ -208,11 +208,11 @@ export async function sendBookingUpdatedEmail(booking: BookingEmailParams) {
 
   const subject = "Modification de rendez-vous";
   const html = `
-    <h1>Rendez-vous modifie</h1>
+    <h1>Rendez-vous modifié</h1>
     <p>Bonjour ${booking.clientName},</p>
-    <p>Votre rendez-vous a ete mis a jour.</p>
-    ${oldSlotLine ? `<p>Ancien creneau : <strong>${oldSlotLine}</strong></p>` : ""}
-    <p>Nouveau creneau : <strong>${slotLine}</strong></p>
+    <p>Votre rendez-vous a été mis à jour.</p>
+    ${oldSlotLine ? `<p>Ancien créneau : <strong>${oldSlotLine}</strong></p>` : ""}
+    <p>Nouveau créneau : <strong>${slotLine}</strong></p>
     ${link ? `<p><a href="${link}">Ouvrir l'agenda</a></p>` : ""}
   `;
 
@@ -230,15 +230,29 @@ export async function sendBookingCancelledEmail(booking: BookingEmailParams) {
 
   const timeZone = booking.timeZone ?? DEFAULT_TZ;
   const slotLine = buildSlotLine(booking.startAt, booking.endAt, timeZone);
-  const link = buildAppLink("/client");
+  const bookLink = buildAppLink("/book");
 
-  const subject = "Annulation de rendez-vous";
+  const subject = "Annulation de votre rendez-vous avec Geoffrey";
   const html = `
-    <h1>Rendez-vous annule</h1>
-    <p>Bonjour ${booking.clientName},</p>
-    <p>Votre rendez-vous a ete annule.</p>
-    <p><strong>${slotLine}</strong></p>
-    ${link ? `<p><a href="${link}">Acceder au portail</a></p>` : ""}
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h1 style="font-size: 22px; color: #111;">Rendez-vous annulé</h1>
+      <p>Bonjour ${booking.clientName},</p>
+      <p>Votre rendez-vous prévu le :</p>
+      <p style="background: #f8f5f0; border-left: 4px solid #C8A060; padding: 12px 16px; font-weight: 600;">
+        ${slotLine}
+      </p>
+      <p>a été annulé.</p>
+      <p>Pas d'inquiétude ! Vous pouvez dès maintenant réserver un nouveau créneau directement depuis votre espace client.</p>
+      ${bookLink ? `
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="${bookLink}" style="display: inline-block; background: #C8A060; color: #000; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: 600; font-size: 15px;">
+          Réserver un nouveau créneau →
+        </a>
+      </p>
+      ` : ""}
+      <p style="color: #666; font-size: 14px;">Si vous avez des questions, n'hésitez pas à contacter Geoffrey directement.</p>
+      <p style="color: #666; font-size: 14px;">À bientôt,<br/>L'équipe Geoffrey Mahieu</p>
+    </div>
   `;
 
   return sendBookingEmail({

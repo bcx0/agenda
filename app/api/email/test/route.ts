@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
 const TO_EMAIL = 'battiste.crevieaux@icloud.com';

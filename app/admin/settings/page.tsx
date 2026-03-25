@@ -1,4 +1,4 @@
-﻿export const runtime = "nodejs";
+export const runtime = "nodejs";
 
 import { redirect } from "next/navigation";
 import { getAdminSession } from "../../../lib/session";

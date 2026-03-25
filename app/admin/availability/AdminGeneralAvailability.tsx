@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
@@ -182,8 +182,242 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       });
   }, [bookings, selectedDay]);
 
+  // Mobile compact calendar (like MobileBookingView)
+  const todayKey = useMemo(() => {
+    const now = DateTime.now().setZone(MIAMI_TZ);
+    return now.toISODate() ?? now.toFormat("yyyy-LL-dd");
+  }, []);
+
+  const [mobileSelectedKey, setMobileSelectedKey] = useState<string>(todayKey);
+  const [mobileMonth, setMobileMonth] = useState<DateTime>(
+    DateTime.now().setZone(MIAMI_TZ).startOf("month")
+  );
+
+  const mobileMonthLabel = mobileMonth.setLocale("fr").toFormat("LLLL yyyy");
+
+  const mobileCalendarDays = useMemo(() => {
+    const startOfMonth = mobileMonth.startOf("month");
+    const daysFromMonday = (startOfMonth.weekday + 6) % 7;
+    const gridStart = startOfMonth.minus({ days: daysFromMonday });
+    const result: DateTime[] = [];
+    for (let i = 0; i < 42; i++) {
+      result.push(gridStart.plus({ days: i }));
+    }
+    return result;
+  }, [mobileMonth]);
+
+  const mobileSelectedData = useMemo(() => {
+    const group = dayMap.get(mobileSelectedKey);
+    if (group) return group;
+    const day = DateTime.fromISO(mobileSelectedKey, { zone: MIAMI_TZ });
+    return {
+      key: mobileSelectedKey,
+      label: day.isValid ? day.setLocale("fr").toFormat("EEEE dd MMMM") : "",
+      slots: [] as SlotView[],
+      date: day,
+    };
+  }, [mobileSelectedKey, dayMap]);
+
+  const mobileDayNames = ["L", "M", "M", "J", "V", "S", "D"];
+
+  const mobileBookingsForDay = useMemo(() => {
+    if (!mobileSelectedKey) return [];
+    return bookings
+      .map((booking) => ({
+        ...booking,
+        startDate: new Date(booking.startAt),
+        endDate: new Date(booking.endAt)
+      }))
+      .filter((booking) => {
+        const dayKey =
+          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
+          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("yyyy-LL-dd");
+        return dayKey === mobileSelectedKey;
+      });
+  }, [bookings, mobileSelectedKey]);
+
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+    <>
+    {/* ── MOBILE VIEW ── */}
+    <div className="space-y-5 md:hidden">
+      {/* Compact Month Calendar */}
+      <div className="rounded-2xl border border-border bg-[#0F0F0F] p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setMobileMonth((m) => m.minus({ months: 1 }))}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/10 active:bg-white/20 transition"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <span className="text-sm font-semibold tracking-wide">
+            {mobileMonthLabel.charAt(0).toUpperCase() + mobileMonthLabel.slice(1)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setMobileMonth((m) => m.plus({ months: 1 }))}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/10 active:bg-white/20 transition"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 mb-1">
+          {mobileDayNames.map((name, i) => (
+            <div key={`${name}-${i}`} className="text-center text-[11px] font-medium text-white/40 py-1">
+              {name}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-y-1">
+          {mobileCalendarDays.map((day) => {
+            const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
+            const isCurrentMonth = day.month === mobileMonth.month;
+            const isToday = key === todayKey;
+            const isSelected = key === mobileSelectedKey;
+            const group = dayMap.get(key);
+            const availableCount = group ? group.slots.filter((s) => s.status === "available").length : 0;
+            const bookedCount = group ? group.slots.filter((s) => s.status === "booked").length : 0;
+            const hasSlots = (group?.slots.length ?? 0) > 0;
+            const isPast = key < todayKey;
+
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setMobileSelectedKey(key);
+                  openDay(day);
+                }}
+                className={`
+                  relative flex flex-col items-center justify-center py-2 rounded-xl transition
+                  ${!isCurrentMonth ? "opacity-20" : ""}
+                  ${isPast && isCurrentMonth ? "opacity-40" : ""}
+                  ${isSelected ? "bg-[#C8A060] text-black" : "text-white"}
+                  ${!isSelected && isToday ? "ring-1 ring-white/50" : ""}
+                  ${!isSelected && isCurrentMonth && !isPast ? "active:bg-white/10" : ""}
+                `}
+              >
+                <span className={`text-sm font-medium ${isSelected ? "font-bold" : ""}`}>
+                  {day.day}
+                </span>
+                <div className="mt-0.5 h-1.5 flex items-center gap-0.5">
+                  {availableCount > 0 && !isSelected && (
+                    <span className="block h-1.5 w-1.5 rounded-full bg-[#C8A060]" />
+                  )}
+                  {bookedCount > 0 && !isSelected && (
+                    <span className="block h-1.5 w-1.5 rounded-full bg-green-500" />
+                  )}
+                  {hasSlots && availableCount === 0 && bookedCount === 0 && !isSelected && (
+                    <span className="block h-1.5 w-1.5 rounded-full bg-white/25" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-border">
+          <div className="flex items-center gap-1.5">
+            <span className="block h-2 w-2 rounded-full bg-[#C8A060]" />
+            <span className="text-[10px] text-white/50">Disponible</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="block h-2 w-2 rounded-full bg-green-500" />
+            <span className="text-[10px] text-white/50">Réservé</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="block h-2 w-2 rounded-full bg-white/25" />
+            <span className="text-[10px] text-white/50">Bloqué</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Selected day header */}
+      <div className="space-y-1">
+        <h3 className="font-[var(--font-playfair)] text-lg uppercase tracking-wider">
+          {mobileSelectedData.label}
+        </h3>
+        <p className="text-xs text-white/50">
+          {mobileSelectedData.slots.length === 0
+            ? "Aucun créneau"
+            : `${mobileSelectedData.slots.filter((s) => s.status === "available").length} disponible${
+                mobileSelectedData.slots.filter((s) => s.status === "available").length > 1 ? "s" : ""
+              } · ${mobileSelectedData.slots.filter((s) => s.status === "booked").length} réservé${
+                mobileSelectedData.slots.filter((s) => s.status === "booked").length > 1 ? "s" : ""
+              }`}
+        </p>
+      </div>
+
+      {/* Slots + Bookings for selected day */}
+      {mobileSelectedData.slots.length > 0 ? (
+        <div className="space-y-2">
+          {mobileSelectedData.slots.map((slot) => (
+            <div
+              key={slot.start.toISOString()}
+              className={`rounded-xl border px-4 py-3 ${
+                slot.status === "available"
+                  ? "border-[#C8A060]/30 bg-[#0F0F0F]"
+                  : slot.status === "booked"
+                  ? "border-green-800 bg-green-900/10"
+                  : "border-gray-800 bg-[#0F0F0F] opacity-50"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">{slot.brussels} (Brussels)</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  slot.status === "available"
+                    ? "bg-[#C8A060] text-black"
+                    : slot.status === "booked"
+                    ? "bg-green-900/30 text-green-400"
+                    : "bg-white/10 text-white/60"
+                }`}>
+                  {slot.status === "available" ? "Disponible" : slot.status === "booked" ? "Réservé" : "Bloqué"}
+                </span>
+              </div>
+              <div className="text-xs text-white/60">{slot.miami} (Miami)</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-[#0F0F0F] px-4 py-6 text-center text-sm text-white/40">
+          Aucun créneau pour cette date.
+          <br />
+          <span className="text-[11px]">Sélectionnez un jour avec un point.</span>
+        </div>
+      )}
+
+      {/* Bookings for day */}
+      {mobileBookingsForDay.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-widest text-[#C8A060]">Réservations</h4>
+          {mobileBookingsForDay.map((booking) => (
+            <Link
+              key={booking.id}
+              href={`/admin/bookings/${booking.id}`}
+              className="block rounded-xl border border-gray-800 bg-[#0F0F0F] px-4 py-3 transition hover:border-[#C8A060]/30"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">{booking.client.name}</span>
+                <span className="text-xs text-[#C8A060]">Voir →</span>
+              </div>
+              <div className="text-xs text-white/60">
+                {DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")} -{" "}
+                {DateTime.fromJSDate(booking.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")} (Brussels)
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {/* ── DESKTOP VIEW ── */}
+    <div className="hidden md:grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-6 lg:col-span-8">
         <div className="rounded-2xl border border-border bg-background-elevated p-6">
         <div className="flex items-center justify-between">
@@ -423,6 +657,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
 
       </div>
     </div>
+    </>
   );
 }
 

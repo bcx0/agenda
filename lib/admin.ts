@@ -1,4 +1,4 @@
-﻿import { DateTime } from "luxon";
+import { DateTime } from "luxon";
 import { prisma } from "./prisma";
 import { BRUSSELS_TZ, MIAMI_TZ, isWithinMiamiWindow, monthBoundsUtc } from "./time";
 import { sendBookingConfirmationEmail, sendBookingUpdatedEmail } from "./email/booking";

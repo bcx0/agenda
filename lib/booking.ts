@@ -21,7 +21,7 @@ import {
 } from "./email/booking";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "./makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle } from "./sync-engine";
-import { checkBookingLimit } from "./booking-limits";
+// booking-limits.ts weekly cap removed — monthly quota is the sole limiter
 
 type AvailabilityStatus = "available" | "booked" | "blocked";
 
@@ -367,11 +367,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     return { error: "Acces reserve aux clients sous contrat." };
   }
 
-  // Check booking limit for this week
-  const limitCheck = await checkBookingLimit(client.email, startUtc);
-  if (!limitCheck.allowed) {
-    return { error: limitCheck.reason || "Limite atteinte." };
-  }
+  // Monthly quota is enforced below via getQuotaStatus — no weekly cap needed
 
   const settings = await getSettings();
   const location = settings.location === "BELGIUM" ? "BELGIUM" : "MIAMI";

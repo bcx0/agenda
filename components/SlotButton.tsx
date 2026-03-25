@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { clsx } from "clsx";
 import { bookSlotAction } from "../app/book/actions";
 
@@ -29,9 +29,12 @@ function SlotButtonComponent({
   status,
   quotaReached = false
 }: Props) {
-  const disabled = status !== "available" || quotaReached;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const disabled = status !== "available" || quotaReached || isSubmitting;
 
-  const stateLabel = quotaReached && status === "available"
+  const stateLabel = isSubmitting
+    ? "Réservation..."
+    : quotaReached && status === "available"
     ? "Quota atteint"
     : status === "booked"
     ? "Occupe"
@@ -39,8 +42,9 @@ function SlotButtonComponent({
     ? "Indisponible"
     : "Disponible";
 
-  const badgeClass =
-    status === "available" && !disabled
+  const badgeClass = isSubmitting
+    ? "bg-[#C8A060]/60 text-black animate-pulse"
+    : status === "available" && !disabled
       ? "bg-[#C8A060] text-black"
       : status === "booked"
       ? "bg-amber-100 text-amber-800"
@@ -57,7 +61,11 @@ function SlotButtonComponent({
         const ok = window.confirm(
           `Confirmer ce rendez vous ?\n${brussels} (Brussels)\n${miami} (Miami)`
         );
-        if (!ok) e.preventDefault();
+        if (!ok) {
+          e.preventDefault();
+          return;
+        }
+        setIsSubmitting(true);
       }}
     >
       <input type="hidden" name="start" value={startIso} />
@@ -72,7 +80,19 @@ function SlotButtonComponent({
         )}
       >
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-semibold">{brussels} - Brussels</span>
+          <span className="text-sm font-semibold">
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <svg className="h-4 w-4 animate-spin text-[#C8A060]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                {brussels} - Brussels
+              </span>
+            ) : (
+              `${brussels} - Brussels`
+            )}
+          </span>
           <span className={clsx("rounded-full px-2 py-1 text-[11px] font-semibold", badgeClass)}>
             {stateLabel}
           </span>

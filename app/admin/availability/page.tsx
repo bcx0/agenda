@@ -75,7 +75,7 @@ const HALF_HOUR_OPTIONS = [
 
 function tabLink(tab: string, label: string, active: boolean) {
   const base =
-    "rounded-full border px-3 py-1 text-xs uppercase tracking-widest transition";
+    "whitespace-nowrap rounded-full border px-3 py-2 text-xs uppercase tracking-widest transition";
   const classes = active
     ? "border-border bg-black text-white"
     : "border-border text-white/60 hover:border-border";
@@ -146,7 +146,7 @@ export default async function AdminAvailabilityPage({
       {errorMessage ? <div className="alert-error">{errorMessage}</div> : null}
       {successMessage ? <div className="alert-success">{successMessage}</div> : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {tabLink("general", "Voir le calendrier", tab === "general")}
         {tabLink("weekly", "Mes horaires fixes", tab === "weekly")}
         {tabLink("single-block", "Réserver un RDV", tab === "single-block")}
@@ -347,7 +347,7 @@ export default async function AdminAvailabilityPage({
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
               RDV bloqués
             </h2>
-            <form action={createAvailabilityOverrideAction} className="grid gap-3 md:grid-cols-5">
+            <form action={createAvailabilityOverrideAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
               <input type="date" name="date" className="input" required />
               <input type="time" name="startTime" className="input" required />
               <input type="time" name="endTime" className="input" required />
@@ -359,9 +359,9 @@ export default async function AdminAvailabilityPage({
                 type="text"
                 name="note"
                 placeholder="Note (optionnel)"
-                className="input md:col-span-5"
+                className="input sm:col-span-2 md:col-span-5"
               />
-              <button type="submit" className="btn btn-primary md:col-span-5">
+              <button type="submit" className="btn btn-primary sm:col-span-2 md:col-span-5">
                 Ajouter
               </button>
             </form>
@@ -449,7 +449,7 @@ export default async function AdminAvailabilityPage({
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
               RDV réguliers
             </h2>
-            <form action={createRecurringBlockAction} className="grid gap-3 md:grid-cols-4">
+            <form action={createRecurringBlockAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
               <select name="dayOfWeek" className="input" required>
                 {WEEK_DAYS.map((day) => (
                   <option key={day.value} value={day.value}>
@@ -481,7 +481,7 @@ export default async function AdminAvailabilityPage({
                   </option>
                 ))}
               </select>
-              <select name="timeZone" className="input" required>
+              <select name="timeZone" className="input sm:col-span-2 md:col-span-1" required>
                 <option value="America/New_York">America/New_York (Miami)</option>
                 <option value="Europe/Brussels">Europe/Brussels (Bruxelles)</option>
               </select>
@@ -489,9 +489,9 @@ export default async function AdminAvailabilityPage({
                 type="text"
                 name="note"
                 placeholder="Réservé pour… (optionnel)"
-                className="input md:col-span-4"
+                className="input sm:col-span-2 md:col-span-4"
               />
-              <button type="submit" className="btn btn-primary md:col-span-4">
+              <button type="submit" className="btn btn-primary sm:col-span-2 md:col-span-4">
                 Ajouter
               </button>
             </form>

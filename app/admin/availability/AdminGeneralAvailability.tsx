@@ -240,7 +240,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               </button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-7">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
               {Array.from({ length: 7 }, (_, i) => i).map((i) => {
                 const day = weekStart.plus({ days: i });
                 const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");

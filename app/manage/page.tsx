@@ -22,7 +22,8 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
   const bookings = await prisma.booking.findMany({
     where: {
       clientId: client.id,
-      status: { not: "CANCELLED" }
+      status: { not: "CANCELLED" },
+      startAt: { gte: new Date() }
     },
     orderBy: { startAt: "asc" }
   });

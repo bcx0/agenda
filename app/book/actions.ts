@@ -24,7 +24,7 @@ export async function bookSlotAction(formData: FormData) {
   }
 
   revalidatePath("/book");
-  redirect("/book?success=Rendez-vous%20confirme");
+  redirect("/book?success=RDV%20confirm%C3%A9%20!");
 }
 
 export async function manageBookingAction() {

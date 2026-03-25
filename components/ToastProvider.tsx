@@ -42,7 +42,7 @@ export function ToastProvider() {
 
   return (
     <Toaster
-      position="top-right"
+      position="top-left"
       toastOptions={{
         duration: 3000,
         style: {

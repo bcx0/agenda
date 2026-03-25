@@ -102,7 +102,8 @@ async function sendBookingEmail(params: {
   });
 
   if (!apiKey || !emailFrom) {
-    const errorMessage = "Missing RESEND_API_KEY or EMAIL_FROM.";
+    const errorMessage = `Missing env: RESEND_API_KEY=${apiKey ? "set" : "MISSING"}, EMAIL_FROM=${emailFrom ? "set" : "MISSING"}`;
+    console.error("[Email]", errorMessage);
     await prisma.emailLog.update({
       where: { id: log.id },
       data: {
@@ -126,6 +127,7 @@ async function sendBookingEmail(params: {
     });
 
     if (error) {
+      console.error("[Email] Resend API error:", error.message, "to:", booking.clientEmail);
       await prisma.emailLog.update({
         where: { id: log.id },
         data: {
@@ -139,6 +141,7 @@ async function sendBookingEmail(params: {
       return { ok: false, error: error.message };
     }
 
+    console.log("[Email] Sent successfully:", type, "to:", booking.clientEmail, "id:", data?.id);
     await prisma.emailLog.update({
       where: { id: log.id },
       data: {
@@ -153,6 +156,7 @@ async function sendBookingEmail(params: {
     return { ok: true, id: data?.id };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[Email] Exception sending email:", message, "to:", booking.clientEmail);
     await prisma.emailLog.update({
       where: { id: log.id },
       data: {

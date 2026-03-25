@@ -48,7 +48,7 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
           href="/admin/availability?tab=general"
           className="text-sm text-primary underline underline-offset-4 hover:text-primary-light"
         >
-          â† Retour aux disponibilitÃ©s
+          ← Retour aux disponibilités
         </Link>
         <p className="pill w-fit">Admin</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
@@ -108,7 +108,7 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
             <form action={adminRescheduleBookingAction} className="space-y-3">
               <input type="hidden" name="bookingId" value={booking.id} />
               <label className="space-y-2 text-sm">
-                <span className="block text-white/60">Nouveau crÃ©neau</span>
+                <span className="block text-white/60">Nouveau créneau</span>
                 <input type="datetime-local" name="start" className="input" required defaultValue={startInput} />
               </label>
               <label className="space-y-2 text-sm">
@@ -132,7 +132,7 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
               Zone de danger
             </h2>
             <p className="text-sm text-white/70">
-              Annuler ce rendez-vous rendra le crÃ©neau Ã  nouveau disponible.
+              Annuler ce rendez-vous rendra le créneau à nouveau disponible.
             </p>
             <form action={cancelBookingAction}>
               <input type="hidden" name="bookingId" value={booking.id} />

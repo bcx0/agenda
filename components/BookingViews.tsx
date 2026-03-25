@@ -6,6 +6,7 @@ import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
 import { CalendarViewToggle, type ViewMode } from "./CalendarViewToggle";
 import { DaySlotsPanel } from "./DaySlotsPanel";
+import { MobileBookingView } from "./MobileBookingView";
 import { MonthCalendar } from "./MonthCalendar";
 import { WeekCalendar } from "./WeekCalendar";
 import SlotButton from "./SlotButton";
@@ -67,83 +68,91 @@ export function BookingViews({ slots, quotaReached }: Props) {
   }, [dayMap]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <CalendarViewToggle value={view} onChange={setView} />
+    <>
+      {/* ── Mobile: compact calendar + inline slots ── */}
+      <div className="md:hidden">
+        <MobileBookingView slots={slots} quotaReached={quotaReached} />
       </div>
 
-      {view === "month" && (
-        <MonthCalendar
-          month={monthFocus}
-          daySlots={daySlotsMap}
-          onChangeMonth={setMonthFocus}
-          onSelectDay={(d) => {
-            const inMiami = d.setZone(MIAMI_TZ);
-            startTransition(() => {
-              handleSelectDay(inMiami);
-              setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
-            });
-          }}
-        />
-      )}
-
-      {view === "week" && (
-        <WeekCalendar
-          weekStart={weekStart}
-          daySlots={daySlotsMap}
-          quotaReached={quotaReached}
-          onChangeWeek={(next) => {
-            startTransition(() => {
-              setWeekStart(next);
-              setMonthFocus(next.setZone(MIAMI_TZ).startOf("month"));
-            });
-          }}
-        />
-      )}
-
-      {view === "list" && (
-        <div className="space-y-6">
-          {orderedDayGroups.map((group) => (
-            <div key={group.key} className="space-y-3">
-              <div className="flex items-baseline justify-between">
-                <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-                  {group.label}
-                </h3>
-                <span className="text-xs uppercase tracking-widest text-white/50">
-                  (Brussels / Miami)
-                </span>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                {group.slots.map((slot) => {
-                  return (
-                    <SlotButton
-                      key={slot.start.toISOString()}
-                      startIso={slot.start.toISOString()}
-                      brussels={slot.brussels}
-                      miami={slot.miami}
-                      mode={slot.mode as any}
-                      location={slot.location as any}
-                      presentielLocation={slot.presentielLocation}
-                      presentielNote={slot.presentielNote}
-                      status={slot.status}
-                      quotaReached={quotaReached}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+      {/* ── Desktop: existing 3-view layout ── */}
+      <div className="hidden md:block space-y-6">
+        <div className="flex items-center justify-between">
+          <CalendarViewToggle value={view} onChange={setView} />
         </div>
-      )}
 
-      <DaySlotsPanel
-        open={!!selectedDay}
-        dateLabel={selectedDay?.label ?? ""}
-        slots={selectedDay?.slots ?? []}
-        quotaReached={quotaReached}
-        onClose={() => setSelectedDay(null)}
-      />
-    </div>
+        {view === "month" && (
+          <MonthCalendar
+            month={monthFocus}
+            daySlots={daySlotsMap}
+            onChangeMonth={setMonthFocus}
+            onSelectDay={(d) => {
+              const inMiami = d.setZone(MIAMI_TZ);
+              startTransition(() => {
+                handleSelectDay(inMiami);
+                setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
+              });
+            }}
+          />
+        )}
+
+        {view === "week" && (
+          <WeekCalendar
+            weekStart={weekStart}
+            daySlots={daySlotsMap}
+            quotaReached={quotaReached}
+            onChangeWeek={(next) => {
+              startTransition(() => {
+                setWeekStart(next);
+                setMonthFocus(next.setZone(MIAMI_TZ).startOf("month"));
+              });
+            }}
+          />
+        )}
+
+        {view === "list" && (
+          <div className="space-y-6">
+            {orderedDayGroups.map((group) => (
+              <div key={group.key} className="space-y-3">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
+                    {group.label}
+                  </h3>
+                  <span className="text-xs uppercase tracking-widest text-white/50">
+                    (Brussels / Miami)
+                  </span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                  {group.slots.map((slot) => {
+                    return (
+                      <SlotButton
+                        key={slot.start.toISOString()}
+                        startIso={slot.start.toISOString()}
+                        brussels={slot.brussels}
+                        miami={slot.miami}
+                        mode={slot.mode as any}
+                        location={slot.location as any}
+                        presentielLocation={slot.presentielLocation}
+                        presentielNote={slot.presentielNote}
+                        status={slot.status}
+                        quotaReached={quotaReached}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DaySlotsPanel
+          open={!!selectedDay}
+          dateLabel={selectedDay?.label ?? ""}
+          slots={selectedDay?.slots ?? []}
+          quotaReached={quotaReached}
+          onClose={() => setSelectedDay(null)}
+        />
+      </div>
+    </>
   );
 }
 

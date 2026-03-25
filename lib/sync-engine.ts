@@ -14,11 +14,33 @@ const DEFAULT_TIMEZONE = 'Europe/Paris'
 
 async function findOrCreateGoogleClient(clientName: string) {
   const normalizedName = clientName.trim().replace(/\s+/g, ' ')
-  const existingClient = await prisma.client.findFirst({
+
+  // 1. Recherche exacte par nom (insensible à la casse)
+  const exactMatch = await prisma.client.findFirst({
     where: { name: { equals: normalizedName, mode: 'insensitive' } },
   })
-  if (existingClient) return existingClient
+  if (exactMatch) return exactMatch
 
+  // 2. Recherche partielle : le nom Google contient le nom client ou inversement
+  const allClients = await prisma.client.findMany({
+    where: {
+      isActive: true,
+      // Exclure les clients auto-générés par Google
+      NOT: { email: { endsWith: '@import.local' } },
+    },
+    select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
+  })
+
+  const normalizedLower = normalizedName.toLowerCase()
+  const partialMatch = allClients.find((c) => {
+    const cLower = c.name.toLowerCase()
+    // Le nom Google est contenu dans le nom client ou inversement
+    return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
+  })
+  if (partialMatch) return partialMatch
+
+  // 3. Aucun match → créer un nouveau client dans une transaction
+  //    pour éviter les doublons dus aux race conditions
   const safeSlug = normalizedName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -28,14 +50,22 @@ async function findOrCreateGoogleClient(clientName: string) {
     .replace(/^-+/g, '')
   const email = `google-${safeSlug || 'client'}-${Date.now()}@import.local`
 
-  return prisma.client.create({
-    data: {
-      name: normalizedName,
-      email,
-      passwordHash: crypto.randomBytes(16).toString('hex'),
-      creditsPerMonth: 0,
-      isActive: true,
-    },
+  // Re-vérifier dans une transaction pour éviter les race conditions
+  return prisma.$transaction(async (tx) => {
+    const doubleCheck = await tx.client.findFirst({
+      where: { name: { equals: normalizedName, mode: 'insensitive' } },
+    })
+    if (doubleCheck) return doubleCheck
+
+    return tx.client.create({
+      data: {
+        name: normalizedName,
+        email,
+        passwordHash: crypto.randomBytes(16).toString('hex'),
+        creditsPerMonth: 0,
+        isActive: true,
+      },
+    })
   })
 }
 
@@ -219,9 +249,11 @@ export async function pullFromGoogle(
       await prisma.booking.update({
         where: { id: booking.id },
         data: {
+          status: 'CANCELLED',           // ← Statut métier pour que l'app le filtre
           syncStatus: 'cancelled',
           syncSource: 'google',
           lastSyncedAt: new Date(),
+          cancelReason: 'Supprimé depuis Google Calendar',
         },
       })
       await logSync('Booking', booking.id, 'pull_delete', 'google_to_app')

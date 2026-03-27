@@ -6,13 +6,13 @@ export default function Footer() {
           Mentions légales - Geoffrey Mahieu 2026
         </span>
         <div className="flex items-center gap-4">
-          <a href="https://www.linkedin.com/in/geoffrey-mahieu" target="_blank" rel="noopener noreferrer" className="hover:text-white">
+          <a href="https://www.linkedin.com/in/geoffrey-mahieu-bab0086b" target="_blank" rel="noopener noreferrer" className="hover:text-white">
             LinkedIn
           </a>
-          <a href="https://www.instagram.com/geoffreymahieu" target="_blank" rel="noopener noreferrer" className="hover:text-white">
+          <a href="https://www.instagram.com/geoffrey_mahieu_coach_mental/" target="_blank" rel="noopener noreferrer" className="hover:text-white">
             Instagram
           </a>
-          <a href="https://www.youtube.com/@geoffreymahieu" target="_blank" rel="noopener noreferrer" className="hover:text-white">
+          <a href="https://www.youtube.com/@GeoffreyMahieuCoachMental" target="_blank" rel="noopener noreferrer" className="hover:text-white">
             Youtube
           </a>
         </div>

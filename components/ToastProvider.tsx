@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { Toaster, toast } from "react-hot-toast";
 
 function resolveSuccessMessage(successParam: string | null) {
@@ -15,6 +15,7 @@ function resolveSuccessMessage(successParam: string | null) {
 export function ToastProvider() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const router = useRouter();
   const lastKey = useRef<string>("");
 
   useEffect(() => {
@@ -31,14 +32,20 @@ export function ToastProvider() {
 
     if (error) {
       toast.error(decodeURIComponent(error));
-      return;
+    } else {
+      const successMessage = resolveSuccessMessage(success);
+      if (successMessage) {
+        toast.success(successMessage);
+      }
     }
 
-    const successMessage = resolveSuccessMessage(success);
-    if (successMessage) {
-      toast.success(successMessage);
-    }
-  }, [pathname, searchParams]);
+    // Clean URL params after showing toast
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("success");
+    next.delete("error");
+    const cleanUrl = next.toString() ? `${pathname}?${next.toString()}` : pathname;
+    router.replace(cleanUrl);
+  }, [pathname, searchParams, router]);
 
   return (
     <Toaster

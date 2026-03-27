@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { DateTime } from "luxon";
+import { useSearchParams } from "next/navigation";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
 import { CalendarViewToggle, type ViewMode } from "./CalendarViewToggle";
@@ -44,6 +45,15 @@ export function BookingViews({ slots, quotaReached }: Props) {
     DateTime.now().setZone(MIAMI_TZ).startOf("week").plus({ days: 1 })
   );
   const [selectedDay, setSelectedDay] = useState<DayGroup | null>(null);
+  const searchParams = useSearchParams();
+
+  // Close panel after successful booking so user can book another slot
+  useEffect(() => {
+    const success = searchParams?.get("success");
+    if (success) {
+      setSelectedDay(null);
+    }
+  }, [searchParams]);
 
   const orderedDayGroups = useMemo(
     () => Array.from(dayMap.values()).sort((a, b) => a.date.toMillis() - b.date.toMillis()),

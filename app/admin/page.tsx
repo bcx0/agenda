@@ -146,7 +146,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
           </div>
           <div className="grid gap-2 text-sm">
             <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/availability">
-              Gérer les disponibilités
+              Voir l'agenda
             </Link>
             <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/clients">
               Gérer les clients

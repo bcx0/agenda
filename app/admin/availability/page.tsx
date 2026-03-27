@@ -102,7 +102,7 @@ export default async function AdminAvailabilityPage({
     ? searchParams?.success[0]
     : searchParams?.success;
   const successMessage = rawSuccess ? decodeURIComponent(rawSuccess) : undefined;
-  const tab = searchParams?.tab ?? "weekly";
+  const tab = searchParams?.tab ?? "general";
 
   const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates, upcomingBookings] = await Promise.all([
     listAvailabilityRules(),
@@ -136,10 +136,10 @@ export default async function AdminAvailabilityPage({
       <div className="space-y-2">
         <p className="pill w-fit">Admin</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-          Disponibilités
+          Agenda
         </h1>
         <p className="text-sm text-white/70">
-          Configuration en timezone Brussels, avec affichage double (Brussels / Miami) pour vérification.
+          Vue calendrier Brussels / Miami. Gérez vos créneaux et rendez-vous.
         </p>
       </div>
 
@@ -147,7 +147,7 @@ export default async function AdminAvailabilityPage({
       {successMessage ? <div className="alert-success">{successMessage}</div> : null}
 
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        {tabLink("general", "Voir le calendrier", tab === "general")}
+        {tabLink("general", "Agenda", tab === "general")}
         {tabLink("weekly", "Mes horaires fixes", tab === "weekly")}
         {tabLink("single-block", "Réserver un RDV", tab === "single-block")}
         {tabLink("recurring", "RDV réguliers", tab === "recurring")}

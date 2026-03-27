@@ -32,6 +32,13 @@ function SlotButtonComponent({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset loading state when slot status changes (after server revalidation)
+  useEffect(() => {
+    setIsSubmitting(false);
+    setConfirming(false);
+  }, [status]);
+
   const disabled = status !== "available" || quotaReached || isSubmitting;
 
   // Auto-cancel confirm state after 4 seconds

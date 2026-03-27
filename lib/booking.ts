@@ -420,7 +420,8 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     ? `${appUrl.replace(/\/$/, "")}/rdv/manage/${booking.manageToken}`
     : null;
 
-  await sendBookingConfirmationEmail({
+  // Fire-and-forget: don't block the response waiting for email delivery
+  sendBookingConfirmationEmail({
     bookingId: booking.id,
     clientName: client.name,
     clientEmail: client.email,
@@ -428,7 +429,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     endAt: booking.endAt,
     timeZone: "Europe/Brussels",
     manageUrl
-  });
+  }).catch((err) => console.error("[Email] Confirmation send failed:", err));
 
   void sendMakeBookingWebhook(
     makePayloadFromBooking({

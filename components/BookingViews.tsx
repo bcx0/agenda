@@ -47,13 +47,16 @@ export function BookingViews({ slots, quotaReached }: Props) {
   const [selectedDay, setSelectedDay] = useState<DayGroup | null>(null);
   const searchParams = useSearchParams();
 
-  // Close panel after successful booking so user can book another slot
+  // After booking: keep panel open but refresh slots for the selected day
   useEffect(() => {
     const success = searchParams?.get("success");
-    if (success) {
-      setSelectedDay(null);
+    if (success && selectedDay) {
+      const updatedGroup = dayMap.get(selectedDay.key);
+      if (updatedGroup) {
+        setSelectedDay({ ...updatedGroup });
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, dayMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const orderedDayGroups = useMemo(
     () => Array.from(dayMap.values()).sort((a, b) => a.date.toMillis() - b.date.toMillis()),

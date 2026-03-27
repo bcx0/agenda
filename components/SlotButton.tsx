@@ -58,13 +58,6 @@ function SlotButtonComponent({
           e.preventDefault();
           return;
         }
-        const ok = window.confirm(
-          `Confirmer ce rendez vous ?\n${brussels} (Brussels)\n${miami} (Miami)`
-        );
-        if (!ok) {
-          e.preventDefault();
-          return;
-        }
         setIsSubmitting(true);
       }}
     >

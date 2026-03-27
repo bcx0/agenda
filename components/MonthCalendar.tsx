@@ -43,28 +43,28 @@ function MonthCalendarComponent({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-center gap-3">
         <button
           type="button"
           onClick={() => onChangeMonth(month.minus({ months: 1 }))}
-          className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
         >
           {"<"}
         </button>
-        <div className="text-lg font-semibold flex-1 text-center">
+        <div className="text-lg font-semibold text-center whitespace-nowrap">
           {monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}
         </div>
         <button
           type="button"
           onClick={() => onChangeMonth(month.plus({ months: 1 }))}
-          className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
         >
           {">"}
         </button>
         <button
           type="button"
           onClick={() => onChangeMonth(DateTime.now().setZone(MIAMI_TZ).startOf("month"))}
-          className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5 whitespace-nowrap"
         >
           Aujourd&apos;hui
         </button>

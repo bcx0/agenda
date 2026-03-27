@@ -75,7 +75,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
       </div>
 
       {/* ── Desktop: existing 3-view layout ── */}
-      <div className="hidden md:block space-y-6">
+      <div className={`hidden md:block space-y-6 transition-all duration-300 ${selectedDay ? "md:mr-[430px]" : ""}`}>
         <div className="flex items-center justify-between">
           <CalendarViewToggle value={view} onChange={setView} />
         </div>

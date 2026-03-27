@@ -98,7 +98,8 @@ export async function pushBookingToGoogle(
   })
   if (!booking) throw new Error(`Booking ${bookingId} introuvable`)
 
-  if (booking.syncSource === 'google') {
+  // For deletes, always proceed even if booking came from Google
+  if (booking.syncSource === 'google' && action !== 'delete') {
     await prisma.booking.update({
       where: { id: bookingId },
       data: {

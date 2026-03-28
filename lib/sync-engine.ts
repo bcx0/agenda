@@ -12,6 +12,87 @@ const prisma = new PrismaClient()
 const APP_SOURCE_TAG = 'your-saas-app'
 const DEFAULT_TIMEZONE = 'Europe/Paris'
 
+// Mots-clés indiquant un événement personnel (pas un RDV client)
+const PERSONAL_KEYWORDS = [
+  'perso', 'personnel', 'personnelle', 'prive', 'privé', 'privée',
+  'indisponible', 'pause', 'break', 'lunch', 'déjeuner', 'repos',
+  'vacances', 'congé', 'congés', 'férié', 'ferie',
+  'formation', 'admin', 'réunion', 'meeting', 'interne',
+]
+
+/**
+ * Tente de trouver un client RÉEL existant par son nom.
+ * Ne crée PAS de nouveau client — retourne null si aucun match.
+ */
+async function findExistingRealClient(eventName: string) {
+  const normalizedName = eventName.trim().replace(/\s+/g, ' ')
+  const normalizedLower = normalizedName.toLowerCase()
+
+  // Vérifier si c'est un mot-clé personnel
+  if (PERSONAL_KEYWORDS.some(kw => normalizedLower.includes(kw))) {
+    return null
+  }
+
+  // Charger les vrais clients (exclure les auto-générés @import.local)
+  const realClients = await prisma.client.findMany({
+    where: {
+      isActive: true,
+      NOT: { email: { endsWith: '@import.local' } },
+    },
+    select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
+  })
+
+  // 1. Recherche exacte
+  const exactMatch = realClients.find(
+    (c) => c.name.toLowerCase() === normalizedLower
+  )
+  if (exactMatch) return exactMatch
+
+  // 2. Recherche partielle (le nom Google est contenu dans le nom client ou inversement)
+  const partialMatch = realClients.find((c) => {
+    const cLower = c.name.toLowerCase()
+    return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
+  })
+  if (partialMatch) return partialMatch
+
+  return null
+}
+
+/**
+ * Supprime les accents pour un matching plus robuste.
+ */
+function removeAccents(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/**
+ * Matching intelligent entre un nom Google et un nom client.
+ * Retourne un score : 0 = pas de match, 1 = partiel, 2 = exact.
+ */
+function matchClientName(googleName: string, clientName: string): number {
+  const gLower = removeAccents(googleName.toLowerCase().trim())
+  const cLower = removeAccents(clientName.toLowerCase().trim())
+
+  // Match exact
+  if (gLower === cLower) return 2
+
+  // Le nom Google est un seul mot (prénom ou nom de famille)
+  // → vérifier s'il correspond à un des mots du nom client
+  const gWords = gLower.split(/\s+/)
+  const cWords = cLower.split(/\s+/)
+
+  // Match partiel : nom Google contenu dans nom client ou inverse
+  // Minimum 3 caractères pour éviter les faux positifs ("Al" matchant "Alice")
+  if (gLower.length >= 3) {
+    if (cLower.includes(gLower) || gLower.includes(cLower)) return 1
+  }
+
+  // Match par premier mot (prénom)
+  if (gWords[0].length >= 3 && cWords[0].length >= 3 && gWords[0] === cWords[0]) return 1
+
+  return 0
+}
+
 async function findOrCreateGoogleClient(clientName: string) {
   const normalizedName = clientName.trim().replace(/\s+/g, ' ')
   const normalizedLower = normalizedName.toLowerCase()
@@ -25,28 +106,28 @@ async function findOrCreateGoogleClient(clientName: string) {
     select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
   })
 
-  // 1. Recherche exacte parmi les VRAIS clients uniquement
-  const exactRealMatch = realClients.find(
-    (c) => c.name.toLowerCase() === normalizedLower
-  )
-  if (exactRealMatch) return exactRealMatch
+  // 1. Recherche avec scoring parmi les VRAIS clients
+  let bestMatch: typeof realClients[0] | null = null
+  let bestScore = 0
 
-  // 2. Recherche partielle parmi les vrais clients :
-  //    le nom Google est contenu dans le nom client ou inversement
-  const partialMatch = realClients.find((c) => {
-    const cLower = c.name.toLowerCase()
-    return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
-  })
-  if (partialMatch) return partialMatch
+  for (const client of realClients) {
+    const score = matchClientName(normalizedName, client.name)
+    if (score > bestScore) {
+      bestScore = score
+      bestMatch = client
+    }
+  }
 
-  // 3. Fallback : recherche exacte parmi TOUS les clients (y compris @import.local)
+  if (bestMatch) return bestMatch
+
+  // 2. Fallback : recherche exacte parmi TOUS les clients (y compris @import.local)
   //    pour éviter de créer des doublons auto-générés
   const exactAnyMatch = await prisma.client.findFirst({
     where: { name: { equals: normalizedName, mode: 'insensitive' } },
   })
   if (exactAnyMatch) return exactAnyMatch
 
-  // 4. Aucun match → créer un nouveau client dans une transaction
+  // 3. Aucun match → créer un nouveau client dans une transaction
   //    pour éviter les doublons dus aux race conditions
   const safeSlug = normalizedName
     .toLowerCase()
@@ -65,11 +146,17 @@ async function findOrCreateGoogleClient(clientName: string) {
         NOT: { email: { endsWith: '@import.local' } },
       },
     })
-    const lastChance = realCheck.find((c) => {
-      const cLower = c.name.toLowerCase()
-      return cLower === normalizedLower || cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
-    })
-    if (lastChance) return lastChance
+
+    let txBestMatch: typeof realCheck[0] | null = null
+    let txBestScore = 0
+    for (const client of realCheck) {
+      const score = matchClientName(normalizedName, client.name)
+      if (score > txBestScore) {
+        txBestScore = score
+        txBestMatch = client
+      }
+    }
+    if (txBestMatch) return txBestMatch
 
     const anyCheck = await tx.client.findFirst({
       where: { name: { equals: normalizedName, mode: 'insensitive' } },
@@ -377,6 +464,41 @@ export async function pullFromGoogle(
     return { action: 'booking_created', id: newBooking.id, clientName: parsed.clientName }
   }
 
+  // Pour les événements block_simple, vérifier si le nom correspond à un client existant
+  // Si oui → créer un Booking (décompte crédits). Si non → créer un Block classique.
+  if (parsed.type === 'block_simple') {
+    const matchedClient = await findExistingRealClient(parsed.reason)
+
+    if (matchedClient) {
+      // Le nom de l'événement correspond à un vrai client → créer un Booking
+      const newBooking = await prisma.booking.create({
+        data: {
+          clientId: matchedClient.id,
+          startAt: new Date(googleEvent.start.dateTime),
+          endAt: new Date(googleEvent.end.dateTime!),
+          status: 'CONFIRMED',
+          mode: 'VISIO',
+          googleEventId,
+          syncSource: 'google',
+          syncStatus: 'synced',
+          lastSyncedAt: new Date(),
+          bookedBy: 'google',
+        },
+      })
+
+      await logSync('Booking', newBooking.id, 'pull_create', 'google_to_app', {
+        source: 'google_external_event_matched_client',
+        summary: googleEvent.summary,
+        parsedType: parsed.type,
+        matchedClientName: matchedClient.name,
+        matchedClientId: matchedClient.id,
+      })
+
+      return { action: 'booking_created', id: newBooking.id, clientName: matchedClient.name }
+    }
+  }
+
+  // Aucun client trouvé ou événement personnel → créer un Block
   const newBlock = await prisma.block.create({
     data: {
       startAt: new Date(googleEvent.start.dateTime),

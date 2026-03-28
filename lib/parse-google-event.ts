@@ -7,40 +7,13 @@ export interface ParsedGoogleEvent {
   originalSummary: string
 }
 
-const PERSO_KEYWORDS = [
-  'perso', 'personnel', 'personnelle', 'prive', 'privé', 'privée',
-  'indisponible', 'pause', 'break', 'lunch', 'déjeuner', 'repos',
-  'vacances', 'congé', 'congés', 'férié', 'ferie',
-]
-
-// Préfixes reconnus comme "RDV" (insensible à la casse)
-const RDV_PREFIXES = ['rdv', 'rendez-vous', 'rendezvous', 'rv']
-
-/**
- * Détecte si le summary commence par un préfixe de type RDV.
- * Retourne le texte après le préfixe, ou null si pas de préfixe trouvé.
- */
-function extractAfterRdvPrefix(original: string): string | null {
-  const normalized = original.toLowerCase()
-
-  for (const prefix of RDV_PREFIXES) {
-    if (normalized.startsWith(prefix)) {
-      const rest = original.substring(prefix.length)
-      return rest.replace(/^[\s+\-—:]+/, '').trim()
-    }
-  }
-
-  return null
-}
+const PERSO_KEYWORDS = ['perso', 'personnel', 'personnelle', 'prive', 'privé', 'privée']
 
 export function parseGoogleEventSummary(summary: string | undefined | null): ParsedGoogleEvent {
   const original = (summary || '').trim()
   const normalized = original.toLowerCase()
 
-  const afterRdv = extractAfterRdvPrefix(original)
-
-  // Pas de préfixe RDV → block_simple (le sync-engine vérifiera si c'est un client)
-  if (afterRdv === null) {
+  if (!normalized.startsWith('rdv')) {
     return {
       type: 'block_simple',
       clientName: null,
@@ -49,7 +22,11 @@ export function parseGoogleEventSummary(summary: string | undefined | null): Par
     }
   }
 
-  // Préfixe RDV trouvé mais rien après → personnel
+  let afterRdv = original
+    .substring(3)
+    .replace(/^[\s+\-:]+/, '')
+    .trim()
+
   if (!afterRdv) {
     return {
       type: 'block_perso',
@@ -60,11 +37,7 @@ export function parseGoogleEventSummary(summary: string | undefined | null): Par
   }
 
   const afterRdvLower = afterRdv.toLowerCase()
-
-  // Vérifier si c'est un mot-clé personnel (match exact OU contenu dans le texte)
-  const isPerso = PERSO_KEYWORDS.some(keyword =>
-    afterRdvLower === keyword || afterRdvLower.startsWith(keyword + ' ')
-  )
+  const isPerso = PERSO_KEYWORDS.some(keyword => afterRdvLower === keyword)
 
   if (isPerso) {
     return {
@@ -75,7 +48,6 @@ export function parseGoogleEventSummary(summary: string | undefined | null): Par
     }
   }
 
-  // C'est un RDV client → extraire le nom
   const clientName = afterRdv
     .split(/\s+/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())

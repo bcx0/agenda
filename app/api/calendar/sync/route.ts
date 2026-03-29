@@ -87,9 +87,32 @@ export async function POST(req: NextRequest) {
       const body = await req.json();
       const events = (body.events ?? []) as GoogleCalendarEvent[];
 
+      // Bulk pre-check: 2 queries to find ALL already-imported events
+      const eventIds = events.map((e) => e.id);
+      const [existingBookings, existingBlocks] = await Promise.all([
+        prisma.booking.findMany({
+          where: { googleEventId: { in: eventIds } },
+          select: { googleEventId: true },
+        }),
+        prisma.block.findMany({
+          where: { googleEventId: { in: eventIds } },
+          select: { googleEventId: true },
+        }),
+      ]);
+      const alreadyImported = new Set([
+        ...existingBookings.map((b) => b.googleEventId),
+        ...existingBlocks.map((b) => b.googleEventId),
+      ]);
+
       const results: Array<{ eventId: string; action: string }> = [];
 
       for (const event of events) {
+        // Skip already-imported events instantly (no DB query needed)
+        if (alreadyImported.has(event.id) && event.status !== "cancelled") {
+          results.push({ eventId: event.id, action: "already_exists" });
+          continue;
+        }
+
         try {
           const result = await pullFromGoogle(
             event.status === "cancelled" ? null : event,

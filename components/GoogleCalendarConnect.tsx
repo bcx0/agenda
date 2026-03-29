@@ -63,8 +63,8 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
 
       setProgress(`Traitement de ${allEvents.length} événements...`)
 
-      // Step 2: Process events in batches of 20 (safe for Vercel timeout)
-      const BATCH_SIZE = 20
+      // Step 2: Process events in batches of 100 (bulk pre-check skips existing)
+      const BATCH_SIZE = 100
       for (let i = 0; i < allEvents.length; i += BATCH_SIZE) {
         if (abortRef.current) break
 

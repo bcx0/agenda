@@ -84,42 +84,31 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === "debug") {
-      const [bookingCount, blockCount, clientCount, importClientCount, sampleBookings, sampleBlocks] = await Promise.all([
+      const [bookingCount, blockCount, clientCount, importClientCount] = await Promise.all([
         prisma.booking.count(),
         prisma.block.count(),
         prisma.client.count(),
         prisma.client.count({ where: { email: { endsWith: "@import.local" } } }),
-        prisma.booking.findMany({
-          take: 5,
-          orderBy: { startAt: "asc" },
-          where: { startAt: { gte: new Date() } },
-          include: { client: { select: { name: true, email: true } } },
-        }),
-        prisma.block.findMany({
-          take: 5,
-          orderBy: { startAt: "asc" },
-          where: { startAt: { gte: new Date() } },
-        }),
       ]);
+      // Check for duplicates: bookings with same startAt + clientId
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const upcomingBookings = await prisma.booking.findMany({
+        where: { startAt: { gte: tomorrow, lt: nextWeek }, status: "CONFIRMED" },
+        orderBy: { startAt: "asc" },
+        include: { client: { select: { name: true } } },
+      });
       return NextResponse.json({
         bookingCount,
         blockCount,
         clientCount,
         importClientCount,
-        sampleBookings: sampleBookings.map((b: { id: number; client: { name: string }; startAt: Date; status: string; syncSource: string; googleEventId: string | null }) => ({
+        upcomingWeek: upcomingBookings.map((b: { id: number; client: { name: string }; startAt: Date; syncSource: string; googleEventId: string | null }) => ({
           id: b.id,
           client: b.client.name,
           startAt: b.startAt,
-          status: b.status,
           syncSource: b.syncSource,
-          googleEventId: b.googleEventId ? "yes" : "no",
-        })),
-        sampleBlocks: sampleBlocks.map((b: { id: number; reason: string | null; startAt: Date; syncSource: string; googleEventId: string | null }) => ({
-          id: b.id,
-          reason: b.reason,
-          startAt: b.startAt,
-          syncSource: b.syncSource,
-          googleEventId: b.googleEventId ? "yes" : "no",
+          hasGoogleId: !!b.googleEventId,
         })),
       });
     }

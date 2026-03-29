@@ -83,6 +83,47 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (step === "debug") {
+      const [bookingCount, blockCount, clientCount, importClientCount, sampleBookings, sampleBlocks] = await Promise.all([
+        prisma.booking.count(),
+        prisma.block.count(),
+        prisma.client.count(),
+        prisma.client.count({ where: { email: { endsWith: "@import.local" } } }),
+        prisma.booking.findMany({
+          take: 5,
+          orderBy: { startAt: "asc" },
+          where: { startAt: { gte: new Date() } },
+          include: { client: { select: { name: true, email: true } } },
+        }),
+        prisma.block.findMany({
+          take: 5,
+          orderBy: { startAt: "asc" },
+          where: { startAt: { gte: new Date() } },
+        }),
+      ]);
+      return NextResponse.json({
+        bookingCount,
+        blockCount,
+        clientCount,
+        importClientCount,
+        sampleBookings: sampleBookings.map((b: { id: number; client: { name: string }; startAt: Date; status: string; syncSource: string; googleEventId: string | null }) => ({
+          id: b.id,
+          client: b.client.name,
+          startAt: b.startAt,
+          status: b.status,
+          syncSource: b.syncSource,
+          googleEventId: b.googleEventId ? "yes" : "no",
+        })),
+        sampleBlocks: sampleBlocks.map((b: { id: number; reason: string | null; startAt: Date; syncSource: string; googleEventId: string | null }) => ({
+          id: b.id,
+          reason: b.reason,
+          startAt: b.startAt,
+          syncSource: b.syncSource,
+          googleEventId: b.googleEventId ? "yes" : "no",
+        })),
+      });
+    }
+
     if (step === "purge") {
       // 1. Delete Google-imported bookings + blocks
       const [deletedBookings, deletedBlocks] = await Promise.all([

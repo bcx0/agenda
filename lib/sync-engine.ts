@@ -334,17 +334,19 @@ export async function pullFromGoogle(
         })
       }
       return { action: 'etag_updated', skipped: true }
-    } catch (error: any) {
-      if (error?.code === 'P2025') {
+    } catch (error: unknown) {
+      if ((error as { code?: string })?.code === 'P2025') {
         return { action: 'record_deleted_skipped', skipped: true }
       }
       throw error
     }
   }
 
-  const existingBooking = await prisma.booking.findFirst({
-    where: { googleEventId },
-  })
+  // Parallel lookup: check booking AND block simultaneously (halves latency)
+  const [existingBooking, existingBlock] = await Promise.all([
+    prisma.booking.findFirst({ where: { googleEventId } }),
+    prisma.block.findFirst({ where: { googleEventId } }),
+  ])
 
   if (existingBooking) {
     const appTime = existingBooking.updatedAt.getTime()
@@ -385,10 +387,7 @@ export async function pullFromGoogle(
     }
   }
 
-  // \u2500\u2500 FIX: v\u00e9rifier s'il existe d\u00e9j\u00e0 un Block avec ce googleEventId \u2500\u2500
-  const existingBlock = await prisma.block.findFirst({
-    where: { googleEventId },
-  })
+
 
   if (existingBlock) {
     const blockStartDt = googleEvent.start.dateTime

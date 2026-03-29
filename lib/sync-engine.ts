@@ -287,19 +287,26 @@ export async function pullFromGoogle(
   const recordId = googleEvent.extendedProperties?.private?.recordId
 
   if (appSource === APP_SOURCE_TAG && recordId) {
-    if (recordType === 'booking') {
-      await prisma.booking.update({
-        where: { id: parseInt(recordId) },
-        data: { googleEtag: googleEvent.etag },
-      })
+    try {
+      if (recordType === 'booking') {
+        await prisma.booking.update({
+          where: { id: parseInt(recordId) },
+          data: { googleEtag: googleEvent.etag },
+        })
+      }
+      if (recordType === 'block') {
+        await prisma.block.update({
+          where: { id: parseInt(recordId) },
+          data: { googleEtag: googleEvent.etag },
+        })
+      }
+      return { action: 'etag_updated', skipped: true }
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        return { action: 'record_deleted_skipped', skipped: true }
+      }
+      throw error
     }
-    if (recordType === 'block') {
-      await prisma.block.update({
-        where: { id: parseInt(recordId) },
-        data: { googleEtag: googleEvent.etag },
-      })
-    }
-    return { action: 'etag_updated', skipped: true }
   }
 
   const existingBooking = await prisma.booking.findFirst({
@@ -317,19 +324,26 @@ export async function pullFromGoogle(
       })
       return { action: 'conflict_app_wins' }
     } else {
-      await prisma.booking.update({
-        where: { id: existingBooking.id },
-        data: {
-          startAt: new Date(googleEvent.start.dateTime!),
-          endAt: new Date(googleEvent.end.dateTime!),
-          googleEtag: googleEvent.etag,
-          syncSource: 'google',
-          syncStatus: 'synced',
-          lastSyncedAt: new Date(),
-        },
-      })
-      await logSync('Booking', existingBooking.id, 'pull_update', 'google_to_app')
-      return { action: 'booking_updated' }
+      try {
+        await prisma.booking.update({
+          where: { id: existingBooking.id },
+          data: {
+            startAt: new Date(googleEvent.start.dateTime!),
+            endAt: new Date(googleEvent.end.dateTime!),
+            googleEtag: googleEvent.etag,
+            syncSource: 'google',
+            syncStatus: 'synced',
+            lastSyncedAt: new Date(),
+          },
+        })
+        await logSync('Booking', existingBooking.id, 'pull_update', 'google_to_app')
+        return { action: 'booking_updated' }
+      } catch (error: any) {
+        if (error?.code === 'P2025') {
+          return { action: 'record_deleted_skipped', skipped: true }
+        }
+        throw error
+      }
     }
   }
 
@@ -340,20 +354,27 @@ export async function pullFromGoogle(
 
   if (existingBlock) {
     if (googleEvent.start.dateTime) {
-      await prisma.block.update({
-        where: { id: existingBlock.id },
-        data: {
-          startAt: new Date(googleEvent.start.dateTime),
-          endAt: new Date(googleEvent.end.dateTime!),
-          reason: googleEvent.summary || existingBlock.reason,
-          googleEtag: googleEvent.etag,
-          syncSource: 'google',
-          syncStatus: 'synced',
-          lastSyncedAt: new Date(),
-        },
-      })
-      await logSync('Block', existingBlock.id, 'pull_update', 'google_to_app')
-      return { action: 'block_updated', id: existingBlock.id }
+      try {
+        await prisma.block.update({
+          where: { id: existingBlock.id },
+          data: {
+            startAt: new Date(googleEvent.start.dateTime),
+            endAt: new Date(googleEvent.end.dateTime!),
+            reason: googleEvent.summary || existingBlock.reason,
+            googleEtag: googleEvent.etag,
+            syncSource: 'google',
+            syncStatus: 'synced',
+            lastSyncedAt: new Date(),
+          },
+        })
+        await logSync('Block', existingBlock.id, 'pull_update', 'google_to_app')
+        return { action: 'block_updated', id: existingBlock.id }
+      } catch (error: any) {
+        if (error?.code === 'P2025') {
+          return { action: 'record_deleted_skipped', skipped: true }
+        }
+        throw error
+      }
     }
     return { action: 'block_exists_skipped', id: existingBlock.id }
   }

@@ -83,6 +83,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (step === "purge") {
+      // Delete ALL Google-imported bookings and blocks to allow clean re-import
+      const [deletedBookings, deletedBlocks] = await Promise.all([
+        prisma.booking.deleteMany({ where: { syncSource: "google" } }),
+        prisma.block.deleteMany({ where: { syncSource: "google" } }),
+      ]);
+      // Also delete import-only clients (created by sync, not real clients)
+      const deletedClients = await prisma.client.deleteMany({
+        where: { email: { endsWith: "@import.local" } },
+      });
+      console.log(`[Sync:purge] Deleted ${deletedBookings.count} bookings, ${deletedBlocks.count} blocks, ${deletedClients.count} import clients`);
+      return NextResponse.json({
+        step: "purge",
+        deletedBookings: deletedBookings.count,
+        deletedBlocks: deletedBlocks.count,
+        deletedClients: deletedClients.count,
+      });
+    }
+
     if (step === "process") {
       const body = await req.json();
       const events = (body.events ?? []) as GoogleCalendarEvent[];
@@ -100,8 +119,8 @@ export async function POST(req: NextRequest) {
         }),
       ]);
       const alreadyImported = new Set([
-        ...existingBookings.map((b) => b.googleEventId),
-        ...existingBlocks.map((b) => b.googleEventId),
+        ...existingBookings.map((b: { googleEventId: string | null }) => b.googleEventId),
+        ...existingBlocks.map((b: { googleEventId: string | null }) => b.googleEventId),
       ]);
 
       const results: Array<{ eventId: string; action: string }> = [];

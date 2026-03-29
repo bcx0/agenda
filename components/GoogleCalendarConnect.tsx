@@ -20,6 +20,31 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
     }
   }, [syncResult])
 
+  const handleFullResync = async () => {
+    if (!confirm('Cela va supprimer tous les RDV importés de Google et tout re-synchroniser. Continuer ?')) return
+    setSyncing(true)
+    setSyncResult(null)
+    setProgress('Nettoyage des anciens imports...')
+
+    try {
+      const purgeRes = await fetch('/api/calendar/sync?step=purge', { method: 'POST' })
+      if (!purgeRes.ok) throw new Error('Erreur lors du nettoyage')
+      const purgeData = await purgeRes.json()
+      setProgress(`Nettoyé: ${purgeData.deletedBookings} RDV, ${purgeData.deletedBlocks} blocks`)
+      // Small delay then trigger normal sync
+      await new Promise((r) => setTimeout(r, 500))
+    } catch (err) {
+      setSyncResult('error')
+      setProgress(err instanceof Error ? err.message : 'Erreur')
+      setSyncing(false)
+      return
+    }
+
+    setSyncing(false)
+    // Now trigger a normal full sync
+    await handleSync()
+  }
+
   const handleSync = async () => {
     setSyncing(true)
     setSyncResult(null)
@@ -142,6 +167,16 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
             ) : (
               '\u21BB Synchroniser maintenant'
             )}
+          </button>
+
+          <button
+            onClick={handleFullResync}
+            disabled={syncing}
+            className="text-xs px-3 py-2 rounded-lg border border-red-200
+              text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50
+              disabled:cursor-not-allowed"
+          >
+            Reset & re-sync
           </button>
 
           <a

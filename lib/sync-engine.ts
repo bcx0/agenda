@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client'
 import * as crypto from 'crypto'
+import { prisma } from './prisma'
 import {
   createGoogleEvent,
   updateGoogleEvent,
@@ -9,7 +9,6 @@ import {
 import { parseGoogleEventSummary } from './parse-google-event'
 import { fuzzyMatchName } from './fuzzy-match'
 
-const prisma = new PrismaClient()
 const APP_SOURCE_TAG = 'your-saas-app'
 const DEFAULT_TIMEZONE = 'Europe/Paris'
 

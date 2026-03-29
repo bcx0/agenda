@@ -36,6 +36,15 @@ export async function setClientActive(clientId: number, isActive: boolean) {
   });
 }
 
+export async function deleteClient(clientId: number) {
+  // Cascade: delete related records first, then the client
+  await prisma.$transaction([
+    prisma.booking.deleteMany({ where: { clientId } }),
+    prisma.recurringBlock.deleteMany({ where: { clientId } }),
+    prisma.client.delete({ where: { id: clientId } }),
+  ]);
+}
+
 export async function listBlocks() {
   return prisma.block.findMany({ orderBy: { startAt: "asc" } });
 }

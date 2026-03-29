@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   addClientAction,
+  deleteClientAction,
   toggleClientAction,
   updateClientEmailAction,
   updateCreditsAction
@@ -36,6 +37,7 @@ export default function ClientsList({
   addFormDefaults
 }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<ClientItem | null>(null);
 
   const filteredClients = useMemo(() => {
     if (!searchQuery.trim()) return initialClients;
@@ -136,8 +138,18 @@ export default function ClientsList({
               <div className="card p-6 text-sm text-white/60">Aucun client trouvé.</div>
             ) : (
               filteredClients.map((client) => (
-                <article key={client.id} className="card p-5">
-                  <div className="flex items-start justify-between">
+                <article key={client.id} className="card p-5 relative">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(client)}
+                    className="absolute top-3 right-3 p-1.5 rounded-md text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                    title="Supprimer ce client"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
+                      <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <div className="flex items-start justify-between pr-8">
                     <div>
                       <h3 className="text-base font-semibold">{client.name}</h3>
                       <p className="mt-0.5 text-sm text-white/50">{client.email}</p>
@@ -182,9 +194,19 @@ export default function ClientsList({
               filteredClients.map((client) => (
                 <div
                   key={client.id}
-                  className="card-gm rounded-lg border border-border bg-background-elevated px-4 py-4 text-sm"
+                  className="card-gm relative rounded-lg border border-border bg-background-elevated px-4 py-4 text-sm"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(client)}
+                    className="absolute top-3 right-3 p-1.5 rounded-md text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                    title="Supprimer ce client"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4.5 h-4.5">
+                      <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <div className="flex items-start justify-between gap-3 pr-8">
                     <div>
                       <div className="font-semibold text-white">{client.name}</div>
                       <div className="text-xs text-white/50">ID: {client.id}</div>
@@ -261,6 +283,42 @@ export default function ClientsList({
           </div>
         </div>
       </div>
+
+      {/* Modale de confirmation de suppression */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-background-elevated p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white">Supprimer ce client ?</h3>
+            <p className="mt-2 text-sm text-white/70">
+              Êtes-vous sûr de vouloir supprimer{" "}
+              <span className="font-semibold text-white">{deleteConfirm.name}</span> ?
+              Tous ses rendez-vous seront également supprimés. Cette action est irréversible.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-white/70 hover:bg-white/5 transition-colors"
+              >
+                Annuler
+              </button>
+              <form
+                action={deleteClientAction}
+                className="flex-1"
+                onSubmit={() => setDeleteConfirm(null)}
+              >
+                <input type="hidden" name="clientId" value={deleteConfirm.id} />
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+                >
+                  Supprimer
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -17,6 +17,7 @@ import {
   deleteAvailabilityRule,
   deleteRecurringBlock,
   deleteBlock,
+  deleteClient,
   setClientActive,
   updateBookingStatus,
   updateCredits
@@ -264,6 +265,17 @@ export async function toggleClientAction(formData: FormData) {
   await setClientActive(clientId, active);
   revalidatePath("/admin/clients");
   redirect("/admin/clients?success=Statut%20client%20mis%20a%20jour");
+}
+
+export async function deleteClientAction(formData: FormData) {
+  assertAdmin();
+  const clientId = Number(formData.get("clientId"));
+  if (!clientId || !Number.isFinite(clientId)) {
+    redirect("/admin/clients?error=ID%20client%20invalide");
+  }
+  await deleteClient(clientId);
+  revalidatePath("/admin/clients");
+  redirect("/admin/clients?success=Client%20supprim%C3%A9");
 }
 
 export async function createBlockAction(formData: FormData) {

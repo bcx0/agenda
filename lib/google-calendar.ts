@@ -139,13 +139,24 @@ export async function updateGoogleEvent(
 export async function deleteGoogleEvent(googleEventId: string): Promise<void> {
   const accessToken = await getValidAccessToken()
 
-  await fetch(
+  console.log("[GoogleCalendar] Deleting event:", googleEventId)
+
+  const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`,
     {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${accessToken}` },
     }
   )
+
+  // 204 = deleted, 410 = already deleted (both are fine)
+  if (!res.ok && res.status !== 410) {
+    const errText = await res.text().catch(() => 'no body')
+    console.error("[GoogleCalendar] Delete failed:", res.status, errText)
+    throw new Error(`Google deleteGoogleEvent failed (${res.status}): ${errText}`)
+  }
+
+  console.log("[GoogleCalendar] Event deleted successfully:", googleEventId, "status:", res.status)
 }
 
 // ─── fetchChangedEvents ───────────────────────────────────────────

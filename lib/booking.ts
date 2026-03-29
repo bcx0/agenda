@@ -473,18 +473,22 @@ export async function cancelBooking(bookingId: number, reason?: string) {
     throw new Error("Booking manquant pour l'annulation.");
   }
 
-  await sendBookingCancelledEmail({
+  // Delete from Google Calendar first (await to ensure it completes before response)
+  try {
+    await pushBookingToGoogle(booking.id, "delete");
+  } catch (err) {
+    console.error("[GoogleSync] Booking delete failed:", err);
+  }
+
+  // Email in fire-and-forget (don't block the response)
+  sendBookingCancelledEmail({
     bookingId: booking.id,
     clientName: booking.client.name,
     clientEmail: booking.client.email,
     startAt: booking.startAt,
     endAt: booking.endAt,
     timeZone: "Europe/Brussels"
-  });
-  pushBookingToGoogle(booking.id, "delete").catch((err) =>
-    console.error("[GoogleSync] Booking delete failed:", err)
-  );
-
+  }).catch((err) => console.error("[Email] Cancellation email failed:", err));
 
   return result;
 }

@@ -336,9 +336,11 @@ export async function pullFromGoogle(
       return { action: 'etag_updated', skipped: true }
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2025') {
-        return { action: 'record_deleted_skipped', skipped: true }
+        // Record was purged/deleted — fall through to re-import as new
+        console.log(`[Sync] Record ${recordType}#${recordId} purged, re-importing event ${googleEventId}`)
+      } else {
+        throw error
       }
-      throw error
     }
   }
 

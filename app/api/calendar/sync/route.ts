@@ -83,6 +83,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (step === "test-parse") {
+      // Test parser + count action types from last sync
+      const { parseGoogleEventSummary } = await import("../../../../lib/parse-google-event");
+      const body = await req.json().catch(() => ({}));
+      const testSummaries = body.summaries ?? ["RDV — Guillaume Caron", "RDV - Jean Dupont", "Rdv perso", "Meeting", "RDV—Test"];
+      const parseResults = testSummaries.map((s: string) => ({
+        input: s,
+        ...parseGoogleEventSummary(s),
+      }));
+      return NextResponse.json({ parseResults });
+    }
+
     if (step === "debug") {
       const [bookingCount, blockCount, clientCount] = await Promise.all([
         prisma.booking.count(),
@@ -198,11 +210,18 @@ export async function POST(req: NextRequest) {
         (r) => r.action === "booking_created" || r.action === "block_created"
       ).length;
 
+      // Count each action type for debugging
+      const actionCounts: Record<string, number> = {};
+      for (const r of results) {
+        const key = r.action.startsWith("error") ? "error" : r.action;
+        actionCounts[key] = (actionCounts[key] ?? 0) + 1;
+      }
+
       return NextResponse.json({
         step: "process",
         processed: results.length,
         imported,
-        results,
+        actionCounts,
       });
     }
 

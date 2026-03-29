@@ -40,7 +40,7 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
         <p className="pill w-fit">Admin</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">Bookings</h1>
         <p className="text-sm text-white/70">
-          Seuls les rendez-vous restants du mois en cours sont affichés. L&apos;admin peut modifier
+          Tous les rendez-vous à venir sont affichés. L&apos;admin peut modifier
           ou annuler même à moins de 72h.
         </p>
       </div>

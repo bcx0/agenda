@@ -184,14 +184,14 @@ export async function pushBookingToGoogle(
       })
     }
 
-    await logSync('Booking', bookingId, `push_${action}`, 'app_to_google')
+    logSync('Booking', bookingId, `push_${action}`, 'app_to_google')
     return { success: true }
   } catch (error) {
     await prisma.booking.update({
       where: { id: bookingId },
       data: { syncStatus: 'error' },
     })
-    await logSync('Booking', bookingId, 'error', 'app_to_google', {
+    logSync('Booking', bookingId, 'error', 'app_to_google', {
       error: String(error),
     })
     throw error
@@ -266,14 +266,14 @@ export async function pushBlockToGoogle(
       })
     }
 
-    await logSync('Block', blockId, `push_${action}`, 'app_to_google')
+    logSync('Block', blockId, `push_${action}`, 'app_to_google')
     return { success: true }
   } catch (error) {
     await prisma.block.update({
       where: { id: blockId },
       data: { syncStatus: 'error' },
     })
-    await logSync('Block', blockId, 'error', 'app_to_google', {
+    logSync('Block', blockId, 'error', 'app_to_google', {
       error: String(error),
     })
     throw error
@@ -299,7 +299,7 @@ export async function pullFromGoogle(
           cancelReason: 'Supprim\u00e9 depuis Google Calendar',
         },
       })
-      await logSync('Booking', booking.id, 'pull_delete', 'google_to_app')
+      logSync('Booking', booking.id, 'pull_delete', 'google_to_app')
       return { action: 'booking_cancelled' }
     }
 
@@ -308,7 +308,7 @@ export async function pullFromGoogle(
     })
     if (block) {
       await prisma.block.delete({ where: { id: block.id } })
-      await logSync('Block', block.id, 'pull_delete', 'google_to_app')
+      logSync('Block', block.id, 'pull_delete', 'google_to_app')
       return { action: 'block_deleted' }
     }
 
@@ -352,7 +352,7 @@ export async function pullFromGoogle(
 
     if (appTime > googleTime) {
       await pushBookingToGoogle(existingBooking.id, 'update')
-      await logSync('Booking', existingBooking.id, 'conflict', 'app_to_google', {
+      logSync('Booking', existingBooking.id, 'conflict', 'app_to_google', {
         winner: 'app',
       })
       return { action: 'conflict_app_wins' }
@@ -374,7 +374,7 @@ export async function pullFromGoogle(
             lastSyncedAt: new Date(),
           },
         })
-        await logSync('Booking', existingBooking.id, 'pull_update', 'google_to_app')
+        logSync('Booking', existingBooking.id, 'pull_update', 'google_to_app')
         return { action: 'booking_updated' }
       } catch (error: any) {
         if (error?.code === 'P2025') {
@@ -407,7 +407,7 @@ export async function pullFromGoogle(
             lastSyncedAt: new Date(),
           },
         })
-        await logSync('Block', existingBlock.id, 'pull_update', 'google_to_app')
+        logSync('Block', existingBlock.id, 'pull_update', 'google_to_app')
         return { action: 'block_updated', id: existingBlock.id }
       } catch (error: any) {
         if (error?.code === 'P2025') {
@@ -445,7 +445,7 @@ export async function pullFromGoogle(
       },
     })
 
-    await logSync('Booking', newBooking.id, 'pull_create', 'google_to_app', {
+    logSync('Booking', newBooking.id, 'pull_create', 'google_to_app', {
       source: 'google_external_event',
       summary: googleEvent.summary,
       parsedType: parsed.type,
@@ -468,21 +468,22 @@ export async function pullFromGoogle(
     },
   })
 
-  await logSync('Block', newBlock.id, 'pull_create', 'google_to_app', {
+  logSync('Block', newBlock.id, 'pull_create', 'google_to_app', {
     source: 'google_external_event',
     summary: googleEvent.summary,
   })
   return { action: 'block_created', id: newBlock.id, type: parsed.type }
 }
 
-async function logSync(
+function logSync(
   table: string,
   recordId: number | undefined,
   action: string,
   direction: string,
   details?: object
-): Promise<void> {
-  await prisma.syncLog.create({
+): void {
+  // Fire-and-forget: don't block sync processing for logging
+  prisma.syncLog.create({
     data: {
       table,
       recordId: recordId ?? null,
@@ -490,5 +491,5 @@ async function logSync(
       direction,
       details: details ?? {},
     },
-  })
+  }).catch((e: unknown) => console.error('[SyncLog] Write failed:', e))
 }

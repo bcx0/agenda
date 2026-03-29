@@ -84,31 +84,38 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === "debug") {
-      const [bookingCount, blockCount, clientCount, importClientCount] = await Promise.all([
+      const [bookingCount, blockCount, clientCount] = await Promise.all([
         prisma.booking.count(),
         prisma.block.count(),
         prisma.client.count(),
-        prisma.client.count({ where: { email: { endsWith: "@import.local" } } }),
       ]);
-      // Check for duplicates: bookings with same startAt + clientId
-      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      const upcomingBookings = await prisma.booking.findMany({
-        where: { startAt: { gte: tomorrow, lt: nextWeek }, status: "CONFIRMED" },
+      // Show blocks with their reasons to see what's being classified as block
+      const recentBlocks = await prisma.block.findMany({
+        take: 15,
         orderBy: { startAt: "asc" },
+        where: { startAt: { gte: new Date() } },
+      });
+      const recentBookings = await prisma.booking.findMany({
+        take: 10,
+        orderBy: { startAt: "asc" },
+        where: { startAt: { gte: new Date() }, status: "CONFIRMED" },
         include: { client: { select: { name: true } } },
       });
       return NextResponse.json({
         bookingCount,
         blockCount,
         clientCount,
-        importClientCount,
-        upcomingWeek: upcomingBookings.map((b: { id: number; client: { name: string }; startAt: Date; syncSource: string; googleEventId: string | null }) => ({
+        blocks: recentBlocks.map((b: { id: number; reason: string | null; startAt: Date; syncSource: string }) => ({
+          id: b.id,
+          reason: b.reason,
+          startAt: b.startAt,
+          syncSource: b.syncSource,
+        })),
+        bookings: recentBookings.map((b: { id: number; client: { name: string }; startAt: Date; syncSource: string }) => ({
           id: b.id,
           client: b.client.name,
           startAt: b.startAt,
           syncSource: b.syncSource,
-          hasGoogleId: !!b.googleEventId,
         })),
       });
     }

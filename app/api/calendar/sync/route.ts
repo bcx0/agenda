@@ -114,32 +114,33 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === "purge") {
-      // 1. Delete Google-imported bookings + blocks
+      // Nuclear purge: delete EVERYTHING that has a googleEventId
+      // This catches all imports regardless of syncSource (fixes duplicates)
       const [deletedBookings, deletedBlocks] = await Promise.all([
-        prisma.booking.deleteMany({ where: { syncSource: "google" } }),
-        prisma.block.deleteMany({ where: { syncSource: "google" } }),
+        prisma.booking.deleteMany({ where: { googleEventId: { not: null } } }),
+        prisma.block.deleteMany({ where: { googleEventId: { not: null } } }),
       ]);
-      // 2. Find import-only clients
+      // Clean up import-only clients
       const importClients = await prisma.client.findMany({
         where: { email: { endsWith: "@import.local" } },
         select: { id: true },
       });
       const importClientIds = importClients.map((c: { id: number }) => c.id);
-      // 3. Delete remaining bookings + recurringBlocks tied to import clients
       if (importClientIds.length > 0) {
         await prisma.booking.deleteMany({ where: { clientId: { in: importClientIds } } });
         await prisma.recurringBlock.deleteMany({ where: { clientId: { in: importClientIds } } });
+        await prisma.client.deleteMany({ where: { id: { in: importClientIds } } });
       }
-      // 4. Now safe to delete import clients
-      const deletedClients = await prisma.client.deleteMany({
-        where: { id: { in: importClientIds } },
-      });
-      console.log(`[Sync:purge] Deleted ${deletedBookings.count} bookings, ${deletedBlocks.count} blocks, ${deletedClients.count} import clients`);
+      // Reset syncToken to force full re-fetch
+      await prisma.googleToken.updateMany({ data: { syncToken: null } });
+
+      const remainingBookings = await prisma.booking.count();
+      console.log(`[Sync:purge] Deleted ${deletedBookings.count} bookings, ${deletedBlocks.count} blocks. Remaining: ${remainingBookings}`);
       return NextResponse.json({
         step: "purge",
         deletedBookings: deletedBookings.count,
         deletedBlocks: deletedBlocks.count,
-        deletedClients: deletedClients.count,
+        remainingBookings,
       });
     }
 

@@ -11,9 +11,15 @@ const PERSO_KEYWORDS = ['perso', 'personnel', 'personnelle', 'prive', 'privé', 
 
 export function parseGoogleEventSummary(summary: string | undefined | null): ParsedGoogleEvent {
   const original = (summary || '').trim()
-  const normalized = original.toLowerCase()
 
-  if (!normalized.startsWith('rdv')) {
+  // Match "RDV" (case-insensitive) followed by optional separators then content
+  // Supports: "RDV - Jean", "rdv—Jean", "Rdv : Jean", "RDV Jean", "rdv/Jean", etc.
+  const rdvMatch = original.match(/^rdv[\s\-—–―:+/\\|,.*·•]+(.+)$/i)
+  // Also match "RDV" alone or "RDVJean" (no separator, just letters after rdv)
+  const rdvAlone = !rdvMatch && /^rdv$/i.test(original)
+  const rdvGlued = !rdvMatch && !rdvAlone && original.match(/^rdv(.+)$/i)
+
+  if (!rdvMatch && !rdvAlone && !rdvGlued) {
     return {
       type: 'block_simple',
       clientName: null,
@@ -22,12 +28,19 @@ export function parseGoogleEventSummary(summary: string | undefined | null): Par
     }
   }
 
-  let afterRdv = original
-    .substring(3)
-    .replace(/^[\s\-—–:+/\\|]+/, '')
-    .trim()
+  // Extract the part after "RDV" + separators
+  // Always strip leading separator-like chars (covers rdvGlued path too)
+  let afterRdv = ''
+  if (rdvMatch) {
+    afterRdv = rdvMatch[1].trim()
+  } else if (rdvGlued) {
+    afterRdv = rdvGlued[1]
+      .replace(/^[\s\-—–―~>:+/\\|,.*·•#=_]+/, '')
+      .trim()
+  }
 
-  if (!afterRdv) {
+  // If nothing remains (or only non-alpha chars), treat as personal block
+  if (!afterRdv || !/[a-zA-ZÀ-ÿ]/.test(afterRdv)) {
     return {
       type: 'block_perso',
       clientName: null,
@@ -50,6 +63,7 @@ export function parseGoogleEventSummary(summary: string | undefined | null): Par
 
   const clientName = afterRdv
     .split(/\s+/)
+    .filter(word => word.length > 0)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ')
 

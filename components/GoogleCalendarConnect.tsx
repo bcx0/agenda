@@ -63,8 +63,8 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
 
       setProgress(`Traitement de ${allEvents.length} événements...`)
 
-      // Step 2: Process events in small batches of 10
-      const BATCH_SIZE = 10
+      // Step 2: Process events in batches of 50 (client cache makes this fast)
+      const BATCH_SIZE = 50
       for (let i = 0; i < allEvents.length; i += BATCH_SIZE) {
         if (abortRef.current) break
 

@@ -16,7 +16,7 @@ export const revalidate = 0;
  *
  * Step 2: ?step=process
  *   → Body: { events: GoogleCalendarEvent[] }
- *   → Processes a small batch of events (max 5)
+ *   → Processes a batch of events (sent by client, typically 50)
  *   → Returns results
  */
 export async function POST(req: NextRequest) {

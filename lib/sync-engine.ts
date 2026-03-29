@@ -12,33 +12,55 @@ import { fuzzyMatchName } from './fuzzy-match'
 const APP_SOURCE_TAG = 'your-saas-app'
 const DEFAULT_TIMEZONE = 'Europe/Paris'
 
+// ─── Client cache for batch sync (avoids repeated DB queries) ────
+type CachedClient = {
+  id: number; name: string; email: string;
+  passwordHash: string; creditsPerMonth: number;
+  isActive: boolean; createdAt: Date;
+}
+let _clientCache: CachedClient[] | null = null
+let _clientCacheTime = 0
+const CACHE_TTL = 30_000 // 30 seconds
+
+async function getClientCache(): Promise<CachedClient[]> {
+  if (_clientCache && Date.now() - _clientCacheTime < CACHE_TTL) {
+    return _clientCache
+  }
+  const clients = await prisma.client.findMany({
+    select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
+  })
+  _clientCache = clients as CachedClient[]
+  _clientCacheTime = Date.now()
+  return _clientCache
+}
+
+function invalidateClientCache() {
+  _clientCache = null
+}
+
 async function findOrCreateGoogleClient(clientName: string) {
   const normalizedName = clientName.trim().replace(/\s+/g, ' ')
   const normalizedLower = normalizedName.toLowerCase()
 
-  // 1. Fetch all real active clients (not auto-imported)
-  const realClients = await prisma.client.findMany({
-    where: {
-      isActive: true,
-      NOT: { email: { endsWith: '@import.local' } },
-    },
-    select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
-  })
+  const allClients = await getClientCache()
+  const realClients = allClients.filter(
+    (c) => c.isActive && !c.email.endsWith('@import.local')
+  )
 
-  // 2. Exact match (case-insensitive)
+  // 1. Exact match (case-insensitive) on real clients
   const exactRealMatch = realClients.find(
     (c) => c.name.toLowerCase() === normalizedLower
   )
   if (exactRealMatch) return exactRealMatch
 
-  // 3. Partial/substring match
+  // 2. Partial/substring match on real clients
   const partialMatch = realClients.find((c) => {
     const cLower = c.name.toLowerCase()
     return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
   })
   if (partialMatch) return partialMatch
 
-  // 4. Fuzzy match: handles typos, accent differences, name order swaps
+  // 3. Fuzzy match on real clients
   if (realClients.length > 0) {
     const candidateNames = realClients.map((c) => c.name)
     const fuzzyResult = fuzzyMatchName(normalizedName, candidateNames, 0.65)
@@ -50,16 +72,13 @@ async function findOrCreateGoogleClient(clientName: string) {
     }
   }
 
-  // 5. Exact match across all clients (including inactive/imported)
-  const exactAnyMatch = await prisma.client.findFirst({
-    where: { name: { equals: normalizedName, mode: 'insensitive' } },
-  })
+  // 4. Exact match across ALL clients (including imported)
+  const exactAnyMatch = allClients.find(
+    (c) => c.name.toLowerCase() === normalizedLower
+  )
   if (exactAnyMatch) return exactAnyMatch
 
-  // 6. Fuzzy match against all clients (including imported)
-  const allClients = await prisma.client.findMany({
-    select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
-  })
+  // 5. Fuzzy match on all clients
   if (allClients.length > 0) {
     const allNames = allClients.map((c) => c.name)
     const fuzzyAll = fuzzyMatchName(normalizedName, allNames, 0.65)
@@ -71,52 +90,26 @@ async function findOrCreateGoogleClient(clientName: string) {
     }
   }
 
-  // 7. No match found — create new import client
+  // 6. No match found — create new import client
   const safeSlug = normalizedName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
-    .replace(/-+$/g, '')
-    .replace(/^-+/g, '')
+    .replace(/^-+|-+$/g, '')
   const email = `google-${safeSlug || 'client'}-${Date.now()}@import.local`
 
-  return prisma.$transaction(async (tx) => {
-    // Re-check inside transaction to prevent race conditions
-    const realCheck = await tx.client.findMany({
-      where: {
-        isActive: true,
-        NOT: { email: { endsWith: '@import.local' } },
-      },
-    })
-    const lastChance = realCheck.find((c) => {
-      const cLower = c.name.toLowerCase()
-      return cLower === normalizedLower || cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
-    })
-    if (lastChance) return lastChance
-
-    // Fuzzy check inside transaction too
-    if (realCheck.length > 0) {
-      const txNames = realCheck.map((c) => c.name)
-      const txFuzzy = fuzzyMatchName(normalizedName, txNames, 0.65)
-      if (txFuzzy) return realCheck[txFuzzy.index]
-    }
-
-    const anyCheck = await tx.client.findFirst({
-      where: { name: { equals: normalizedName, mode: 'insensitive' } },
-    })
-    if (anyCheck) return anyCheck
-
-    return tx.client.create({
-      data: {
-        name: normalizedName,
-        email,
-        passwordHash: crypto.randomBytes(16).toString('hex'),
-        creditsPerMonth: 0,
-        isActive: true,
-      },
-    })
+  const newClient = await prisma.client.create({
+    data: {
+      name: normalizedName,
+      email,
+      passwordHash: crypto.randomBytes(16).toString('hex'),
+      creditsPerMonth: 0,
+      isActive: true,
+    },
   })
+  invalidateClientCache() // force reload on next call
+  return newClient
 }
 
 export async function pushBookingToGoogle(
@@ -364,12 +357,17 @@ export async function pullFromGoogle(
       })
       return { action: 'conflict_app_wins' }
     } else {
+      const startDt = googleEvent.start.dateTime
+      const endDt = googleEvent.end.dateTime
+      if (!startDt || !endDt) {
+        return { action: 'skipped_missing_datetime', id: existingBooking.id }
+      }
       try {
         await prisma.booking.update({
           where: { id: existingBooking.id },
           data: {
-            startAt: new Date(googleEvent.start.dateTime!),
-            endAt: new Date(googleEvent.end.dateTime!),
+            startAt: new Date(startDt),
+            endAt: new Date(endDt),
             googleEtag: googleEvent.etag,
             syncSource: 'google',
             syncStatus: 'synced',
@@ -393,13 +391,15 @@ export async function pullFromGoogle(
   })
 
   if (existingBlock) {
-    if (googleEvent.start.dateTime) {
+    const blockStartDt = googleEvent.start.dateTime
+    const blockEndDt = googleEvent.end.dateTime
+    if (blockStartDt && blockEndDt) {
       try {
         await prisma.block.update({
           where: { id: existingBlock.id },
           data: {
-            startAt: new Date(googleEvent.start.dateTime),
-            endAt: new Date(googleEvent.end.dateTime!),
+            startAt: new Date(blockStartDt),
+            endAt: new Date(blockEndDt),
             reason: googleEvent.summary || existingBlock.reason,
             googleEtag: googleEvent.etag,
             syncSource: 'google',
@@ -419,7 +419,9 @@ export async function pullFromGoogle(
     return { action: 'block_exists_skipped', id: existingBlock.id }
   }
 
-  if (!googleEvent.start.dateTime) {
+  const eventStartDt = googleEvent.start.dateTime
+  const eventEndDt = googleEvent.end.dateTime
+  if (!eventStartDt || !eventEndDt) {
     return { action: 'skipped_all_day' }
   }
 
@@ -431,8 +433,8 @@ export async function pullFromGoogle(
     const newBooking = await prisma.booking.create({
       data: {
         clientId: client.id,
-        startAt: new Date(googleEvent.start.dateTime),
-        endAt: new Date(googleEvent.end.dateTime!),
+        startAt: new Date(eventStartDt),
+        endAt: new Date(eventEndDt),
         status: 'CONFIRMED',
         mode: 'VISIO',
         googleEventId,
@@ -455,8 +457,8 @@ export async function pullFromGoogle(
 
   const newBlock = await prisma.block.create({
     data: {
-      startAt: new Date(googleEvent.start.dateTime),
-      endAt: new Date(googleEvent.end.dateTime!),
+      startAt: new Date(eventStartDt),
+      endAt: new Date(eventEndDt),
       reason: parsed.reason,
       googleEventId,
       syncSource: 'google',

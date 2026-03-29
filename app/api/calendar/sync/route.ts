@@ -84,14 +84,25 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === "purge") {
-      // Delete ALL Google-imported bookings and blocks to allow clean re-import
+      // 1. Delete Google-imported bookings + blocks
       const [deletedBookings, deletedBlocks] = await Promise.all([
         prisma.booking.deleteMany({ where: { syncSource: "google" } }),
         prisma.block.deleteMany({ where: { syncSource: "google" } }),
       ]);
-      // Also delete import-only clients (created by sync, not real clients)
-      const deletedClients = await prisma.client.deleteMany({
+      // 2. Find import-only clients
+      const importClients = await prisma.client.findMany({
         where: { email: { endsWith: "@import.local" } },
+        select: { id: true },
+      });
+      const importClientIds = importClients.map((c: { id: number }) => c.id);
+      // 3. Delete remaining bookings + recurringBlocks tied to import clients
+      if (importClientIds.length > 0) {
+        await prisma.booking.deleteMany({ where: { clientId: { in: importClientIds } } });
+        await prisma.recurringBlock.deleteMany({ where: { clientId: { in: importClientIds } } });
+      }
+      // 4. Now safe to delete import clients
+      const deletedClients = await prisma.client.deleteMany({
+        where: { id: { in: importClientIds } },
       });
       console.log(`[Sync:purge] Deleted ${deletedBookings.count} bookings, ${deletedBlocks.count} blocks, ${deletedClients.count} import clients`);
       return NextResponse.json({

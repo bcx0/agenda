@@ -44,23 +44,30 @@ export async function POST(req: NextRequest) {
       const params = new URLSearchParams({
         singleEvents: "true",
         orderBy: "startTime",
-        maxResults: "50",
+        maxResults: "250",
         timeMin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       });
       if (pageToken) params.set("pageToken", pageToken);
 
-      const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          cache: "no-store",
-        }
-      );
+      // Retry up to 3 times on rate limit (429/403)
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            cache: "no-store",
+          }
+        );
+        if (response.status !== 403 && response.status !== 429) break;
+        // Wait before retry: 2s, 4s, 8s
+        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
+      }
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Google Calendar: ${response.status} ${errorText}`);
+      if (!response || !response.ok) {
+        const errorText = await (response?.text() ?? Promise.resolve("no response"));
+        throw new Error(`Google Calendar: ${response?.status} ${errorText}`);
       }
 
       const data = await response.json();

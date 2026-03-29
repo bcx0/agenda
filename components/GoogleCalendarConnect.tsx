@@ -56,12 +56,15 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
         isFirst = false
 
         setProgress(`Récupération... ${allEvents.length} événements`)
+
+        // Small delay between pages to avoid Google rate limit
+        if (pageToken) await new Promise((r) => setTimeout(r, 500))
       } while (pageToken)
 
       setProgress(`Traitement de ${allEvents.length} événements...`)
 
-      // Step 2: Process events in small batches of 5
-      const BATCH_SIZE = 5
+      // Step 2: Process events in small batches of 10
+      const BATCH_SIZE = 10
       for (let i = 0; i < allEvents.length; i += BATCH_SIZE) {
         if (abortRef.current) break
 

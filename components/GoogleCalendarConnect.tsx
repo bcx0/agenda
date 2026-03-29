@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Props {
   isConnected: boolean
@@ -10,11 +10,12 @@ interface Props {
 export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(null)
+  const [progress, setProgress] = useState<{ imported: number; total: number } | null>(null)
+  const abortRef = useRef(false)
 
-  // Reset le message de résultat après 3 secondes
   useEffect(() => {
     if (syncResult) {
-      const timer = setTimeout(() => setSyncResult(null), 3000)
+      const timer = setTimeout(() => setSyncResult(null), 5000)
       return () => clearTimeout(timer)
     }
   }, [syncResult])
@@ -22,21 +23,50 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
   const handleSync = async () => {
     setSyncing(true)
     setSyncResult(null)
+    setProgress({ imported: 0, total: 0 })
+    abortRef.current = false
+
+    let pageToken: string | null = null
+    let totalImported = 0
+    let totalProcessed = 0
+    let isFirstPage = true
+
     try {
-      const res = await fetch('/api/calendar/sync', { method: 'POST' })
-      if (res.ok) {
-        setSyncResult('success')
-      } else {
-        setSyncResult('error')
-      }
-    } catch {
+      do {
+        if (abortRef.current) break
+
+        const params = new URLSearchParams()
+        if (pageToken) params.set('pageToken', pageToken)
+        if (isFirstPage) params.set('reset', 'true')
+
+        const res = await fetch(`/api/calendar/sync?${params.toString()}`, {
+          method: 'POST',
+        })
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Erreur serveur' }))
+          throw new Error(errorData.error || `HTTP ${res.status}`)
+        }
+
+        const data = await res.json()
+        totalImported += (data.imported ?? 0) + (data.updated ?? 0)
+        totalProcessed += data.pageCount ?? 0
+        pageToken = data.nextPageToken ?? null
+        isFirstPage = false
+
+        setProgress({ imported: totalImported, total: totalProcessed })
+      } while (pageToken)
+
+      setSyncResult('success')
+      setProgress({ imported: totalImported, total: totalProcessed })
+    } catch (err) {
+      console.error('[Sync] Error:', err)
       setSyncResult('error')
     } finally {
       setSyncing(false)
     }
   }
 
-  // ─── Connecté ─────────────────────────────────────────────────
   if (isConnected) {
     return (
       <div className="flex flex-col gap-2">
@@ -75,10 +105,12 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
                   <path className="opacity-75" fill="currentColor"
                     d="M4 12a8 8 0 018-8v8z" />
                 </svg>
-                Synchronisation...
+                {progress
+                  ? `Sync... ${progress.total} traités`
+                  : 'Synchronisation...'}
               </span>
             ) : (
-              '↻ Synchroniser maintenant'
+              '\u21BB Synchroniser maintenant'
             )}
           </button>
 
@@ -91,21 +123,20 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
           </a>
         </div>
 
-        {syncResult === 'success' && (
+        {syncResult === 'success' && progress && (
           <p className="text-xs text-green-600">
-            ✓ Synchronisation réussie
+            \u2713 Synchronisation réussie — {progress.total} événements traités, {progress.imported} importés/mis à jour
           </p>
         )}
         {syncResult === 'error' && (
           <p className="text-xs text-red-500">
-            ✗ Erreur de synchronisation — réessaie dans quelques instants
+            \u2717 Erreur de synchronisation — réessaie dans quelques instants
           </p>
         )}
       </div>
     )
   }
 
-  // ─── Non connecté ─────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-2">
       <a

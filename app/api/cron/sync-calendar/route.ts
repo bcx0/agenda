@@ -4,10 +4,8 @@ import { pullFromGoogle } from '../../../../lib/sync-engine'
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300 // 5 minutes max
 
 export async function GET(req: NextRequest) {
-  // Verify Vercel Cron secret
   const authHeader = req.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -43,27 +41,18 @@ export async function GET(req: NextRequest) {
 
     const results: Array<{ eventId: string; action: string }> = []
 
-    // Process in batches of 10 for better performance
-    for (let i = 0; i < events.length; i += 10) {
-      const batch = events.slice(i, i + 10)
-      const batchResults = await Promise.allSettled(
-        batch.map(async (event) => {
-          const result = await pullFromGoogle(
-            event.status === 'cancelled' ? null : event,
-            event.id
-          )
-          return { eventId: event.id, action: result.action }
-        })
-      )
-
-      for (const r of batchResults) {
-        if (r.status === 'fulfilled') {
-          results.push(r.value)
-        } else {
-          const reason = r.reason instanceof Error ? r.reason.message : String(r.reason)
-          console.error(`[Cron sync] Batch error:`, reason)
-          results.push({ eventId: 'unknown', action: `error: ${reason}` })
-        }
+    // Process sequentially to avoid connection pool issues
+    for (const event of events) {
+      try {
+        const result = await pullFromGoogle(
+          event.status === 'cancelled' ? null : event,
+          event.id
+        )
+        results.push({ eventId: event.id, action: result.action })
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error(`[Cron sync] Error processing event ${event.id}:`, message)
+        results.push({ eventId: event.id, action: `error: ${message}` })
       }
     }
 

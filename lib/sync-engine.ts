@@ -7,7 +7,7 @@ import {
   GoogleCalendarEvent,
 } from './google-calendar'
 import { parseGoogleEventSummary } from './parse-google-event'
-import { fuzzyMatchName, normalizeName } from './fuzzy-match'
+import { fuzzyMatchName } from './fuzzy-match'
 
 const prisma = new PrismaClient()
 const APP_SOURCE_TAG = 'your-saas-app'

@@ -6,6 +6,7 @@ import { pullFromGoogle } from "../../../../lib/sync-engine";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const maxDuration = 300; // 5 minutes max (Vercel Pro)
 
 type GoogleEventsListResponse = {
   items?: GoogleCalendarEvent[];
@@ -21,7 +22,7 @@ async function listGoogleEvents(
     orderBy: "startTime",
     maxResults: "250",
     timeMin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    timeMax: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
   });
 
   if (pageToken) {
@@ -46,6 +47,39 @@ async function listGoogleEvents(
   return (await response.json()) as GoogleEventsListResponse;
 }
 
+/** Process events in parallel batches to stay within timeout */
+async function processBatch(
+  events: GoogleCalendarEvent[],
+  batchSize = 10
+): Promise<Array<{ eventId: string; action: string }>> {
+  const results: Array<{ eventId: string; action: string }> = [];
+
+  for (let i = 0; i < events.length; i += batchSize) {
+    const batch = events.slice(i, i + batchSize);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (event) => {
+        const result = await pullFromGoogle(
+          event.status === "cancelled" ? null : event,
+          event.id
+        );
+        return { eventId: event.id, action: result.action };
+      })
+    );
+
+    for (const r of batchResults) {
+      if (r.status === "fulfilled") {
+        results.push(r.value);
+      } else {
+        const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        console.error(`[ManualSync] Batch error:`, reason);
+        results.push({ eventId: "unknown", action: `error: ${reason}` });
+      }
+    }
+  }
+
+  return results;
+}
+
 export async function POST() {
   try {
     const token = await prisma.googleToken.findFirst();
@@ -59,6 +93,13 @@ export async function POST() {
 
     const accessToken = await getValidAccessToken();
 
+    // Reset syncToken so next cron also does a full sync
+    await prisma.googleToken.update({
+      where: { id: token.id },
+      data: { syncToken: null },
+    });
+
+    // Fetch all events from Google Calendar (paginated)
     let allEvents: GoogleCalendarEvent[] = [];
     let pageToken: string | undefined;
 
@@ -68,20 +109,10 @@ export async function POST() {
       pageToken = response.nextPageToken;
     } while (pageToken);
 
-    const results: Array<{ eventId: string; action: string }> = [];
+    console.log(`[ManualSync] Fetched ${allEvents.length} events from Google Calendar`);
 
-    for (const event of allEvents) {
-      try {
-        const result = await pullFromGoogle(
-          event.status === "cancelled" ? null : event,
-          event.id
-        );
-        results.push({ eventId: event.id, action: result.action });
-      } catch (err: any) {
-        console.error(`[ManualSync] Error processing event ${event.id}:`, err);
-        results.push({ eventId: event.id, action: `error: ${err.message}` });
-      }
-    }
+    // Process in parallel batches of 10
+    const results = await processBatch(allEvents, 10);
 
     const imported = results.filter(
       (r) => r.action === "booking_created" || r.action === "block_created"
@@ -94,11 +125,15 @@ export async function POST() {
         r.action === "etag_updated" ||
         r.action === "not_found" ||
         r.action === "skipped_all_day" ||
-        r.action === "conflict_app_wins"
+        r.action === "conflict_app_wins" ||
+        r.action === "record_deleted_skipped" ||
+        r.action === "block_exists_skipped" ||
+        r.action === "block_updated"
     ).length;
+    const errors = results.filter((r) => r.action.startsWith("error")).length;
 
     console.log(
-      `[ManualSync] Processed ${allEvents.length} events: ${imported} imported, ${updated} updated, ${skipped} skipped`
+      `[ManualSync] Processed ${allEvents.length} events: ${imported} imported, ${updated} updated, ${skipped} skipped, ${errors} errors`
     );
 
     return NextResponse.json({
@@ -106,8 +141,8 @@ export async function POST() {
       imported,
       updated,
       skipped,
+      errors,
       total: allEvents.length,
-      results,
     });
   } catch (error: unknown) {
     console.error("[ManualSync] Error:", error);

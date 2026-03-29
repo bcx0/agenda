@@ -4,6 +4,7 @@ import { pullFromGoogle } from '../../../../lib/sync-engine'
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // 5 minutes max
 
 export async function GET(req: NextRequest) {
   // Verify Vercel Cron secret
@@ -38,30 +39,54 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    console.log(`[Cron sync] Processing ${events.length} events...`)
+
     const results: Array<{ eventId: string; action: string }> = []
 
-    for (const event of events) {
-      try {
-        const result = await pullFromGoogle(
-          event.status === 'cancelled' ? null : event,
-          event.id
-        )
-        results.push({ eventId: event.id, action: result.action })
-      } catch (err: any) {
-        console.error(`[Cron sync] Error processing event ${event.id}:`, err)
-        results.push({ eventId: event.id, action: `error: ${err.message}` })
+    // Process in batches of 10 for better performance
+    for (let i = 0; i < events.length; i += 10) {
+      const batch = events.slice(i, i + 10)
+      const batchResults = await Promise.allSettled(
+        batch.map(async (event) => {
+          const result = await pullFromGoogle(
+            event.status === 'cancelled' ? null : event,
+            event.id
+          )
+          return { eventId: event.id, action: result.action }
+        })
+      )
+
+      for (const r of batchResults) {
+        if (r.status === 'fulfilled') {
+          results.push(r.value)
+        } else {
+          const reason = r.reason instanceof Error ? r.reason.message : String(r.reason)
+          console.error(`[Cron sync] Batch error:`, reason)
+          results.push({ eventId: 'unknown', action: `error: ${reason}` })
+        }
       }
     }
 
-    console.log(`[Cron sync] Processed ${events.length} events:`, JSON.stringify(results))
+    const imported = results.filter(
+      (r) => r.action === 'booking_created' || r.action === 'block_created'
+    ).length
+    const errors = results.filter((r) => r.action.startsWith('error')).length
+
+    console.log(
+      `[Cron sync] Done: ${events.length} events, ${imported} imported, ${errors} errors`
+    )
 
     return NextResponse.json({
       success: true,
       processed: events.length,
-      results,
+      imported,
+      errors,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Cron sync] Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Sync error' },
+      { status: 500 }
+    )
   }
 }

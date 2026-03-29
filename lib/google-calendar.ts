@@ -180,7 +180,8 @@ export async function fetchChangedEvents(syncToken?: string | null): Promise<{
       url += `&syncToken=${syncToken}`
     } else {
       const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      url += `&timeMin=${timeMin}`
+      const timeMax = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+      url += `&timeMin=${timeMin}&timeMax=${timeMax}`
     }
 
     if (pageToken) {

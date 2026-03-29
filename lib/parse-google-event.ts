@@ -24,7 +24,7 @@ export function parseGoogleEventSummary(summary: string | undefined | null): Par
 
   let afterRdv = original
     .substring(3)
-    .replace(/^[\s+\-:]+/, '')
+    .replace(/^[\s\-—–:+/\\|]+/, '')
     .trim()
 
   if (!afterRdv) {

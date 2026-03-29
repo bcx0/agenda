@@ -7,6 +7,7 @@ import {
   GoogleCalendarEvent,
 } from './google-calendar'
 import { parseGoogleEventSummary } from './parse-google-event'
+import { fuzzyMatchName, normalizeName } from './fuzzy-match'
 
 const prisma = new PrismaClient()
 const APP_SOURCE_TAG = 'your-saas-app'
@@ -16,6 +17,7 @@ async function findOrCreateGoogleClient(clientName: string) {
   const normalizedName = clientName.trim().replace(/\s+/g, ' ')
   const normalizedLower = normalizedName.toLowerCase()
 
+  // 1. Fetch all real active clients (not auto-imported)
   const realClients = await prisma.client.findMany({
     where: {
       isActive: true,
@@ -24,22 +26,53 @@ async function findOrCreateGoogleClient(clientName: string) {
     select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
   })
 
+  // 2. Exact match (case-insensitive)
   const exactRealMatch = realClients.find(
     (c) => c.name.toLowerCase() === normalizedLower
   )
   if (exactRealMatch) return exactRealMatch
 
+  // 3. Partial/substring match
   const partialMatch = realClients.find((c) => {
     const cLower = c.name.toLowerCase()
     return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
   })
   if (partialMatch) return partialMatch
 
+  // 4. Fuzzy match: handles typos, accent differences, name order swaps
+  if (realClients.length > 0) {
+    const candidateNames = realClients.map((c) => c.name)
+    const fuzzyResult = fuzzyMatchName(normalizedName, candidateNames, 0.65)
+    if (fuzzyResult) {
+      console.log(
+        `[FuzzyMatch] "${normalizedName}" → "${candidateNames[fuzzyResult.index]}" (score: ${fuzzyResult.score.toFixed(2)})`
+      )
+      return realClients[fuzzyResult.index]
+    }
+  }
+
+  // 5. Exact match across all clients (including inactive/imported)
   const exactAnyMatch = await prisma.client.findFirst({
     where: { name: { equals: normalizedName, mode: 'insensitive' } },
   })
   if (exactAnyMatch) return exactAnyMatch
 
+  // 6. Fuzzy match against all clients (including imported)
+  const allClients = await prisma.client.findMany({
+    select: { id: true, name: true, email: true, passwordHash: true, creditsPerMonth: true, isActive: true, createdAt: true },
+  })
+  if (allClients.length > 0) {
+    const allNames = allClients.map((c) => c.name)
+    const fuzzyAll = fuzzyMatchName(normalizedName, allNames, 0.65)
+    if (fuzzyAll) {
+      console.log(
+        `[FuzzyMatch-All] "${normalizedName}" → "${allNames[fuzzyAll.index]}" (score: ${fuzzyAll.score.toFixed(2)})`
+      )
+      return allClients[fuzzyAll.index]
+    }
+  }
+
+  // 7. No match found — create new import client
   const safeSlug = normalizedName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -50,6 +83,7 @@ async function findOrCreateGoogleClient(clientName: string) {
   const email = `google-${safeSlug || 'client'}-${Date.now()}@import.local`
 
   return prisma.$transaction(async (tx) => {
+    // Re-check inside transaction to prevent race conditions
     const realCheck = await tx.client.findMany({
       where: {
         isActive: true,
@@ -61,6 +95,13 @@ async function findOrCreateGoogleClient(clientName: string) {
       return cLower === normalizedLower || cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
     })
     if (lastChance) return lastChance
+
+    // Fuzzy check inside transaction too
+    if (realCheck.length > 0) {
+      const txNames = realCheck.map((c) => c.name)
+      const txFuzzy = fuzzyMatchName(normalizedName, txNames, 0.65)
+      if (txFuzzy) return realCheck[txFuzzy.index]
+    }
 
     const anyCheck = await tx.client.findFirst({
       where: { name: { equals: normalizedName, mode: 'insensitive' } },

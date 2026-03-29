@@ -10,12 +10,12 @@ interface Props {
 export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(null)
-  const [progress, setProgress] = useState<{ imported: number; total: number } | null>(null)
+  const [progress, setProgress] = useState('')
   const abortRef = useRef(false)
 
   useEffect(() => {
     if (syncResult) {
-      const timer = setTimeout(() => setSyncResult(null), 5000)
+      const timer = setTimeout(() => setSyncResult(null), 8000)
       return () => clearTimeout(timer)
     }
   }, [syncResult])
@@ -23,45 +23,74 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
   const handleSync = async () => {
     setSyncing(true)
     setSyncResult(null)
-    setProgress({ imported: 0, total: 0 })
+    setProgress('Récupération...')
     abortRef.current = false
 
-    let pageToken: string | null = null
     let totalImported = 0
     let totalProcessed = 0
-    let isFirstPage = true
 
     try {
+      // Step 1: Fetch all events page by page
+      let allEvents: any[] = []
+      let pageToken: string | null = null
+      let isFirst = true
+
       do {
         if (abortRef.current) break
 
-        const params = new URLSearchParams()
+        const params = new URLSearchParams({ step: 'fetch' })
         if (pageToken) params.set('pageToken', pageToken)
-        if (isFirstPage) params.set('reset', 'true')
+        if (isFirst) params.set('reset', 'true')
 
         const res = await fetch(`/api/calendar/sync?${params.toString()}`, {
           method: 'POST',
         })
-
         if (!res.ok) {
-          const errorData = await res.json().catch(() => ({ error: 'Erreur serveur' }))
-          throw new Error(errorData.error || `HTTP ${res.status}`)
+          const err = await res.json().catch(() => ({ error: 'Erreur' }))
+          throw new Error(err.error || `HTTP ${res.status}`)
         }
 
         const data = await res.json()
-        totalImported += (data.imported ?? 0) + (data.updated ?? 0)
-        totalProcessed += data.pageCount ?? 0
+        allEvents = allEvents.concat(data.events ?? [])
         pageToken = data.nextPageToken ?? null
-        isFirstPage = false
+        isFirst = false
 
-        setProgress({ imported: totalImported, total: totalProcessed })
+        setProgress(`Récupération... ${allEvents.length} événements`)
       } while (pageToken)
 
+      setProgress(`Traitement de ${allEvents.length} événements...`)
+
+      // Step 2: Process events in small batches of 5
+      const BATCH_SIZE = 5
+      for (let i = 0; i < allEvents.length; i += BATCH_SIZE) {
+        if (abortRef.current) break
+
+        const batch = allEvents.slice(i, i + BATCH_SIZE)
+
+        const res = await fetch('/api/calendar/sync?step=process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events: batch }),
+        })
+
+        if (!res.ok) {
+          console.error('[Sync] Process batch failed:', res.status)
+          continue
+        }
+
+        const data = await res.json()
+        totalImported += data.imported ?? 0
+        totalProcessed += data.processed ?? 0
+
+        setProgress(`Traitement... ${totalProcessed}/${allEvents.length}`)
+      }
+
       setSyncResult('success')
-      setProgress({ imported: totalImported, total: totalProcessed })
+      setProgress(`${totalProcessed} traités, ${totalImported} importés`)
     } catch (err) {
       console.error('[Sync] Error:', err)
       setSyncResult('error')
+      setProgress(err instanceof Error ? err.message : 'Erreur')
     } finally {
       setSyncing(false)
     }
@@ -105,9 +134,7 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
                   <path className="opacity-75" fill="currentColor"
                     d="M4 12a8 8 0 018-8v8z" />
                 </svg>
-                {progress
-                  ? `Sync... ${progress.total} traités`
-                  : 'Synchronisation...'}
+                {progress || 'Synchronisation...'}
               </span>
             ) : (
               '\u21BB Synchroniser maintenant'
@@ -123,14 +150,14 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
           </a>
         </div>
 
-        {syncResult === 'success' && progress && (
+        {syncResult === 'success' && (
           <p className="text-xs text-green-600">
-            \u2713 Synchronisation réussie — {progress.total} événements traités, {progress.imported} importés/mis à jour
+            ✓ {progress}
           </p>
         )}
         {syncResult === 'error' && (
           <p className="text-xs text-red-500">
-            \u2717 Erreur de synchronisation — réessaie dans quelques instants
+            ✗ {progress || 'Erreur de synchronisation'}
           </p>
         )}
       </div>

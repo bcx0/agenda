@@ -24,13 +24,24 @@ export default function LoginPage() {
         <LoginForm />
       </div>
 
-      <div className="mt-8 text-center">
+      <div className="mt-8 flex flex-col items-center gap-2">
         <Link
           href="/admin"
           className="text-xs uppercase tracking-widest text-white/40 hover:text-[#C8A060] transition-colors"
         >
           Admin
         </Link>
+        <p className="text-xs text-white/30">
+          Réalisé par{" "}
+          <a
+            href="https://lagencepartners.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/50 underline hover:text-[#C8A060] transition-colors"
+          >
+            L&apos;agence
+          </a>
+        </p>
       </div>
     </section>
   );

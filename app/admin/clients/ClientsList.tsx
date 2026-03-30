@@ -9,6 +9,7 @@ import {
   updateClientEmailAction,
   updateCreditsAction
 } from "../actions";
+import { useLanguage } from "../../../components/LanguageProvider";
 
 type ClientItem = {
   id: number;
@@ -38,6 +39,7 @@ export default function ClientsList({
 }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<ClientItem | null>(null);
+  const { t } = useLanguage();
 
   const filteredClients = useMemo(() => {
     if (!searchQuery.trim()) return initialClients;
@@ -52,7 +54,7 @@ export default function ClientsList({
     <section className="space-y-6">
       <div className="space-y-2">
         <p className="pill w-fit">Admin</p>
-        <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">Clients</h1>
+        <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">{t("clients.title")}</h1>
         <p className="text-sm text-white/70">
           Gestion des comptes, quotas mensuels, recherche et historique des rendez-vous.
         </p>
@@ -68,7 +70,7 @@ export default function ClientsList({
       <div className="grid gap-6 md:grid-cols-2">
         <div className="card-gm space-y-4 p-4 md:p-6">
           <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-            Ajouter un client
+            {t("clients.addClient")}
           </h2>
           <form action={addClientAction} className="space-y-3">
             <div className="grid gap-3">
@@ -122,11 +124,11 @@ export default function ClientsList({
         <div className="space-y-4">
           <div className="card-gm space-y-3 p-4 md:p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Liste des clients
+              {t("clients.clientList")}
             </h2>
             <input
               type="text"
-              placeholder="Rechercher un client par nom ou email..."
+              placeholder={t("clients.search")}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               className="input p-4 text-base"
@@ -135,7 +137,7 @@ export default function ClientsList({
 
           <div className="space-y-3 md:hidden">
             {filteredClients.length === 0 ? (
-              <div className="card p-6 text-sm text-white/60">Aucun client trouvé.</div>
+              <div className="card p-6 text-sm text-white/60">{t("clients.noClient")}</div>
             ) : (
               filteredClients.map((client) => (
                 <article key={client.id} className="card p-5 relative">
@@ -161,7 +163,7 @@ export default function ClientsList({
                           : "bg-white/5 text-white/50 border border-gray-800"
                       }`}
                     >
-                      {client.isActive ? "Actif" : "Inactif"}
+                      {client.isActive ? t("clients.active") : t("clients.inactive")}
                     </span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-[#C8A060]">
@@ -172,7 +174,7 @@ export default function ClientsList({
                       <input type="hidden" name="clientId" value={client.id} />
                       <input type="hidden" name="active" value={(!client.isActive).toString()} />
                       <button className="btn-secondary touch-target w-full text-sm">
-                        {client.isActive ? "Désactiver" : "Activer"}
+                        {client.isActive ? t("clients.deactivate") : t("clients.activate")}
                       </button>
                     </form>
                     <Link
@@ -189,7 +191,7 @@ export default function ClientsList({
 
           <div className="hidden space-y-3 md:block">
             {filteredClients.length === 0 ? (
-              <div className="card-gm p-6 text-sm text-white/60">Aucun client trouvé.</div>
+              <div className="card-gm p-6 text-sm text-white/60">{t("clients.noClient")}</div>
             ) : (
               filteredClients.map((client) => (
                 <div
@@ -219,7 +221,7 @@ export default function ClientsList({
                           : "bg-background-elevated/10 text-white/60"
                       }`}
                     >
-                      {client.isActive ? "Actif" : "Inactif"}
+                      {client.isActive ? t("clients.active") : t("clients.inactive")}
                     </span>
                   </div>
 
@@ -255,7 +257,7 @@ export default function ClientsList({
                       <input type="hidden" name="clientId" value={client.id} />
                       <input type="hidden" name="active" value={(!client.isActive).toString()} />
                       <button className="touch-target rounded-md border border-border px-3 py-2 text-xs hover:bg-black hover:text-white">
-                        {client.isActive ? "Désactiver" : "Activer"}
+                        {client.isActive ? t("clients.deactivate") : t("clients.activate")}
                       </button>
                     </form>
                   </div>
@@ -288,11 +290,9 @@ export default function ClientsList({
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-xl border border-border bg-background-elevated p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white">Supprimer ce client ?</h3>
+            <h3 className="text-lg font-semibold text-white">{t("clients.deleteConfirm")}</h3>
             <p className="mt-2 text-sm text-white/70">
-              Êtes-vous sûr de vouloir supprimer{" "}
-              <span className="font-semibold text-white">{deleteConfirm.name}</span> ?
-              Tous ses rendez-vous seront également supprimés. Cette action est irréversible.
+              <span className="font-semibold text-white">{deleteConfirm.name}</span> — {t("clients.deleteWarning")}
             </p>
             <div className="mt-5 flex gap-3">
               <button
@@ -300,7 +300,7 @@ export default function ClientsList({
                 onClick={() => setDeleteConfirm(null)}
                 className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-white/70 hover:bg-white/5 transition-colors"
               >
-                Annuler
+                {t("common.cancel")}
               </button>
               <form
                 action={deleteClientAction}
@@ -312,7 +312,7 @@ export default function ClientsList({
                   type="submit"
                   className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 transition-colors"
                 >
-                  Supprimer
+                  {t("clients.delete")}
                 </button>
               </form>
             </div>

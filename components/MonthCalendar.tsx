@@ -4,6 +4,7 @@ import { memo, useMemo } from "react";
 import { DateTime } from "luxon";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
+import { useLanguage } from "./LanguageProvider";
 
 type SlotWithLocation = SlotView & { activeLocation?: "MIAMI" | "BELGIUM" };
 
@@ -26,6 +27,7 @@ function MonthCalendarComponent({
   allowEmptySelection = false,
   selectedDayKey = null
 }: Props) {
+  const { t } = useLanguage();
   const days = useMemo(() => {
     const startOfMonth = month.startOf("month");
     const daysFromMonday = (startOfMonth.weekday + 6) % 7;
@@ -156,15 +158,15 @@ function MonthCalendarComponent({
       <div className="flex flex-wrap items-center justify-center gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-2">
         <span className="flex items-center gap-2 text-xs text-white/60">
           <span className="inline-block h-3 w-6 rounded border-2 border-[#C8A060]" />
-          Miami
+          {t("legend.miami")}
         </span>
         <span className="flex items-center gap-2 text-xs text-white/60">
           <span className="inline-block h-3 w-6 rounded border-2 border-blue-500" />
-          Belgique
+          {t("legend.belgium")}
         </span>
         <span className="flex items-center gap-2 text-xs text-white/60">
           <span className="inline-block h-3 w-6 rounded border-2 border-gray-700" />
-          Indisponible
+          {t("legend.unavailable")}
         </span>
       </div>
     </div>

@@ -1,10 +1,5 @@
-import Link from "next/link";
 import { getClientSession } from "../lib/session";
-
-const navItems = [
-  { href: "/", label: "ACCUEIL" },
-  { href: "/book", label: "PRENDRE RDV" }
-];
+import { HeaderNav } from "./HeaderNav";
 
 export default function Header() {
   const session = getClientSession();
@@ -17,18 +12,7 @@ export default function Header() {
             Espace Client
           </span>
         </div>
-        <nav className="flex items-center gap-6 text-xs font-semibold tracking-widest">
-          {navItems.map((item) => (
-            <Link key={item.href} href={item.href} className="hover:text-primary">
-              {item.label}
-            </Link>
-          ))}
-          {showManage ? (
-            <Link href="/manage" className="hover:text-primary">
-              MES RDV
-            </Link>
-          ) : null}
-        </nav>
+        <HeaderNav showManage={showManage} />
       </div>
     </header>
   );

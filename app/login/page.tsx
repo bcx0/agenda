@@ -18,7 +18,7 @@ export default function LoginPage() {
           <ul className="hidden space-y-3 text-white/70 md:block">
             <li>— Vérification par email + mot de passe.</li>
             <li>— Quotas mensuels pris en compte automatiquement.</li>
-            <li>— Créneaux Brussels / Miami affichés en temps réel.</li>
+            <li>— Créneaux Belgique / Miami affichés en temps réel.</li>
           </ul>
         </div>
         <LoginForm />

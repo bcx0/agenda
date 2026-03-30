@@ -8,6 +8,7 @@ import type { SlotView } from "../../../lib/booking";
 import { BRUSSELS_TZ, MIAMI_TZ } from "../../../lib/time";
 import { CalendarViewToggle, type ViewMode } from "../../../components/CalendarViewToggle";
 import { MonthCalendar } from "../../../components/MonthCalendar";
+import { useLanguage } from "../../../components/LanguageProvider";
 import {
   setGeneralAvailabilityForDateAction,
   setGeneralRecurringForDayAction,
@@ -192,6 +193,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
   const [mobileMonth, setMobileMonth] = useState<DateTime>(
     DateTime.now().setZone(MIAMI_TZ).startOf("month")
   );
+  const { t, translateSlotStatus } = useLanguage();
 
   const mobileMonthLabel = mobileMonth.setLocale("fr").toFormat("LLLL yyyy");
 
@@ -331,15 +333,15 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         <div className="flex flex-wrap items-center justify-center gap-3 mt-3 pt-3 border-t border-border">
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-[#C8A060]" />
-            <span className="text-[10px] text-white/50">Disponible</span>
+            <span className="text-[10px] text-white/50">{t("legend.available")}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-green-500" />
-            <span className="text-[10px] text-white/50">Réservé</span>
+            <span className="text-[10px] text-white/50">{t("legend.booked")}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-white/25" />
-            <span className="text-[10px] text-white/50">Bloqué</span>
+            <span className="text-[10px] text-white/50">{t("legend.blocked")}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-blue-500" />
@@ -355,7 +357,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         </h3>
         <p className="text-xs text-white/50">
           {mobileSelectedData.slots.length === 0
-            ? "Aucun créneau"
+            ? t("availability.noSlot")
             : `${mobileSelectedData.slots.filter((s) => s.status === "available").length} disponible${
                 mobileSelectedData.slots.filter((s) => s.status === "available").length > 1 ? "s" : ""
               } · ${mobileSelectedData.slots.filter((s) => s.status === "booked").length} réservé${
@@ -396,7 +398,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                       ? "bg-green-900/30 text-green-400"
                       : "bg-white/10 text-white/60"
                   }`}>
-                    {slot.status === "available" ? "Disponible" : slot.status === "booked" ? "Réservé" : "Bloqué"}
+                    {translateSlotStatus(slot.status)}
                   </span>
                 </div>
                 <div className="text-xs text-white/60">
@@ -414,7 +416,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-[#0F0F0F] px-4 py-6 text-center text-sm text-white/40">
-          Aucun créneau pour cette date.
+          {t("availability.noSlot")} pour cette date.
           <br />
           <span className="text-[11px]">Sélectionnez un jour avec un point.</span>
         </div>
@@ -423,7 +425,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       {/* Bookings for day */}
       {mobileBookingsForDay.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-widest text-[#C8A060]">Réservations</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-widest text-[#C8A060]">{t("availability.reservations")}</h4>
           {mobileBookingsForDay.map((booking) => (
             <Link
               key={booking.id}
@@ -497,7 +499,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 }
                 className="rounded-full border border-border px-4 py-2 text-sm text-white/70 hover:bg-white/5 transition"
               >
-                Aujourd&apos;hui
+                {t("availability.today")}
               </button>
             </div>
 
@@ -550,7 +552,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     <div key={`slots-${key}`} className="bg-[#0A0A0A] p-2 space-y-1 min-h-[200px]">
                       {slotsForDay.length === 0 ? (
                         <div className="flex h-full items-center justify-center text-[11px] text-white/20">
-                          Aucun créneau
+                          {t("availability.noSlot")}
                         </div>
                       ) : (
                         slotsForDay.map((slot) => {
@@ -620,7 +622,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                         <div className="flex items-center justify-between">
                           <span>{isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}</span>
                           <span className="text-[10px] uppercase tracking-widest text-white/40">
-                            {slot.status === "available" ? "Dispo" : slot.status === "booked" ? "Réservé" : "Bloqué"}
+                            {translateSlotStatus(slot.status)}
                           </span>
                         </div>
                         <div className="text-white/60">{isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}</div>
@@ -641,7 +643,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">Récapitulatif du {selectedDay.label}</h3>
+                  <h3 className="text-lg font-semibold">{t("availability.summary")} {selectedDay.label}</h3>
                   <p className="text-sm text-white/60">
                     Belgique : {selectedDay.date.setZone(BRUSSELS_TZ).toFormat("dd LLL yyyy")}
                   </p>
@@ -651,13 +653,13 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   className="text-sm text-white/60 hover:text-white"
                   onClick={() => setSelectedDay(null)}
                 >
-                  Fermer
+                  {t("availability.close")}
                 </button>
               </div>
 
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">
-                  Disponibilités
+                  {t("availability.availabilities")}
                 </h4>
                 {availabilitiesForDay.length > 0 ? (
                   <div className="space-y-2">
@@ -679,13 +681,13 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-white/50">Aucune disponibilité</p>
+                  <p className="text-sm text-white/50">{t("availability.noAvailability")}</p>
                 )}
               </div>
 
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">
-                  Réservations
+                  {t("availability.reservations")}
                 </h4>
                 {bookingsForDay.length > 0 ? (
                   <div className="space-y-2">
@@ -727,13 +729,13 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-white/50">Aucune réservation</p>
+                  <p className="text-sm text-white/50">{t("availability.noReservation")}</p>
                 )}
               </div>
             </div>
           ) : (
             <div className="flex min-h-[240px] items-center justify-center text-center text-white/50">
-              Cliquez sur un jour du calendrier pour voir le récapitulatif.
+              {t("availability.clickDay")}
             </div>
           )}
         </div>

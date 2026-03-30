@@ -3,6 +3,7 @@
 import { memo, useEffect } from "react";
 import SlotButton from "./SlotButton";
 import type { SlotView } from "../lib/booking";
+import { useLanguage } from "./LanguageProvider";
 
 type Props = {
   open: boolean;
@@ -13,6 +14,8 @@ type Props = {
 };
 
 function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose }: Props) {
+  const { t } = useLanguage();
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -29,7 +32,7 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose 
       <div className="w-full max-h-[90vh] max-w-xl overflow-hidden rounded-t-3xl bg-background-elevated shadow-xl sm:rounded-2xl md:h-[calc(100vh-3rem)] md:max-h-none md:rounded-2xl md:border md:border-border md:shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border bg-background-elevated px-6 py-4">
           <div>
-            <div className="text-xs uppercase tracking-widest text-white/50">Belgique / Miami</div>
+            <div className="text-xs uppercase tracking-widest text-white/50">{t("legend.belgium")} / Miami</div>
             <div className="text-lg font-semibold leading-snug">{dateLabel}</div>
           </div>
           <button
@@ -37,13 +40,13 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose 
             onClick={onClose}
             className="text-sm text-white/60 hover:text-white"
           >
-            Fermer
+            {t("availability.close")}
           </button>
         </div>
         <div className="max-h-[70vh] overflow-y-auto p-6 space-y-3 md:max-h-[calc(100%-72px)]">
           {slots.length === 0 ? (
             <div className="rounded-xl border border-border bg-background-elevated/5 px-4 py-3 text-sm text-white/70">
-              Aucun creneau pour cette date.
+              {t("availability.noSlot")}
             </div>
           ) : (
             slots.map((slot) => (
@@ -69,4 +72,3 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose 
 }
 
 export const DaySlotsPanel = memo(DaySlotsPanelComponent);
-

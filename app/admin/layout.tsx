@@ -3,38 +3,46 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
+import { useLanguage } from "../../components/LanguageProvider";
+import { LanguageToggle } from "../../components/LanguageToggle";
+import type { TranslationKey } from "../../lib/i18n";
 
-const links = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/availability", label: "Agenda" },
-  { href: "/admin/clients", label: "Clients" },
-  { href: "/admin/bookings", label: "Bookings" },
-  { href: "/admin/settings", label: "Settings" }
+const links: { href: string; labelKey: TranslationKey }[] = [
+  { href: "/admin", labelKey: "nav.dashboard" },
+  { href: "/admin/availability", labelKey: "nav.agenda" },
+  { href: "/admin/clients", labelKey: "nav.clients" },
+  { href: "/admin/bookings", labelKey: "nav.bookings" },
+  { href: "/admin/settings", labelKey: "nav.settings" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-screen bg-black pb-16 text-white md:pb-0">
       <header className="border-b border-border bg-background-elevated">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
           <div className="font-[var(--font-playfair)] text-lg uppercase tracking-wider text-white">
-            Admin Agenda
+            {t("nav.adminAgenda")}
           </div>
-          <nav className="hidden items-center gap-3 text-sm md:flex">
-            {links.map((link) => {
-              const active = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={active ? "nav-link nav-link-active" : "nav-link"}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="hidden items-center gap-3 md:flex">
+            <nav className="flex items-center gap-3 text-sm">
+              {links.map((link) => {
+                const active = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={active ? "nav-link nav-link-active" : "nav-link"}
+                  >
+                    {t(link.labelKey)}
+                  </Link>
+                );
+              })}
+            </nav>
+            <LanguageToggle />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-5 py-8 md:py-12">{children}</main>
@@ -51,10 +59,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 active ? "text-[#C8A060]" : "text-white/60 hover:text-white"
               }`}
             >
-              <span className="text-xs font-semibold leading-tight text-center">{link.label}</span>
+              <span className="text-xs font-semibold leading-tight text-center">{t(link.labelKey)}</span>
             </Link>
           );
         })}
+        <LanguageToggle />
       </nav>
     </div>
   );

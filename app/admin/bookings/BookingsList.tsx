@@ -22,7 +22,7 @@ type Props = {
 
 export default function BookingsList({ bookings, errorMessage }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
-  const { t, translateStatus, translateMode } = useLanguage();
+  const { t, translateStatus, translateMode, locale } = useLanguage();
 
   const filteredBookings = useMemo(() => {
     if (!searchQuery.trim()) return bookings;
@@ -69,13 +69,13 @@ export default function BookingsList({ bookings, errorMessage }: Props) {
                 <h3 className="text-base font-semibold">{booking.client.name}</h3>
                 <p className="mt-1 truncate text-sm text-white/60">{booking.client.email}</p>
                 <p className="mt-2 text-sm font-medium text-white/80">
-                  {new Date(booking.startAt).toLocaleDateString("fr-FR", {
+                  {new Date(booking.startAt).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", {
                     weekday: "short",
                     day: "numeric",
                     month: "short"
                   })}
                   {" à "}
-                  {new Date(booking.startAt).toLocaleTimeString("fr-FR", {
+                  {new Date(booking.startAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
                     hour: "2-digit",
                     minute: "2-digit"
                   })}
@@ -144,14 +144,14 @@ export default function BookingsList({ bookings, errorMessage }: Props) {
             <div className="space-y-1 text-sm">
               <p>
                 <strong>Date :</strong>{" "}
-                {new Date(booking.startAt).toLocaleDateString("fr-FR", {
+                {new Date(booking.startAt).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", {
                   weekday: "long",
                   day: "2-digit",
                   month: "long",
                   year: "numeric"
                 })}{" "}
                 à{" "}
-                {new Date(booking.startAt).toLocaleTimeString("fr-FR", {
+                {new Date(booking.startAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
                   hour: "2-digit",
                   minute: "2-digit"
                 })}{" "}

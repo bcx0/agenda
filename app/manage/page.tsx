@@ -8,6 +8,7 @@ import {
   cancelClientBookingAction,
   manageClientBookingAction
 } from "../../lib/actions/bookingActions";
+import { getServerLocale, t } from "../../lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ const MANAGE_WINDOW_MS = 72 * 60 * 60 * 1000;
 export default async function ManagePage({ searchParams }: { searchParams?: SearchParams }) {
   const client = await getCurrentClient();
   if (!client) redirect("/login");
+
+  const locale = await getServerLocale();
 
   const bookings = await prisma.booking.findMany({
     where: {
@@ -36,9 +39,9 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
   return (
     <section className="mx-auto max-w-4xl space-y-8 px-5 py-14 md:py-20">
       <div className="space-y-2">
-        <p className="pill w-fit">Espace client</p>
+        <p className="pill w-fit">{t("manage.pill", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-          Mes rendez-vous
+          {t("manage.title", locale)}
         </h1>
       </div>
 
@@ -49,7 +52,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
       ) : null}
 
       {bookings.length === 0 ? (
-        <div className="card p-6 text-sm text-white/60">Aucun rendez-vous.</div>
+        <div className="card p-6 text-sm text-white/60">{t("manage.noBookings2", locale)}</div>
       ) : (
         <div className="space-y-4">
           {bookings.map((booking) => {
@@ -80,7 +83,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
                       }`}
                       disabled={!canManage}
                     >
-                      Modifier
+                      {t("manage.modify", locale)}
                     </button>
                   </form>
 
@@ -93,13 +96,13 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
                       }`}
                       disabled={!canManage}
                     >
-                      Annuler
+                      {t("manage.cancel", locale)}
                     </button>
                   </form>
 
                   {!canManage ? (
                     <span className="text-xs text-white/60">
-                      Modification impossible (moins de 72h)
+                      {t("manage.noModify", locale)}
                     </span>
                   ) : null}
                 </div>

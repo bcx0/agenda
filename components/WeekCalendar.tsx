@@ -5,6 +5,7 @@ import { DateTime } from "luxon";
 import SlotButton from "./SlotButton";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
+import { useLanguage } from "./LanguageProvider";
 
 type Props = {
   weekStart: DateTime;
@@ -16,17 +17,18 @@ type Props = {
 const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
 function WeekCalendarComponent({ weekStart, daySlots, quotaReached, onChangeWeek }: Props) {
+  const { locale } = useLanguage();
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i })),
     [weekStart]
   );
   const weekLabel = useMemo(
     () =>
-      `${weekStart.setLocale("fr").toFormat("dd LLL")} - ${weekStart
+      `${weekStart.setLocale(locale).toFormat("dd LLL")} - ${weekStart
         .plus({ days: 6 })
-        .setLocale("fr")
+        .setLocale(locale)
         .toFormat("dd LLL")}`,
-    [weekStart]
+    [weekStart, locale]
   );
 
   return (
@@ -64,7 +66,7 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, onChangeWeek
           const slots = [...(daySlots.get(key) ?? [])].sort(
             (a, b) => a.start.getTime() - b.start.getTime()
           );
-          const label = `${dayNames[idx]} ${day.setLocale("fr").toFormat("dd MMM")}`;
+          const label = `${dayNames[idx]} ${day.setLocale(locale).toFormat("dd MMM")}`;
           return (
             <div key={key} className="space-y-2 rounded-xl border border-border bg-background-elevated p-3">
               <div className="flex items-center justify-between text-sm font-semibold text-white">

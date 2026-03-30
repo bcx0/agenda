@@ -3,6 +3,7 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { clsx } from "clsx";
 import { bookSlotAction } from "../app/book/actions";
+import { useLanguage } from "./LanguageProvider";
 
 type SlotStatus = "available" | "booked" | "blocked";
 
@@ -31,6 +32,7 @@ function SlotButtonComponent({
   status,
   quotaReached = false
 }: Props) {
+  const { t } = useLanguage();
   const isBrussels = activeLocation === "BELGIUM";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -55,16 +57,16 @@ function SlotButtonComponent({
   }, [confirming]);
 
   const stateLabel = isSubmitting
-    ? "Réservation..."
+    ? t("slotButton.reserving")
     : confirming
-    ? "Confirmer ?"
+    ? t("slotButton.confirmQ")
     : quotaReached && status === "available"
-    ? "Quota atteint"
+    ? t("slotButton.quotaReached")
     : status === "booked"
-    ? "Occupé"
+    ? t("slotButton.occupied")
     : status === "blocked"
-    ? "Indisponible"
-    : "Disponible";
+    ? t("slotButton.unavailable")
+    : t("slotButton.available");
 
   const badgeClass = isSubmitting
     ? "bg-[#C8A060]/60 text-black animate-pulse"
@@ -122,7 +124,7 @@ function SlotButtonComponent({
               </span>
             </div>
             <span className={clsx("rounded-full px-3 py-1.5 text-xs font-bold", badgeClass)}>
-              Confirmer ?
+              {t("slotButton.confirmQ")}
             </span>
           </div>
         ) : (
@@ -151,14 +153,14 @@ function SlotButtonComponent({
               <span>{isBrussels ? `${miami} Miami` : `${brussels} Brussels`}</span>
               <span className="rounded-full bg-white/5 px-2 py-1 text-[11px]">
                 {mode === "PRESENTIEL"
-                  ? `Présentiel${presentielLocation ? " - " + presentielLocation : ""}`
-                  : "Visio"}
+                  ? `${t("slotButton.presentiel")}${presentielLocation ? " - " + presentielLocation : ""}`
+                  : t("slotButton.visio")}
               </span>
             </div>
             {isBrussels && (
               <div className="mt-1 flex items-center gap-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                <span className="text-[11px] font-medium text-blue-400">Belgique</span>
+                <span className="text-[11px] font-medium text-blue-400">{t("slotButton.belgium")}</span>
               </div>
             )}
             {mode === "PRESENTIEL" && presentielNote ? (

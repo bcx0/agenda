@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
+import { useLanguage } from "./LanguageProvider";
 
 const BRUSSELS = "Europe/Brussels";
 const MIAMI = "America/New_York";
 
 export default function DualClock() {
+  const { locale } = useLanguage();
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -15,7 +17,7 @@ export default function DualClock() {
   }, []);
 
   const format = (zone: string) =>
-    DateTime.fromJSDate(now).setZone(zone).setLocale("fr").toFormat("HH:mm - EEEE dd MMM");
+    DateTime.fromJSDate(now).setZone(zone).setLocale(locale).toFormat("HH:mm - EEEE dd MMM");
 
   return (
     <div className="grid gap-3 text-sm text-white/80 md:grid-cols-2">

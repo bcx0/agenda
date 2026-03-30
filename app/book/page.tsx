@@ -11,6 +11,7 @@ import { formatTimeSlot, getAvailableTimeSlots } from "../../lib/timeSlots";
 import { logoutAction } from "../login/actions";
 import { prisma } from "../../lib/prisma";
 import { getSettings } from "../../lib/settings";
+import { getServerLocale, t } from "../../lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,8 @@ export default async function BookPage({
   const client = await getCurrentClient();
   if (!client) redirect("/login");
 
+  const locale = await getServerLocale();
+
   const [slots, quota, settings, sessionModes] = await Promise.all([
     getAvailableTimeSlots(),
     getQuotaStatus(client.id),
@@ -95,12 +98,12 @@ export default async function BookPage({
     <section className="mx-auto max-w-6xl space-y-10 px-5 py-14 md:py-20">
       <div className="space-y-6">
         <div className="space-y-3">
-          <p className="pill w-fit">Espace client</p>
+          <p className="pill w-fit">{t("book.pill", locale)}</p>
           <h1 className="font-[var(--font-playfair)] text-4xl uppercase tracking-wider md:text-5xl">
-            PRENDRE RENDEZ-VOUS
+            {t("book.title", locale)}
           </h1>
           <p className="text-sm text-white/60">
-            Les créneaux occupés restent anonymes. Aucun rappel automatique ne sera envoyé.
+            {t("book.subtitle", locale)}
           </p>
         </div>
 
@@ -109,10 +112,10 @@ export default async function BookPage({
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-base uppercase tracking-widest text-white/60">
-                  Vos RDV mensuels
+                  {t("book.monthlyRdv", locale)}
                 </div>
                 <div className="text-base font-semibold text-white">
-                  {quota.creditsUsedThisMonth}/{quota.creditsPerMonth} utilisés ce mois-ci
+                  {quota.creditsUsedThisMonth}/{quota.creditsPerMonth} {t("book.usedThisMonth", locale)}
                 </div>
               </div>
               <form action={logoutAction} className="self-start">
@@ -120,29 +123,28 @@ export default async function BookPage({
                   type="submit"
                   className="text-xs uppercase tracking-widest text-white/60 underline underline-offset-4 hover:text-white"
                 >
-                  Deconnexion
+                  {t("book.disconnect", locale)}
                 </button>
               </form>
             </div>
             <p className="text-xs text-white/60">
-              Les RDV sont bloqués après le quota mensuel. Pour un besoin exceptionnel, contactez Geoffrey.
+              {t("book.blocked", locale)}
             </p>
             <Link
               href="/manage"
               className="inline-flex text-xs uppercase tracking-widest text-white/60 underline underline-offset-4 hover:text-white"
             >
-              Mes RDV
+              {t("book.myRdv", locale)}
             </Link>
           </div>
         </div>
       </div>
 
-      {success ? <div className="alert-success">Rendez-vous confirme.</div> : null}
+      {success ? <div className="alert-success">{t("book.confirmed", locale)}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
       {quotaReached ? (
         <div className="alert-warning">
-          Quota mensuel atteint. Contactez Geoffrey si vous avez besoin d’un créneau
-          supplémentaire.
+          {t("book.quotaWarning", locale)}
         </div>
       ) : null}
 

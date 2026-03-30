@@ -25,6 +25,7 @@ import { BRUSSELS_TZ, MIAMI_TZ, formatInZone } from "../../../lib/time";
 import { getAdminSession } from "../../../lib/session";
 import { getAvailability } from "../../../lib/booking";
 import { prisma } from "../../../lib/prisma";
+import { getServerLocale, t, translateStatus, type Locale } from "../../../lib/i18n";
 import AdminGeneralAvailability from "./AdminGeneralAvailability";
 
 export const dynamic = "force-dynamic";
@@ -35,15 +36,6 @@ type PageSearchParams = {
   tab?: string | string[];
 };
 
-const WEEK_DAYS = [
-  { value: 1, label: "Lundi" },
-  { value: 2, label: "Mardi" },
-  { value: 3, label: "Mercredi" },
-  { value: 4, label: "Jeudi" },
-  { value: 5, label: "Vendredi" },
-  { value: 6, label: "Samedi" },
-  { value: 7, label: "Dimanche" }
-];
 
 const ADMIN_BLOCK_NOTE_PREFIX = "[ADMIN_BLOCK]";
 const HALF_HOUR_OPTIONS = [
@@ -94,6 +86,8 @@ export default async function AdminAvailabilityPage({
   const session = getAdminSession();
   if (!session) redirect("/admin?error=unauthorized");
 
+  const locale = await getServerLocale();
+
   const rawError = Array.isArray(searchParams?.error)
     ? searchParams?.error[0]
     : searchParams?.error;
@@ -131,15 +125,17 @@ export default async function AdminAvailabilityPage({
     })
   ]);
 
+  const weekDays = [1, 2, 3, 4, 5, 6, 7].map(v => ({ value: v, label: t(`dayName.${v}` as any, locale) }));
+
   return (
     <section className="space-y-6">
       <div className="space-y-2">
-        <p className="pill w-fit">Admin</p>
+        <p className="pill w-fit">{t("common.admin", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-          Agenda
+          {t("avail.tabAgenda", locale)}
         </h1>
         <p className="text-sm text-white/70">
-          Vue calendrier Brussels / Miami. Gérez vos créneaux et rendez-vous.
+          {t("avail.calendarView", locale)}
         </p>
       </div>
 
@@ -147,11 +143,11 @@ export default async function AdminAvailabilityPage({
       {successMessage ? <div className="alert-success">{successMessage}</div> : null}
 
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        {tabLink("general", "Agenda", tab === "general")}
-        {tabLink("weekly", "Mes horaires fixes", tab === "weekly")}
-        {tabLink("single-block", "Réserver un RDV", tab === "single-block")}
-        {tabLink("recurring", "RDV réguliers", tab === "recurring")}
-        {tabLink("overrides", "RDV bloqués", tab === "overrides")}
+        {tabLink("general", t("avail.tabAgenda", locale), tab === "general")}
+        {tabLink("weekly", t("avail.tabWeekly", locale), tab === "weekly")}
+        {tabLink("single-block", t("avail.tabSingleBlock", locale), tab === "single-block")}
+        {tabLink("recurring", t("avail.tabRecurring", locale), tab === "recurring")}
+        {tabLink("overrides", t("avail.tabOverrides", locale), tab === "overrides")}
       </div>
 
       {tab === "general" ? (
@@ -175,11 +171,11 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Mes horaires fixes
+              {t("avail.myFixedHours", locale)}
             </h2>
             <form action={createAvailabilityRuleAction} className="grid gap-3 md:grid-cols-3">
               <select name="dayOfWeek" className="input" required>
-                {WEEK_DAYS.map((day) => (
+                {weekDays.map((day) => (
                   <option key={day.value} value={day.value}>
                     {day.label}
                   </option>
@@ -200,23 +196,22 @@ export default async function AdminAvailabilityPage({
                 ))}
               </select>
               <button type="submit" className="btn btn-primary md:col-span-3">
-                Ajouter
+                {t("avail.addRule", locale)}
               </button>
             </form>
             {rules.length === 0 ? (
               <p className="text-xs text-white/60">
-                Aucune règle définie. Les créneaux retombent sur la plage par défaut tant que
-                vous n’en créez pas.
+                {t("avail.noRule", locale)}
               </p>
             ) : null}
           </div>
 
           <div className="card space-y-3 p-6">
             <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Règles existantes
+              {t("avail.existingRules", locale)}
             </h3>
             {rules.length === 0 ? (
-              <p className="text-sm text-white/60">Aucune règle.</p>
+              <p className="text-sm text-white/60">{t("avail.noRuleShort", locale)}</p>
             ) : (
               <div className="space-y-2">
                 {rules.map((rule) => (
@@ -226,14 +221,14 @@ export default async function AdminAvailabilityPage({
                   >
                     <div>
                       <div className="font-semibold">
-                        {WEEK_DAYS.find((d) => d.value === rule.dayOfWeek)?.label} ·{" "}
+                        {weekDays.find((d) => d.value === rule.dayOfWeek)?.label} ·{" "}
                         {rule.startTime} → {rule.endTime} Brussels
                       </div>
                     </div>
                     <form action={deleteAvailabilityRuleAction}>
                       <input type="hidden" name="ruleId" value={rule.id} />
                       <button className="rounded-md border border-border px-3 py-2 text-xs hover:bg-red-50 hover:text-red-700">
-                        Supprimer
+                        {t("avail.delete", locale)}
                       </button>
                     </form>
                   </div>
@@ -248,34 +243,34 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Réserver un RDV
+              {t("avail.bookRdv", locale)}
             </h2>
             <form action={blockDateForClientAction} className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs uppercase tracking-widest text-white/60">Client</label>
+                <label className="text-xs uppercase tracking-widest text-white/60">{t("avail.client", locale)}</label>
                 <select name="clientId" required className="input">
-                  <option value="">Selectionner un client</option>
+                  <option value="">{t("avail.selectClient", locale)}</option>
                   {clients.map((client) => {
                     const used = usageMap.get(client.id) ?? 0;
                     const remaining = Math.max(client.creditsPerMonth - used, 0);
                     return (
                       <option key={client.id} value={client.id}>
-                        {client.name} ({remaining} RDV restants)
+                        {client.name} ({remaining} {t("avail.rdvRemaining", locale)})
                       </option>
                     );
                   })}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-widest text-white/60">Date</label>
+                <label className="text-xs uppercase tracking-widest text-white/60">{t("avail.date", locale)}</label>
                 <input type="date" name="date" className="input" required />
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-widest text-white/60">
-                  Heure de début
+                  {t("avail.startTime", locale)}
                 </label>
                 <select name="startTime" className="input" required>
-                  <option value="">Sélectionner</option>
+                  <option value="">{t("avail.select", locale)}</option>
                   {HALF_HOUR_OPTIONS.map((time) => (
                     <option key={`block-start-${time}`} value={time}>
                       {time}
@@ -284,9 +279,9 @@ export default async function AdminAvailabilityPage({
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-widest text-white/60">Heure de fin</label>
+                <label className="text-xs uppercase tracking-widest text-white/60">{t("avail.endTime", locale)}</label>
                 <select name="endTime" className="input" required>
-                  <option value="">Sélectionner</option>
+                  <option value="">{t("avail.select", locale)}</option>
                   {HALF_HOUR_OPTIONS.map((time) => (
                     <option key={`block-end-${time}`} value={time}>
                       {time}
@@ -296,27 +291,27 @@ export default async function AdminAvailabilityPage({
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs uppercase tracking-widest text-white/60">
-                  Notes (optionnel)
+                  {t("avail.notesOptional", locale)}
                 </label>
                 <textarea
                   name="note"
                   rows={3}
                   className="input"
-                  placeholder="Note interne (optionnel)"
+                  placeholder={t("avail.noteInternalPlaceholder", locale)}
                 />
               </div>
               <button type="submit" className="btn btn-primary md:col-span-2">
-                BLOQUER CE CRENEAU
+                {t("avail.blockSlot", locale)}
               </button>
             </form>
           </div>
 
           <div className="card space-y-4 p-6">
             <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Prochaines dates bloquees
+              {t("avail.upcomingBlocked", locale)}
             </h3>
             {upcomingBlockedDates.length === 0 ? (
-              <p className="text-sm text-white/60">Aucune date bloquee.</p>
+              <p className="text-sm text-white/60">{t("avail.noBlocked", locale)}</p>
             ) : (
               <div className="space-y-3">
                 {upcomingBlockedDates.map((booking) => {
@@ -343,7 +338,7 @@ export default async function AdminAvailabilityPage({
                       <form action={cancelBlockedDateAction} className="mt-3 md:mt-0">
                         <input type="hidden" name="bookingId" value={booking.id} />
                         <button type="submit" className="btn-ghost text-red-500 text-sm">
-                          Annuler
+                          {t("avail.cancelBtn", locale)}
                         </button>
                       </form>
                     </div>
@@ -359,12 +354,12 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              RDV bloqués
+              {t("avail.blockedRdv", locale)}
             </h2>
             <form action={createAvailabilityOverrideAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
               <input type="date" name="date" className="input" required />
               <select name="startTime" className="input" required>
-                <option value="">Heure de début</option>
+                <option value="">{t("avail.startHour", locale)}</option>
                 {HALF_HOUR_OPTIONS.map((time) => (
                   <option key={`override-start-${time}`} value={time}>
                     {time}
@@ -372,7 +367,7 @@ export default async function AdminAvailabilityPage({
                 ))}
               </select>
               <select name="endTime" className="input" required>
-                <option value="">Heure de fin</option>
+                <option value="">{t("avail.endHour", locale)}</option>
                 {HALF_HOUR_OPTIONS.map((time) => (
                   <option key={`override-end-${time}`} value={time}>
                     {time}
@@ -380,27 +375,27 @@ export default async function AdminAvailabilityPage({
                 ))}
               </select>
               <select name="type" className="input" required>
-                <option value="BLOCK">Bloquer</option>
-                <option value="OPEN">Ouvrir</option>
+                <option value="BLOCK">{t("avail.block", locale)}</option>
+                <option value="OPEN">{t("avail.open", locale)}</option>
               </select>
               <input
                 type="text"
                 name="note"
-                placeholder="Note (optionnel)"
+                placeholder={t("avail.noteOptional", locale)}
                 className="input sm:col-span-2 md:col-span-5"
               />
               <button type="submit" className="btn btn-primary sm:col-span-2 md:col-span-5">
-                Ajouter
+                {t("avail.add", locale)}
               </button>
             </form>
           </div>
 
           <div className="card space-y-3 p-6">
             <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Exceptions existantes
+              {t("avail.existingExceptions", locale)}
             </h3>
             {overrides.length === 0 ? (
-              <p className="text-sm text-white/60">Aucune exception.</p>
+              <p className="text-sm text-white/60">{t("avail.noException", locale)}</p>
             ) : (
               <div className="space-y-2">
                 {overrides.map((override) => (
@@ -414,17 +409,17 @@ export default async function AdminAvailabilityPage({
                         {override.startTime} → {override.endTime} Brussels
                       </div>
                       <div className="text-white/60">
-                        {override.type === "OPEN" ? "Ouverture" : "Blocage"} ·{" "}
+                        {override.type === "OPEN" ? t("avail.opening", locale) : t("avail.blocking", locale)} ·{" "}
                         {formatInZone(override.date, "dd LLL yyyy", MIAMI_TZ)} Miami
                       </div>
                       {override.note ? (
-                        <div className="text-xs text-white/60">Note: {override.note}</div>
+                        <div className="text-xs text-white/60">{t("avail.note", locale)}: {override.note}</div>
                       ) : null}
                     </div>
                     <form action={deleteAvailabilityOverrideAction}>
                       <input type="hidden" name="overrideId" value={override.id} />
                       <button className="rounded-md border border-border px-3 py-2 text-xs hover:bg-red-50 hover:text-red-700">
-                        Supprimer
+                        {t("avail.delete", locale)}
                       </button>
                     </form>
                   </div>
@@ -436,7 +431,7 @@ export default async function AdminAvailabilityPage({
           {legacyBlocks.length > 0 ? (
             <div className="card space-y-3 p-6">
               <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-                Blocages hérités
+                {t("avail.legacyBlocks", locale)}
               </h3>
               <div className="space-y-2">
                 {legacyBlocks.map((block) => (
@@ -454,13 +449,13 @@ export default async function AdminAvailabilityPage({
                         {formatInZone(block.endAt, "HH:mm", MIAMI_TZ)} Miami
                       </div>
                       {block.reason ? (
-                        <div className="text-xs text-white/60">Raison: {block.reason}</div>
+                        <div className="text-xs text-white/60">{t("avail.reason", locale)}: {block.reason}</div>
                       ) : null}
                     </div>
                     <form action={deleteBlockAction}>
                       <input type="hidden" name="blockId" value={block.id} />
                       <button className="rounded-md border border-border px-3 py-2 text-xs hover:bg-red-50 hover:text-red-700">
-                        Supprimer
+                        {t("avail.delete", locale)}
                       </button>
                     </form>
                   </div>
@@ -475,18 +470,18 @@ export default async function AdminAvailabilityPage({
         <div className="space-y-5">
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              RDV réguliers
+              {t("avail.recurringRdv", locale)}
             </h2>
             <form action={createRecurringBlockAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
               <select name="dayOfWeek" className="input" required>
-                {WEEK_DAYS.map((day) => (
+                {weekDays.map((day) => (
                   <option key={day.value} value={day.value}>
                     {day.label}
                   </option>
                 ))}
               </select>
               <select name="startTime" className="input" required>
-                <option value="">Sélectionner une heure</option>
+                <option value="">{t("avail.selectHour", locale)}</option>
                 {HALF_HOUR_OPTIONS.map((time) => (
                   <option key={`start-${time}`} value={time}>
                     {time}
@@ -494,7 +489,7 @@ export default async function AdminAvailabilityPage({
                 ))}
               </select>
               <select name="endTime" className="input" required>
-                <option value="">Sélectionner une heure</option>
+                <option value="">{t("avail.selectHour", locale)}</option>
                 {HALF_HOUR_OPTIONS.map((time) => (
                   <option key={`end-${time}`} value={time}>
                     {time}
@@ -502,7 +497,7 @@ export default async function AdminAvailabilityPage({
                 ))}
               </select>
               <select name="clientId" className="input">
-                <option value="">Aucun client</option>
+                <option value="">{t("avail.noClient", locale)}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
@@ -516,21 +511,21 @@ export default async function AdminAvailabilityPage({
               <input
                 type="text"
                 name="note"
-                placeholder="Réservé pour… (optionnel)"
+                placeholder={t("avail.reservedForPlaceholder", locale)}
                 className="input sm:col-span-2 md:col-span-4"
               />
               <button type="submit" className="btn btn-primary sm:col-span-2 md:col-span-4">
-                Ajouter
+                {t("avail.add", locale)}
               </button>
             </form>
           </div>
 
           <div className="card space-y-3 p-6">
             <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Blocs récurrents existants
+              {t("avail.existingRecurring", locale)}
             </h3>
             {recurringBlocks.length === 0 ? (
-              <p className="text-sm text-white/60">Aucun bloc récurrent.</p>
+              <p className="text-sm text-white/60">{t("avail.noRecurring", locale)}</p>
             ) : (
               <div className="space-y-2">
                 {recurringBlocks.map((block) => (
@@ -540,26 +535,26 @@ export default async function AdminAvailabilityPage({
                   >
                     <div>
                       <div className="font-semibold">
-                        {WEEK_DAYS.find((d) => d.value === block.dayOfWeek)?.label} ·{" "}
+                        {weekDays.find((d) => d.value === block.dayOfWeek)?.label} ·{" "}
                         {block.startTime} → {block.endTime} (
                         {block.timeZone === "America/New_York" ? "Miami" : "Bruxelles"})
                       </div>
                       {block.client ? (
                         <div className="mt-2 text-sm">
-                          <p className="text-primary">Client : {block.client.name}</p>
+                          <p className="text-primary">{t("avail.clientAssigned", locale)}: {block.client.name}</p>
                           <p className="text-xs text-gray-500">{block.client.email}</p>
                         </div>
                       ) : (
-                        <p className="mt-2 text-sm text-white/50">Client non attribué</p>
+                        <p className="mt-2 text-sm text-white/50">{t("avail.noClientAssigned", locale)}</p>
                       )}
                       {block.note ? (
-                        <div className="text-xs text-white/60">Note: {block.note}</div>
+                        <div className="text-xs text-white/60">{t("avail.note", locale)}: {block.note}</div>
                       ) : null}
                     </div>
                     <form action={deleteRecurringBlockAction}>
                       <input type="hidden" name="recurringBlockId" value={block.id} />
                       <button className="rounded-md border border-border px-3 py-2 text-xs hover:bg-red-50 hover:text-red-700">
-                        Supprimer
+                        {t("avail.delete", locale)}
                       </button>
                     </form>
                   </div>

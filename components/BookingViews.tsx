@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { DateTime } from "luxon";
 import { useSearchParams } from "next/navigation";
+import { useLanguage } from "./LanguageProvider";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
 import { CalendarViewToggle, type ViewMode } from "./CalendarViewToggle";
@@ -25,6 +26,7 @@ type DayGroup = {
 };
 
 export function BookingViews({ slots, quotaReached }: Props) {
+  const { locale } = useLanguage();
   const normalizedSlots = useMemo(
     () =>
       slots.map((slot) => ({
@@ -35,7 +37,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
     [slots]
   );
 
-  const dayMap = useMemo(() => groupSlotsByDay(normalizedSlots), [normalizedSlots]);
+  const dayMap = useMemo(() => groupSlotsByDay(normalizedSlots, locale), [normalizedSlots, locale]);
   const [view, setView] = useState<ViewMode>("month");
   const [, startTransition] = useTransition();
   const [monthFocus, setMonthFocus] = useState<DateTime>(
@@ -73,7 +75,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
     setSelectedDay(
       group ?? {
         key,
-        label: day.setLocale("fr").toFormat("EEEE dd MMMM"),
+        label: day.setLocale(locale).toFormat("EEEE dd MMMM"),
         slots: [],
         date: day
       }
@@ -177,7 +179,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
   );
 }
 
-function groupSlotsByDay(slots: SlotView[]): Map<string, DayGroup> {
+function groupSlotsByDay(slots: SlotView[], locale: string): Map<string, DayGroup> {
   const map = new Map<string, DayGroup>();
 
   slots.forEach((slot) => {
@@ -186,7 +188,7 @@ function groupSlotsByDay(slots: SlotView[]): Map<string, DayGroup> {
     if (!map.has(key)) {
       map.set(key, {
         key,
-        label: day.setLocale("fr").toFormat("EEEE dd MMMM"),
+        label: day.setLocale(locale).toFormat("EEEE dd MMMM"),
         slots: [],
         date: day
       });

@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "../../lib/session";
+import { getServerLocale, t, translateStatus } from "../../lib/i18n";
 import { adminLoginAction, adminLogoutAction } from "./actions";
 import { listClients, listUpcomingBookingsThisMonth } from "../../lib/admin";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 type SearchParams = { error?: string };
 
 export default async function AdminPage({ searchParams }: { searchParams?: SearchParams }) {
+  const locale = await getServerLocale();
   const session = getAdminSession();
   const rawError = Array.isArray(searchParams?.error)
     ? searchParams?.error[0]
@@ -23,12 +25,12 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
     return (
       <section className="mx-auto max-w-xl space-y-6">
         <div className="space-y-3">
-          <p className="pill w-fit">Espace Admin</p>
+          <p className="pill w-fit">{t("adminLogin.pill", locale)}</p>
           <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-            Connexion requise
+            {t("adminLogin.title", locale)}
           </h1>
           <p className="text-sm text-white/70">
-            Protégé par mot de passe (.env ADMIN_PASSWORD). Aucune notification n'est envoyée automatiquement.
+            {t("adminLogin.desc", locale)}
           </p>
         </div>
         {errorMessage ? (
@@ -38,17 +40,17 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
         ) : null}
         <form action={adminLoginAction} className="card space-y-4 p-6">
           <label className="text-xs uppercase tracking-widest text-white/60">
-            Mot de passe admin
+            {t("adminLogin.password", locale)}
           </label>
           <input
             type="password"
             name="password"
             className="w-full rounded-md border border-border bg-background-elevated px-3 py-3 text-sm focus:border-border focus:outline-none"
-            placeholder="Mot de passe"
+            placeholder={t("adminLogin.placeholder", locale)}
             required
           />
           <button type="submit" className="btn btn-primary w-full">
-            Se connecter
+            {t("adminLogin.submit", locale)}
           </button>
         </form>
       </section>
@@ -90,33 +92,33 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
     <section className="space-y-8">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="pill w-fit">Dashboard</p>
+          <p className="pill w-fit">{t("nav.dashboard", locale)}</p>
           <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-            Administration
+            {t("dashboard.title", locale)}
           </h1>
-          <p className="text-sm text-white/70">Vue rapide des clients et rendez-vous.</p>
+          <p className="text-sm text-white/70">{t("dashboard.subtitle", locale)}</p>
         </div>
         <form action={adminLogoutAction}>
-          <button className="text-sm underline underline-offset-4 hover:text-white">Se déconnecter</button>
+          <button className="text-sm underline underline-offset-4 hover:text-white">{t("dashboard.logout", locale)}</button>
         </form>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <StatCard label="Clients actifs" value={clients.filter((c) => c.isActive).length} />
-        <StatCard label="Rendez-vous" value={totalRdv} />
+        <StatCard label={t("dashboard.activeClients", locale)} value={clients.filter((c) => c.isActive).length} />
+        <StatCard label={t("dashboard.appointments", locale)} value={totalRdv} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="card space-y-3 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">Rendez-vous récents</h2>
+            <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">{t("dashboard.recentBookings", locale)}</h2>
             <Link href="/admin/bookings" className="text-sm underline underline-offset-4">
-              Voir tout
+              {t("dashboard.viewAll", locale)}
             </Link>
           </div>
           <div className="space-y-3">
             {upcoming.length === 0 ? (
-              <p className="text-sm text-white/60">Aucun rendez-vous.</p>
+              <p className="text-sm text-white/60">{t("dashboard.noBookings", locale)}</p>
             ) : (
               upcoming.map((b) => (
                 <div
@@ -126,7 +128,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
                   <div className="flex items-center justify-between">
                     <div className="font-semibold">{b.client.name}</div>
                     <span className="rounded-full bg-background-elevated/5 px-2 py-1 text-[11px] text-white/60">
-                      {b.status === "CONFIRMED" ? "Confirmé" : b.status === "CANCELLED" ? "Annulé" : b.status === "NO_SHOW" ? "Absent" : "Terminé"}
+                      {translateStatus(b.status, locale)}
                     </span>
                   </div>
                   <div className="text-white/70">
@@ -140,20 +142,20 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
 
         <div className="card space-y-3 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">Actions rapides</h2>
+            <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">{t("dashboard.quickActions", locale)}</h2>
           </div>
           <div className="grid gap-2 text-sm">
             <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/availability">
-              Voir l'agenda
+              {t("dashboard.viewAgenda", locale)}
             </Link>
             <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/clients">
-              Gérer les clients
+              {t("dashboard.manageClients", locale)}
             </Link>
             <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/bookings">
-              Gérer les rendez-vous
+              {t("dashboard.manageBookings", locale)}
             </Link>
             <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/settings">
-              Paramètres
+              {t("nav.settings", locale)}
             </Link>
           </div>
         </div>

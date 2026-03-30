@@ -5,6 +5,7 @@ import { DateTime } from "luxon";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
 import SlotButton from "./SlotButton";
+import { useLanguage } from "./LanguageProvider";
 
 type Props = {
   slots: SlotView[];
@@ -13,6 +14,7 @@ type Props = {
 
 /** Compact mobile calendar + inline day slots — inspired by Doctolib/Calendly */
 function MobileBookingViewComponent({ slots, quotaReached }: Props) {
+  const { locale } = useLanguage();
   const normalizedSlots = useMemo(
     () =>
       slots.map((slot) => ({
@@ -32,7 +34,7 @@ function MobileBookingViewComponent({ slots, quotaReached }: Props) {
       if (!map.has(key)) {
         map.set(key, {
           key,
-          label: day.setLocale("fr").toFormat("EEEE dd MMMM"),
+          label: day.setLocale(locale).toFormat("EEEE dd MMMM"),
           slots: [],
           date: day,
         });
@@ -59,7 +61,7 @@ function MobileBookingViewComponent({ slots, quotaReached }: Props) {
     return future ?? todayKey;
   });
 
-  const monthLabel = month.setLocale("fr").toFormat("LLLL yyyy");
+  const monthLabel = month.setLocale(locale).toFormat("LLLL yyyy");
 
   // Build 42-day grid for calendar
   const calendarDays = useMemo(() => {
@@ -81,7 +83,7 @@ function MobileBookingViewComponent({ slots, quotaReached }: Props) {
     return {
       key: selectedKey,
       label: day.isValid
-        ? day.setLocale("fr").toFormat("EEEE dd MMMM")
+        ? day.setLocale(locale).toFormat("EEEE dd MMMM")
         : "",
       slots: [] as SlotView[],
       date: day,
@@ -176,7 +178,7 @@ function MobileBookingViewComponent({ slots, quotaReached }: Props) {
                   ${!isSelected && isToday ? "ring-1 ring-white/50" : ""}
                   ${!isSelected && isCurrentMonth && !isPast ? "active:bg-white/10" : ""}
                 `}
-                aria-label={day.setLocale("fr").toFormat("dd MMMM")}
+                aria-label={day.setLocale(locale).toFormat("dd MMMM")}
               >
                 <span className={`text-sm font-medium ${isSelected ? "font-bold" : ""}`}>
                   {day.day}

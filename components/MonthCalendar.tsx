@@ -17,8 +17,6 @@ type Props = {
   selectedDayKey?: string | null;
 };
 
-const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-
 function MonthCalendarComponent({
   month,
   daySlots,
@@ -27,7 +25,8 @@ function MonthCalendarComponent({
   allowEmptySelection = false,
   selectedDayKey = null
 }: Props) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
+  const dayNames = [t("day.mon"), t("day.tue"), t("day.wed"), t("day.thu"), t("day.fri"), t("day.sat"), t("day.sun")];
   const days = useMemo(() => {
     const startOfMonth = month.startOf("month");
     const daysFromMonday = (startOfMonth.weekday + 6) % 7;
@@ -43,7 +42,7 @@ function MonthCalendarComponent({
     const nowMiami = DateTime.now().setZone(MIAMI_TZ);
     return nowMiami.toISODate() ?? nowMiami.toFormat("yyyy-LL-dd");
   }, []);
-  const monthLabel = month.setLocale("fr").toFormat("LLLL yyyy");
+  const monthLabel = month.setLocale(locale === "en" ? "en" : "fr").toFormat("LLLL yyyy");
 
   return (
     <div className="space-y-4">
@@ -70,7 +69,7 @@ function MonthCalendarComponent({
           onClick={() => onChangeMonth(DateTime.now().setZone(MIAMI_TZ).startOf("month"))}
           className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5 whitespace-nowrap"
         >
-          Aujourd&apos;hui
+          {t("calendar.today")}
         </button>
       </div>
 
@@ -103,13 +102,13 @@ function MonthCalendarComponent({
           const statusLabel =
             availableCount > 0
               ? availableCount === 1
-              ? "1 disponibilité"
-              : `${availableCount} disponibilités`
+              ? t("calendar.available1")
+              : `${availableCount} ${t("calendar.availableN")}`
               : hasSlots && bookedCount === totalSlots
-              ? "Complet"
+              ? t("calendar.full")
               : hasSlots
-              ? "Occupé"
-              : "Aucun creneau";
+              ? t("calendar.busy")
+              : t("calendar.noSlot");
 
           const isSelectable = hasSlots || allowEmptySelection;
 
@@ -125,14 +124,14 @@ function MonthCalendarComponent({
                     : "bg-[#0F0F0F] border-4 border-[#C8A060] text-white font-semibold hover:border-[#E8D7BE] hover:bg-[#1A1A1A]"
                   : "bg-[#0F0F0F] border-4 border-gray-700 text-white/30 opacity-40 cursor-not-allowed"
               } ${isToday || isSelected ? "ring-2 ring-white" : ""}`}
-              aria-label={`Selectionner le ${day.toFormat("dd LLLL")}`}
+              aria-label={`Selectionner le ${day.setLocale(locale === "en" ? "en" : "fr").toFormat("dd LLLL")}`}
               disabled={!isSelectable}
             >
               <div className="flex items-center justify-between text-sm font-semibold">
                 <span>{day.day}</span>
                 {isToday && (
                   <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] text-white/70">
-                    Aujourd&apos;hui
+                    {t("calendar.today")}
                   </span>
                 )}
               </div>

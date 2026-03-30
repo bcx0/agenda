@@ -62,7 +62,7 @@ function normalizeSlots(slots: SlotView[]) {
   }));
 }
 
-function groupSlotsByDay(slots: SlotView[]): Map<string, DayGroup> {
+function groupSlotsByDay(slots: SlotView[], locale: string = "fr"): Map<string, DayGroup> {
   const map = new Map<string, DayGroup>();
   slots.forEach((slot) => {
     const day = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(MIAMI_TZ);
@@ -70,7 +70,7 @@ function groupSlotsByDay(slots: SlotView[]): Map<string, DayGroup> {
     if (!map.has(key)) {
       map.set(key, {
         key,
-        label: day.setLocale("fr").toFormat("EEEE dd MMMM"),
+        label: day.setLocale(locale).toFormat("EEEE dd MMMM"),
         slots: [],
         date: day
       });
@@ -88,8 +88,9 @@ function toRangeJson(ranges: Range[]) {
 
 
 export default function AdminGeneralAvailability({ slots, bookings, rules, overrides }: Props) {
+  const { t, translateSlotStatus, locale } = useLanguage();
   const normalized = useMemo(() => normalizeSlots(slots), [slots]);
-  const dayMap = useMemo(() => groupSlotsByDay(normalized), [normalized]);
+  const dayMap = useMemo(() => groupSlotsByDay(normalized, locale), [normalized, locale]);
   const [, startTransition] = useTransition();
   const [view, setView] = useState<ViewMode>("month");
   const [monthFocus, setMonthFocus] = useState<DateTime>(
@@ -129,7 +130,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
     const key = inMiami.toISODate() ?? inMiami.toFormat("yyyy-LL-dd");
     const group = dayMap.get(key) ?? {
       key,
-      label: inMiami.setLocale("fr").toFormat("EEEE dd MMMM"),
+      label: inMiami.setLocale(locale).toFormat("EEEE dd MMMM"),
       slots: [],
       date: inMiami
     };
@@ -193,9 +194,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
   const [mobileMonth, setMobileMonth] = useState<DateTime>(
     DateTime.now().setZone(MIAMI_TZ).startOf("month")
   );
-  const { t, translateSlotStatus } = useLanguage();
-
-  const mobileMonthLabel = mobileMonth.setLocale("fr").toFormat("LLLL yyyy");
+  const mobileMonthLabel = mobileMonth.setLocale(locale).toFormat("LLLL yyyy");
 
   const mobileCalendarDays = useMemo(() => {
     const startOfMonth = mobileMonth.startOf("month");
@@ -214,7 +213,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
     const day = DateTime.fromISO(mobileSelectedKey, { zone: MIAMI_TZ });
     return {
       key: mobileSelectedKey,
-      label: day.isValid ? day.setLocale("fr").toFormat("EEEE dd MMMM") : "",
+      label: day.isValid ? day.setLocale(locale).toFormat("EEEE dd MMMM") : "",
       slots: [] as SlotView[],
       date: day,
     };
@@ -483,7 +482,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
               <div className="text-lg font-semibold flex-1 text-center">
-                {weekStart.setLocale("fr").toFormat("dd LLL")} – {weekStart.plus({ days: 6 }).setLocale("fr").toFormat("dd LLL yyyy")}
+                {weekStart.setLocale(locale).toFormat("dd LLL")} – {weekStart.plus({ days: 6 }).setLocale(locale).toFormat("dd LLL yyyy")}
               </div>
               <button
                 type="button"

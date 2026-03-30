@@ -4,6 +4,7 @@ import { cancelAppointmentAction, rescheduleAppointmentAction } from "./actions"
 import { prisma } from "../../../../lib/prisma";
 import { getAvailability } from "../../../../lib/booking";
 import { BRUSSELS_TZ, MIAMI_TZ, formatInZone } from "../../../../lib/time";
+import { getServerLocale, t } from "../../../../lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ type PageProps = {
 };
 
 export default async function ManageBookingPage({ params, searchParams }: PageProps) {
+  const locale = await getServerLocale();
   const token = params.token;
   const booking = await prisma.booking.findFirst({
     where: {
@@ -26,10 +28,10 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
     return (
       <section className="mx-auto max-w-2xl space-y-4 py-12">
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-          Lien expiré
+          {t("rdvManage.expired", locale)}
         </h1>
         <p className="text-sm text-white/70">
-          Ce lien de gestion n'est plus valide. Contactez votre interlocuteur pour obtenir un nouveau lien.
+          {t("rdvManage.expiredDesc", locale)}
         </p>
       </section>
     );
@@ -52,12 +54,12 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
   return (
     <section className="mx-auto max-w-3xl space-y-8 py-12">
       <div className="space-y-2">
-        <p className="pill w-fit">Espace client</p>
+        <p className="pill w-fit">{t("manage.pill", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-          Gérer votre rendez-vous
+          {t("rdvManage.title", locale)}
         </h1>
         <p className="text-sm text-white/70">
-          Référence pour {booking.client.name} · {bookingDate}
+          {t("rdvManage.refFor", locale)} {booking.client.name} · {bookingDate}
         </p>
       </div>
 
@@ -69,66 +71,66 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
 
       {successMessage === "cancelled" ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Votre rendez-vous a été annulé.
+          {t("rdvManage.cancelled", locale)}
         </div>
       ) : null}
       {successMessage === "rescheduled" ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Votre rendez-vous a été modifié.
+          {t("rdvManage.rescheduled", locale)}
         </div>
       ) : null}
 
       <div className="card space-y-2 p-6">
-        <div className="text-sm text-white/60">Créneau actuel</div>
+        <div className="text-sm text-white/60">{t("rdvManage.currentSlot", locale)}</div>
         <div className="text-lg font-semibold">
           {bookingDate} · {bookingBrussels} Brussels / {bookingMiami} Miami
         </div>
         <div className="text-xs uppercase tracking-widest text-white/60">
-          Statut : {booking.status} · Mode : {booking.mode}
+          {t("rdvManage.status", locale)} {booking.status} · {t("bookingDetail.mode", locale)} {booking.mode}
         </div>
         {booking.cancelReason ? (
-          <div className="text-sm text-red-700">Motif d'annulation : {booking.cancelReason}</div>
+          <div className="text-sm text-red-700">{t("rdvManage.cancelReason", locale)} {booking.cancelReason}</div>
         ) : null}
         {booking.rescheduleReason ? (
-          <div className="text-sm text-primary">Motif de modification : {booking.rescheduleReason}</div>
+          <div className="text-sm text-primary">{t("rdvManage.rescheduleReason", locale)} {booking.rescheduleReason}</div>
         ) : null}
       </div>
 
       {booking.status === "CANCELLED" ? (
         <div className="rounded-md border border-border bg-white/5 px-4 py-3 text-sm text-white/70">
-          Ce rendez-vous est déjà annulé. Pour reprogrammer un nouveau rendez-vous, contactez votre interlocuteur.
+          {t("rdvManage.alreadyCancelled", locale)}
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
           <form action={cancelAppointmentAction} className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Annuler
+              {t("rdvManage.cancel", locale)}
             </h2>
             <p className="text-sm text-white/70">
-              Merci d'indiquer le motif de l'annulation.
+              {t("rdvManage.cancelDesc", locale)}
             </p>
             <input type="hidden" name="token" value={token} />
             <button className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 hover:bg-red-100">
-              Confirmer l'annulation
+              {t("rdvManage.confirmCancel", locale)}
             </button>
           </form>
 
           <form action={rescheduleAppointmentAction} className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Modifier
+              {t("rdvManage.modify", locale)}
             </h2>
             <p className="text-sm text-white/70">
-              Choisissez un nouveau créneau disponible.
+              {t("rdvManage.modifyDesc", locale)}
             </p>
             <input type="hidden" name="token" value={token} />
             <label className="space-y-2 text-sm">
-              <span className="block text-white/60">Nouveau créneau</span>
+              <span className="block text-white/60">{t("rdvManage.newSlot", locale)}</span>
               <select
                 name="start"
                 required
                 className="w-full rounded-md border border-border px-3 py-2 text-sm"
               >
-                <option value="">Sélectionner un créneau</option>
+                <option value="">{t("rdvManage.selectSlot", locale)}</option>
                 {availableSlots.map((slot) => {
                   const label = `${formatInZone(slot.start, "dd LLL yyyy HH:mm", BRUSSELS_TZ)} Brussels / ${formatInZone(slot.start, "HH:mm", MIAMI_TZ)} Miami`;
                   return (
@@ -140,10 +142,10 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
               </select>
             </label>
             {availableSlots.length === 0 ? (
-              <p className="text-sm text-white/60">Aucun créneau disponible pour le moment.</p>
+              <p className="text-sm text-white/60">{t("rdvManage.noSlotAvailable", locale)}</p>
             ) : null}
             <button className="rounded-md border border-border px-4 py-2 text-sm hover:bg-black hover:text-white">
-              Confirmer la modification
+              {t("rdvManage.confirmModify", locale)}
             </button>
           </form>
         </div>

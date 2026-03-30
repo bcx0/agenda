@@ -15,10 +15,10 @@ import {
 } from "../actions";
 import { prisma } from "../../../lib/prisma";
 import { GoogleCalendarConnect } from "../../../components/GoogleCalendarConnect";
+import { getServerLocale, t, Locale } from "../../../lib/i18n";
 
 export const dynamic = "force-dynamic";
 
-const DAY_NAMES = ["", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const HOURS = Array.from({ length: 18 }, (_, i) => {
   const h = i + 5; // 05:00 to 22:00
   return `${h.toString().padStart(2, "0")}:00`;
@@ -27,6 +27,8 @@ const HOURS = Array.from({ length: 18 }, (_, i) => {
 export default async function AdminSettingsPage() {
   const session = getAdminSession();
   if (!session) redirect("/admin?error=unauthorized");
+
+  const locale = await getServerLocale();
 
   const [settings, sessionModes, googleToken, availabilityRules, locationPeriods] =
     await Promise.all([
@@ -40,35 +42,37 @@ export default async function AdminSettingsPage() {
   const miamiRules = availabilityRules.filter((r: { location: string }) => r.location === "MIAMI");
   const brusselsRules = availabilityRules.filter((r: { location: string }) => r.location === "BELGIUM");
 
+  const dayName = (n: number) => t(`dayName.${n}` as any, locale);
+
   return (
     <section className="space-y-6">
       <div className="space-y-2">
-        <p className="pill w-fit">Admin</p>
+        <p className="pill w-fit">{t("common.admin", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-          Paramètres
+          {t("settings.title", locale)}
         </h1>
         <p className="text-sm text-white/70">
-          Configuration des localisations, horaires et synchronisation.
+          {t("settings.subtitle", locale)}
         </p>
       </div>
 
       {/* ── Configuration générale ─────────────────────────── */}
       <div className="card space-y-4 p-6">
         <div>
-          <div className="text-xs uppercase tracking-widest text-white/60">Configuration</div>
-          <div className="text-lg font-semibold">Mode par défaut et lieu présentiel</div>
+          <div className="text-xs uppercase tracking-widest text-white/60">{t("settings.config", locale)}</div>
+          <div className="text-lg font-semibold">{t("settings.defaultModeAndLocation", locale)}</div>
         </div>
         <form action={saveSettingsAction} className="grid gap-4 md:grid-cols-2">
           <input type="hidden" name="location" value="MIAMI" />
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-widest text-white/60">Mode par défaut</label>
+            <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.defaultMode", locale)}</label>
             <select name="defaultMode" defaultValue={settings.defaultMode} className="input">
-              <option value="VISIO">Visio</option>
-              <option value="PRESENTIEL">Présentiel</option>
+              <option value="VISIO">{t("settings.visio", locale)}</option>
+              <option value="PRESENTIEL">{t("settings.presentiel", locale)}</option>
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-widest text-white/60">Lieu présentiel</label>
+            <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.presentielLocation", locale)}</label>
             <input
               type="text"
               name="presentielLocation"
@@ -78,7 +82,7 @@ export default async function AdminSettingsPage() {
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <label className="text-xs uppercase tracking-widest text-white/60">Note présentiel</label>
+            <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.presentielNote", locale)}</label>
             <textarea
               name="presentielNote"
               defaultValue={settings.presentielNote ?? ""}
@@ -88,7 +92,7 @@ export default async function AdminSettingsPage() {
           </div>
           <div className="md:col-span-2">
             <button type="submit" className="btn btn-primary w-full md:w-auto">
-              Enregistrer
+              {t("settings.save", locale)}
             </button>
           </div>
         </form>
@@ -100,13 +104,13 @@ export default async function AdminSettingsPage() {
           <div className="h-3 w-3 rounded-full bg-[#C8A060]" />
           <div>
             <div className="text-xs uppercase tracking-widest text-[#C8A060]">
-              Base — Miami ({MIAMI_TZ})
+              {t("settings.baseMiami", locale)} ({MIAMI_TZ})
             </div>
-            <div className="text-lg font-semibold">Horaires par jour de la semaine</div>
+            <div className="text-lg font-semibold">{t("settings.hoursByDay", locale)}</div>
           </div>
         </div>
 
-        <AvailabilityRulesBlock rules={miamiRules} location="MIAMI" />
+        <AvailabilityRulesBlock rules={miamiRules} location="MIAMI" locale={locale} dayName={dayName} />
       </div>
 
       {/* ── Horaires Belgique ─────────────────────────────── */}
@@ -115,34 +119,33 @@ export default async function AdminSettingsPage() {
           <div className="h-3 w-3 rounded-full bg-blue-500" />
           <div>
             <div className="text-xs uppercase tracking-widest text-blue-400">
-              Belgique ({BRUSSELS_TZ})
+              {t("settings.belgium", locale)} ({BRUSSELS_TZ})
             </div>
-            <div className="text-lg font-semibold">Horaires par jour de la semaine</div>
+            <div className="text-lg font-semibold">{t("settings.hoursByDay", locale)}</div>
           </div>
         </div>
 
-        <AvailabilityRulesBlock rules={brusselsRules} location="BELGIUM" />
+        <AvailabilityRulesBlock rules={brusselsRules} location="BELGIUM" locale={locale} dayName={dayName} />
       </div>
 
       {/* ── Périodes Belgique ──────────────────────────────── */}
       <div className="card space-y-4 p-6 border border-blue-500/30">
         <div>
           <div className="text-xs uppercase tracking-widest text-blue-400">
-            Séjours en Belgique
+            {t("settings.belgiumStays", locale)}
           </div>
           <div className="text-lg font-semibold">
-            Quand Geoffrey est en Belgique
+            {t("settings.whenInBelgium", locale)}
           </div>
           <p className="text-sm text-white/60 mt-1">
-            Pendant ces périodes, les horaires Belgique remplacent les horaires Miami.
-            Les créneaux Miami disparaissent pour les clients.
+            {t("settings.belgiumDesc", locale)}
           </p>
         </div>
 
         <form action={createLocationPeriodAction} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-widest text-white/60">Date de début</label>
+              <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.startDate", locale)}</label>
               <input
                 type="date"
                 name="startDate"
@@ -152,7 +155,7 @@ export default async function AdminSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-widest text-white/60">Date de fin</label>
+              <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.endDate", locale)}</label>
               <input
                 type="date"
                 name="endDate"
@@ -162,20 +165,20 @@ export default async function AdminSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-widest text-white/60">Note (optionnel)</label>
+              <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.noteOptional", locale)}</label>
               <input type="text" name="note" className="input" placeholder="Ex: Vacances de Pâques" />
             </div>
           </div>
           <button type="submit" className="btn btn-primary w-full md:w-auto">
-            Ajouter cette période
+            {t("settings.addPeriod", locale)}
           </button>
         </form>
 
         {locationPeriods.length > 0 ? (
           <div className="space-y-3">
             {locationPeriods.map((period: { id: number; startDate: Date; endDate: Date; note: string | null }) => {
-              const start = new Date(period.startDate).toLocaleDateString("fr-FR");
-              const end = new Date(period.endDate).toLocaleDateString("fr-FR");
+              const start = new Date(period.startDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR");
+              const end = new Date(period.endDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR");
               const now = new Date();
               const isActive =
                 now >= new Date(period.startDate) && now <= new Date(period.endDate);
@@ -193,7 +196,7 @@ export default async function AdminSettingsPage() {
                       {start} → {end}
                       {isActive && (
                         <span className="ml-2 inline-block rounded bg-blue-500 px-2 py-0.5 text-xs font-bold text-white">
-                          EN COURS
+                          {t("settings.active", locale)}
                         </span>
                       )}
                     </p>
@@ -204,7 +207,7 @@ export default async function AdminSettingsPage() {
                   <form action={deleteLocationPeriodAction}>
                     <input type="hidden" name="id" value={period.id} />
                     <button type="submit" className="btn-danger touch-target text-sm">
-                      Supprimer
+                      {t("settings.delete", locale)}
                     </button>
                   </form>
                 </div>
@@ -213,15 +216,15 @@ export default async function AdminSettingsPage() {
           </div>
         ) : (
           <p className="text-sm text-white/50">
-            Aucune période configurée. Les horaires Miami s&apos;appliquent par défaut.
+            {t("settings.noPeriod", locale)}
           </p>
         )}
       </div>
 
       {/* ── Google Calendar ────────────────────────────────── */}
       <div className="card space-y-4 p-6">
-        <div className="text-xs uppercase tracking-widest text-white/60">Google Calendar</div>
-        <div className="text-lg font-semibold">Connexion et synchronisation</div>
+        <div className="text-xs uppercase tracking-widest text-white/60">{t("settings.googleCalendar", locale)}</div>
+        <div className="text-lg font-semibold">{t("settings.connectionAndSync", locale)}</div>
         <GoogleCalendarConnect
           isConnected={Boolean(googleToken)}
           googleEmail={googleToken?.googleEmail ?? null}
@@ -231,16 +234,16 @@ export default async function AdminSettingsPage() {
       {/* ── Modes de session ───────────────────────────────── */}
       <div className="card space-y-6 p-6">
         <div>
-          <h2 className="text-2xl font-semibold">Modes de session par période</h2>
+          <h2 className="text-2xl font-semibold">{t("settings.sessionModes", locale)}</h2>
           <p className="text-sm text-white/70">
-            Définissez des plages de dates avec un mode spécifique (Visio ou Présentiel).
+            {t("settings.sessionModesDesc", locale)}
           </p>
         </div>
 
         <form action={createSessionModeAction} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-widest text-white/60">Date de début</label>
+              <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.startDate", locale)}</label>
               <input
                 type="date"
                 name="startDate"
@@ -250,7 +253,7 @@ export default async function AdminSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-widest text-white/60">Date de fin</label>
+              <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.endDate", locale)}</label>
               <input
                 type="date"
                 name="endDate"
@@ -262,17 +265,17 @@ export default async function AdminSettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-widest text-white/60">Mode</label>
+            <label className="text-xs uppercase tracking-widest text-white/60">{t("settings.selectMode", locale)}</label>
             <select name="mode" required className="input">
-              <option value="">Sélectionner un mode</option>
-              <option value="VISIO">En ligne (Visio)</option>
-              <option value="PRESENTIEL">Sur place (Présentiel)</option>
+              <option value="">{t("settings.selectMode", locale)}</option>
+              <option value="VISIO">{t("settings.onlineVisio", locale)}</option>
+              <option value="PRESENTIEL">{t("settings.onSite", locale)}</option>
             </select>
           </div>
 
           <div className="space-y-2">
             <label className="text-xs uppercase tracking-widest text-white/60">
-              Adresse (si présentiel)
+              {t("settings.addressIfPresentiel", locale)}
             </label>
             <input
               type="text"
@@ -283,12 +286,12 @@ export default async function AdminSettingsPage() {
           </div>
 
           <button type="submit" className="btn btn-primary w-full md:w-auto">
-            AJOUTER CETTE PLAGE
+            {t("settings.addRange", locale)}
           </button>
         </form>
 
         <div className="space-y-4">
-          <h3 className="text-xl font-semibold">Plages configurées</h3>
+          <h3 className="text-xl font-semibold">{t("settings.configuredRanges", locale)}</h3>
           {sessionModes.length > 0 ? (
             <div className="space-y-3">
               {sessionModes.map((sessionMode: { id: number; startDate: Date; endDate: Date; mode: string; location: string | null }) => (
@@ -296,14 +299,14 @@ export default async function AdminSettingsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="font-semibold">
-                        Du {new Date(sessionMode.startDate).toLocaleDateString("fr-FR")} au{" "}
-                        {new Date(sessionMode.endDate).toLocaleDateString("fr-FR")}
+                        {t("settings.from", locale)} {new Date(sessionMode.startDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR")} {t("settings.to", locale)}{" "}
+                        {new Date(sessionMode.endDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR")}
                       </p>
                       <p className="text-sm text-white/70">
                         Mode :{" "}
                         {sessionMode.mode === "VISIO"
-                          ? "En ligne (Visio)"
-                          : "Sur place (Présentiel)"}
+                          ? t("settings.onlineVisio", locale)
+                          : t("settings.onSite", locale)}
                       </p>
                       {sessionMode.location ? (
                         <p className="text-sm text-white/50">{sessionMode.location}</p>
@@ -312,7 +315,7 @@ export default async function AdminSettingsPage() {
                     <form action={deleteSessionModeAction}>
                       <input type="hidden" name="id" value={sessionMode.id} />
                       <button type="submit" className="btn-danger touch-target text-sm">
-                        Supprimer
+                        {t("settings.delete", locale)}
                       </button>
                     </form>
                   </div>
@@ -321,7 +324,7 @@ export default async function AdminSettingsPage() {
             </div>
           ) : (
             <p className="text-sm text-white/50">
-              Aucune plage configurée. Le mode par défaut reste appliqué.
+              {t("settings.noRange", locale)}
             </p>
           )}
         </div>
@@ -343,9 +346,13 @@ type RuleRow = {
 function AvailabilityRulesBlock({
   rules,
   location,
+  locale,
+  dayName,
 }: {
   rules: RuleRow[];
   location: "MIAMI" | "BELGIUM";
+  locale: Locale;
+  dayName: (n: number) => string;
 }) {
   const grouped = new Map<number, RuleRow[]>();
   for (const rule of rules) {
@@ -365,7 +372,7 @@ function AvailabilityRulesBlock({
             return (
               <div key={day} className="flex flex-wrap items-center gap-2">
                 <span className="w-24 text-sm font-medium text-white/80">
-                  {DAY_NAMES[day]}
+                  {dayName(day)}
                 </span>
                 {dayRules.map((rule) => (
                   <form
@@ -394,10 +401,10 @@ function AvailabilityRulesBlock({
         </div>
       ) : (
         <p className="text-sm text-white/40">
-          Aucun horaire configuré.{" "}
+          {t("settings.noHours", locale)}{" "}
           {location === "MIAMI"
-            ? "Les horaires par défaut (7h–21h) seront utilisés."
-            : "Les horaires par défaut (9h–19h) seront utilisés."}
+            ? t("settings.miamiDefault", locale)
+            : t("settings.belgiumDefault", locale)}
         </p>
       )}
 
@@ -405,17 +412,17 @@ function AvailabilityRulesBlock({
       <form action={createAvailabilityRuleAction} className="flex flex-wrap items-end gap-3">
         <input type="hidden" name="location" value={location} />
         <div className="space-y-1">
-          <label className="text-xs text-white/50">Jour</label>
+          <label className="text-xs text-white/50">{t("settings.day", locale)}</label>
           <select name="dayOfWeek" className="input py-2 text-sm" required>
             {[1, 2, 3, 4, 5, 6, 7].map((d) => (
               <option key={d} value={d}>
-                {DAY_NAMES[d]}
+                {dayName(d)}
               </option>
             ))}
           </select>
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-white/50">Début</label>
+          <label className="text-xs text-white/50">{t("settings.start", locale)}</label>
           <select name="startTime" className="input py-2 text-sm" required>
             {HOURS.map((h) => (
               <option key={h} value={h}>
@@ -425,7 +432,7 @@ function AvailabilityRulesBlock({
           </select>
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-white/50">Fin</label>
+          <label className="text-xs text-white/50">{t("settings.end", locale)}</label>
           <select name="endTime" className="input py-2 text-sm" required defaultValue="18:00">
             {HOURS.map((h) => (
               <option key={h} value={h}>
@@ -442,7 +449,7 @@ function AvailabilityRulesBlock({
               : "bg-blue-600 hover:bg-blue-700"
           } transition-colors`}
         >
-          + Ajouter
+          {t("settings.addBtn", locale)}
         </button>
       </form>
     </div>

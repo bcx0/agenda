@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { adminRescheduleBookingAction, cancelBookingAction } from "../../actions";
 import { prisma } from "../../../../lib/prisma";
 import { getAdminSession } from "../../../../lib/session";
+import { getServerLocale, t, translateStatus, translateMode } from "../../../../lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ function toDateTimeLocalValue(date: Date) {
 export default async function AdminBookingDetailPage({ params }: PageProps) {
   const session = getAdminSession();
   if (!session) redirect("/admin?error=unauthorized");
+
+  const locale = await getServerLocale();
 
   const bookingId = Number(params.id);
   if (!Number.isFinite(bookingId) || bookingId <= 0) {
@@ -48,52 +51,52 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
           href="/admin/availability?tab=general"
           className="text-sm text-primary underline underline-offset-4 hover:text-primary-light"
         >
-          ← Retour aux disponibilités
+          ← {t("bookingDetail.backToAvailability", locale)}
         </Link>
-        <p className="pill w-fit">Admin</p>
+        <p className="pill w-fit">{t("common.admin", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
-          Modifier le rendez-vous
+          {t("bookingDetail.title", locale)}
         </h1>
       </div>
 
       <div className="card space-y-4 p-6">
         <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-          Informations actuelles
+          {t("bookingDetail.currentInfo", locale)}
         </h2>
         <div className="space-y-2 text-sm">
           <p>
-            <strong>Client :</strong> {booking.client.name}
+            <strong>{t("bookingDetail.client", locale)}</strong> {booking.client.name}
           </p>
           <p className="text-white/70">{booking.client.email}</p>
           <p>
-            <strong>Date :</strong>{" "}
-            {new Date(booking.startAt).toLocaleDateString("fr-FR", {
+            <strong>{t("bookingDetail.date", locale)}</strong>{" "}
+            {new Date(booking.startAt).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", {
               weekday: "long",
               day: "2-digit",
               month: "long",
               year: "numeric"
             })}{" "}
             à{" "}
-            {new Date(booking.startAt).toLocaleTimeString("fr-FR", {
+            {new Date(booking.startAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
               hour: "2-digit",
               minute: "2-digit"
             })}{" "}
             -{" "}
-            {new Date(booking.endAt).toLocaleTimeString("fr-FR", {
+            {new Date(booking.endAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
               hour: "2-digit",
               minute: "2-digit"
             })}{" "}
             Brussels
           </p>
           <p>
-            <strong>Mode :</strong> {booking.mode === "VISIO" ? "Visio" : "Présentiel"}
+            <strong>{t("bookingDetail.mode", locale)}</strong> {translateMode(booking.mode, locale)}
           </p>
           <p>
-            <strong>Statut :</strong> {booking.status === "CONFIRMED" ? "Confirmé" : booking.status === "CANCELLED" ? "Annulé" : booking.status === "NO_SHOW" ? "Absent" : "Terminé"}
+            <strong>{t("bookingDetail.status", locale)}</strong> {translateStatus(booking.status, locale)}
           </p>
           {booking.rescheduleReason ? (
             <p className="text-white/70">
-              <strong>Notes :</strong> {booking.rescheduleReason}
+              <strong>{t("bookingDetail.notes", locale)}</strong> {booking.rescheduleReason}
             </p>
           ) : null}
         </div>
@@ -103,41 +106,41 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
         <>
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
-              Modifier
+              {t("bookingDetail.modify", locale)}
             </h2>
             <form action={adminRescheduleBookingAction} className="space-y-3">
               <input type="hidden" name="bookingId" value={booking.id} />
               <label className="space-y-2 text-sm">
-                <span className="block text-white/60">Nouveau créneau</span>
+                <span className="block text-white/60">{t("bookingDetail.newSlot", locale)}</span>
                 <input type="datetime-local" name="start" className="input" required defaultValue={startInput} />
               </label>
               <label className="space-y-2 text-sm">
-                <span className="block text-white/60">Notes (optionnel)</span>
+                <span className="block text-white/60">{t("bookingDetail.notesOptional", locale)}</span>
                 <input
                   type="text"
                   name="reason"
-                  placeholder="Motif (optionnel)"
+                  placeholder={t("bookingDetail.reason", locale)}
                   className="input"
                   defaultValue={booking.rescheduleReason ?? ""}
                 />
               </label>
               <button type="submit" className="btn btn-primary w-full">
-                Enregistrer les modifications
+                {t("bookingDetail.save", locale)}
               </button>
             </form>
           </div>
 
           <div className="card space-y-4 p-6">
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider text-red-500">
-              Zone de danger
+              {t("bookingDetail.dangerZone", locale)}
             </h2>
             <p className="text-sm text-white/70">
-              Annuler ce rendez-vous rendra le créneau à nouveau disponible.
+              {t("bookingDetail.cancelDesc", locale)}
             </p>
             <form action={cancelBookingAction}>
               <input type="hidden" name="bookingId" value={booking.id} />
               <button type="submit" className="btn-danger">
-                Annuler ce rendez-vous
+                {t("bookingDetail.cancelBooking", locale)}
               </button>
             </form>
           </div>

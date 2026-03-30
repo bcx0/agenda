@@ -285,6 +285,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
             const bookedCount = group ? group.slots.filter((s) => s.status === "booked").length : 0;
             const hasSlots = (group?.slots.length ?? 0) > 0;
             const isPast = key < todayKey;
+            const isBrusselsDay = group?.slots.some(
+              (s) => (s as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM"
+            );
 
             return (
               <button
@@ -307,13 +310,16 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   {day.day}
                 </span>
                 <div className="mt-0.5 h-1.5 flex items-center gap-0.5">
-                  {availableCount > 0 && !isSelected && (
+                  {isBrusselsDay && !isSelected && (
+                    <span className="block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  )}
+                  {availableCount > 0 && !isSelected && !isBrusselsDay && (
                     <span className="block h-1.5 w-1.5 rounded-full bg-[#C8A060]" />
                   )}
                   {bookedCount > 0 && !isSelected && (
                     <span className="block h-1.5 w-1.5 rounded-full bg-green-500" />
                   )}
-                  {hasSlots && availableCount === 0 && bookedCount === 0 && !isSelected && (
+                  {hasSlots && availableCount === 0 && bookedCount === 0 && !isSelected && !isBrusselsDay && (
                     <span className="block h-1.5 w-1.5 rounded-full bg-white/25" />
                   )}
                 </div>
@@ -322,7 +328,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
           })}
         </div>
 
-        <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-border">
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-3 pt-3 border-t border-border">
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-[#C8A060]" />
             <span className="text-[10px] text-white/50">Disponible</span>
@@ -334,6 +340,10 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-white/25" />
             <span className="text-[10px] text-white/50">Bloqué</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="block h-2 w-2 rounded-full bg-amber-500" />
+            <span className="text-[10px] text-white/50">Bruxelles</span>
           </div>
         </div>
       </div>
@@ -357,32 +367,46 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       {/* Slots + Bookings for selected day */}
       {mobileSelectedData.slots.length > 0 ? (
         <div className="space-y-2">
-          {mobileSelectedData.slots.map((slot) => (
-            <div
-              key={slot.start.toISOString()}
-              className={`rounded-xl border px-4 py-3 ${
-                slot.status === "available"
-                  ? "border-[#C8A060]/30 bg-[#0F0F0F]"
-                  : slot.status === "booked"
-                  ? "border-green-800 bg-green-900/10"
-                  : "border-gray-800 bg-[#0F0F0F] opacity-50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">{slot.brussels} (Brussels)</span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+          {mobileSelectedData.slots.map((slot) => {
+            const slotActiveLocation = (slot as SlotView & { activeLocation?: string }).activeLocation;
+            const isBrusselsSlot = slotActiveLocation === "BELGIUM";
+            return (
+              <div
+                key={slot.start.toISOString()}
+                className={`rounded-xl border px-4 py-3 ${
+                  isBrusselsSlot ? "border-l-4 border-l-amber-500 " : ""
+                }${
                   slot.status === "available"
-                    ? "bg-[#C8A060] text-black"
+                    ? isBrusselsSlot
+                      ? "border-amber-500/30 bg-amber-500/5"
+                      : "border-[#C8A060]/30 bg-[#0F0F0F]"
                     : slot.status === "booked"
-                    ? "bg-green-900/30 text-green-400"
-                    : "bg-white/10 text-white/60"
-                }`}>
-                  {slot.status === "available" ? "Disponible" : slot.status === "booked" ? "Réservé" : "Bloqué"}
-                </span>
+                    ? "border-green-800 bg-green-900/10"
+                    : "border-gray-800 bg-[#0F0F0F] opacity-50"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">{slot.brussels} (Brussels)</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    slot.status === "available"
+                      ? "bg-[#C8A060] text-black"
+                      : slot.status === "booked"
+                      ? "bg-green-900/30 text-green-400"
+                      : "bg-white/10 text-white/60"
+                  }`}>
+                    {slot.status === "available" ? "Disponible" : slot.status === "booked" ? "Réservé" : "Bloqué"}
+                  </span>
+                </div>
+                <div className="text-xs text-white/60">{slot.miami} (Miami)</div>
+                {isBrusselsSlot && (
+                  <div className="mt-1 flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                    <span className="text-[11px] font-medium text-amber-400">Bruxelles</span>
+                  </div>
+                )}
               </div>
-              <div className="text-xs text-white/60">{slot.miami} (Miami)</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-[#0F0F0F] px-4 py-6 text-center text-sm text-white/40">

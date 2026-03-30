@@ -468,22 +468,25 @@ export async function createAvailabilityRuleAction(formData: FormData) {
   const dayOfWeek = Number(formData.get("dayOfWeek"));
   const startTime = formData.get("startTime")?.toString() ?? "";
   const endTime = formData.get("endTime")?.toString() ?? "";
+  const location = formData.get("location")?.toString() ?? "MIAMI";
   if (!dayOfWeek || !startTime || !endTime) {
-    redirect("/admin/availability?error=Champs%20invalides");
+    redirect("/admin/settings?error=Champs%20invalides");
   }
-  assertValidTimeRange(startTime, endTime, "/admin/availability");
-  await createAvailabilityRule(dayOfWeek, startTime, endTime);
+  assertValidTimeRange(startTime, endTime, "/admin/settings");
+  await createAvailabilityRule(dayOfWeek, startTime, endTime, location);
+  revalidatePath("/admin/settings");
   revalidatePath("/admin/availability");
-  redirect("/admin/availability?success=Regle%20hebdo%20ajoutee");
+  redirect("/admin/settings?success=Regle%20hebdo%20ajoutee");
 }
 
 export async function deleteAvailabilityRuleAction(formData: FormData) {
   assertAdmin();
   const ruleId = Number(formData.get("ruleId"));
-  if (!ruleId) redirect("/admin/availability?error=Règle%20introuvable");
+  if (!ruleId) redirect("/admin/settings?error=Règle%20introuvable");
   await deleteAvailabilityRule(ruleId);
+  revalidatePath("/admin/settings");
   revalidatePath("/admin/availability");
-  redirect("/admin/availability?success=Regle%20hebdo%20supprimee");
+  redirect("/admin/settings?success=Regle%20hebdo%20supprimee");
 }
 
 export async function createAvailabilityOverrideAction(formData: FormData) {
@@ -994,4 +997,58 @@ export async function deleteSessionModeAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/book");
   redirect("/admin/settings?success=Plage%20supprimee");
+}
+
+// ── Location Period actions ─────────────────────────────────
+
+export async function createLocationPeriodAction(formData: FormData) {
+  assertAdmin();
+
+  const startDateStr = formData.get("startDate")?.toString() ?? "";
+  const endDateStr = formData.get("endDate")?.toString() ?? "";
+  const note = formData.get("note")?.toString().trim() || null;
+
+  if (!startDateStr || !endDateStr) {
+    redirect("/admin/settings?error=Dates%20requises");
+  }
+
+  const startDate = DateTime.fromISO(startDateStr, { zone: BRUSSELS_TZ }).startOf("day");
+  const endDate = DateTime.fromISO(endDateStr, { zone: BRUSSELS_TZ }).endOf("day");
+
+  if (!startDate.isValid || !endDate.isValid) {
+    redirect("/admin/settings?error=Date%20invalide");
+  }
+
+  if (endDate < startDate) {
+    redirect("/admin/settings?error=La%20date%20de%20fin%20doit%20être%20après%20le%20début");
+  }
+
+  await prisma.locationPeriod.create({
+    data: {
+      startDate: startDate.toUTC().toJSDate(),
+      endDate: endDate.toUTC().toJSDate(),
+      note
+    }
+  });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/availability");
+  revalidatePath("/book");
+  redirect("/admin/settings?success=Période%20Bruxelles%20ajoutée");
+}
+
+export async function deleteLocationPeriodAction(formData: FormData) {
+  assertAdmin();
+
+  const id = Number(formData.get("id"));
+  if (!id) {
+    redirect("/admin/settings?error=Période%20introuvable");
+  }
+
+  await prisma.locationPeriod.delete({ where: { id } });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/availability");
+  revalidatePath("/book");
+  redirect("/admin/settings?success=Période%20Bruxelles%20supprimée");
 }

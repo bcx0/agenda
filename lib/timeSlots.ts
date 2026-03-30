@@ -9,6 +9,7 @@ export type TimeSlot = {
   timezone: "Brussels" | "Miami";
   mode: "ONLINE" | "ONSITE";
   location: "MIAMI" | "BELGIUM";
+  activeLocation: "MIAMI" | "BELGIUM";
   isAvailable: boolean;
   bookingId?: number;
   start: Date;
@@ -42,6 +43,7 @@ export async function getAvailableTimeSlots(date?: Date, _prisma?: unknown): Pro
         timezone: "Brussels" as const,
         mode,
         location: slot.location,
+        activeLocation: slot.activeLocation,
         isAvailable: slot.status === "available",
         bookingId: undefined,
         start: slot.start,

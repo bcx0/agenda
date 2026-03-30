@@ -54,6 +54,7 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose 
                 miami={slot.miami}
                 mode={slot.mode as any}
                 location={slot.location as any}
+                activeLocation={(slot as SlotView & { activeLocation?: "MIAMI" | "BELGIUM" }).activeLocation}
                 presentielLocation={slot.presentielLocation}
                 presentielNote={slot.presentielNote}
                 status={slot.status}

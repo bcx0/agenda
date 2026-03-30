@@ -58,10 +58,11 @@ export async function listAvailabilityRules() {
 export async function createAvailabilityRule(
   dayOfWeek: number,
   startTime: string,
-  endTime: string
+  endTime: string,
+  location: string = "MIAMI"
 ) {
   return prisma.availabilityRule.create({
-    data: { dayOfWeek, startTime, endTime }
+    data: { dayOfWeek, startTime, endTime, location }
   });
 }
 

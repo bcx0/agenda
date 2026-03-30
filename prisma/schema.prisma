@@ -66,6 +66,15 @@ model AvailabilityRule {
   dayOfWeek Int
   startTime String
   endTime   String
+  location  String   @default("MIAMI") // "MIAMI" | "BELGIUM"
+  createdAt DateTime @default(now())
+}
+
+model LocationPeriod {
+  id        Int      @id @default(autoincrement())
+  startDate DateTime
+  endDate   DateTime
+  note      String?
   createdAt DateTime @default(now())
 }
 

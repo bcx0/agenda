@@ -12,6 +12,7 @@ type Props = {
   miami: string;
   mode?: "VISIO" | "PRESENTIEL";
   location?: "MIAMI" | "BELGIUM";
+  activeLocation?: "MIAMI" | "BELGIUM";
   presentielLocation?: string;
   presentielNote?: string | null;
   status: SlotStatus;
@@ -24,11 +25,13 @@ function SlotButtonComponent({
   miami,
   mode = "VISIO",
   location = "MIAMI",
+  activeLocation = "MIAMI",
   presentielLocation,
   presentielNote,
   status,
   quotaReached = false
 }: Props) {
+  const isBrussels = activeLocation === "BELGIUM";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,10 +101,13 @@ function SlotButtonComponent({
         disabled={disabled}
         className={clsx(
           "w-full rounded-xl border px-4 py-4 text-left transition-all duration-200 focus:outline-none focus:ring-2",
+          isBrussels && "border-l-4 border-l-amber-500",
           disabled
             ? "cursor-not-allowed border-gray-800 bg-[#0F0F0F] text-white/30 opacity-50"
             : confirming
             ? "border-green-500 bg-green-500/10 text-white ring-1 ring-green-500/30 scale-[1.02]"
+            : isBrussels
+            ? "border-amber-500/30 bg-amber-500/5 text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/20 hover:border-amber-500 hover:bg-amber-500/10 focus:ring-amber-500/30"
             : "border-gray-800 bg-[#0F0F0F] text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#C8A060]/20 hover:border-[#C8A060] hover:bg-[#C8A060]/10 focus:ring-[#C8A060]/30"
         )}
       >
@@ -143,6 +149,12 @@ function SlotButtonComponent({
                   : "Visio"}
               </span>
             </div>
+            {isBrussels && (
+              <div className="mt-1 flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                <span className="text-[11px] font-medium text-amber-400">Bruxelles</span>
+              </div>
+            )}
             {mode === "PRESENTIEL" && presentielNote ? (
               <div className="mt-1 text-[11px] text-white/60">{presentielNote}</div>
             ) : null}

@@ -94,7 +94,7 @@ export default function ClientsList({
                 min={1}
                 name="creditsPerMonth"
                 inputMode="numeric"
-                placeholder="Crédits/mois"
+                placeholder="RDV/mois"
                 required
                 className="input p-4 text-base"
                 defaultValue={addFormDefaults?.creditsPerMonth ?? ""}
@@ -165,7 +165,7 @@ export default function ClientsList({
                     </span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-[#C8A060]">
-                    {client.usedThisMonth}/{client.creditsPerMonth} crédits
+                    {client.usedThisMonth}/{client.creditsPerMonth} RDV
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <form action={toggleClientAction}>
@@ -224,7 +224,7 @@ export default function ClientsList({
                   </div>
 
                   <div className="mt-2 text-white/70">
-                    {client.usedThisMonth}/{client.creditsPerMonth} crédits utilisés ce mois-ci
+                    {client.usedThisMonth}/{client.creditsPerMonth} RDV utilisés ce mois-ci
                   </div>
 
                   <div className="mt-2">

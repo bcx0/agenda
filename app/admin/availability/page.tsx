@@ -260,7 +260,7 @@ export default async function AdminAvailabilityPage({
                     const remaining = Math.max(client.creditsPerMonth - used, 0);
                     return (
                       <option key={client.id} value={client.id}>
-                        {client.name} ({remaining} credits restants)
+                        {client.name} ({remaining} RDV restants)
                       </option>
                     );
                   })}

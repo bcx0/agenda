@@ -1,11 +1,10 @@
 export const runtime = "nodejs";
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { adminRescheduleBookingAction, cancelBookingAction } from "../actions";
 import { listUpcomingBookingsThisMonth } from "../../../lib/admin";
 import { getAdminSession } from "../../../lib/session";
+import BookingsList from "./BookingsList";
 
 export const dynamic = "force-dynamic";
 
@@ -34,18 +33,28 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
     ? `${appUrl}/api/calendar/feed?token=${encodeURIComponent(feedToken)}`
     : `${appUrl}/api/calendar/feed`;
 
+  const serializedBookings = bookings.map((b) => ({
+    id: b.id,
+    startAt: new Date(b.startAt).toISOString(),
+    status: b.status,
+    mode: b.mode,
+    cancelReason: b.cancelReason,
+    googleEventId: b.googleEventId,
+    client: { id: b.client.id, name: b.client.name, email: b.client.email },
+  }));
+
   return (
     <section className="space-y-6">
       <div className="space-y-2">
         <p className="pill w-fit">Admin</p>
-        <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">Bookings</h1>
+        <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
+          Rendez-vous
+        </h1>
         <p className="text-sm text-white/70">
           Tous les rendez-vous à venir sont affichés. L&apos;admin peut modifier
           ou annuler même à moins de 72h.
         </p>
       </div>
-
-      {errorMessage && <div className="alert-error">{errorMessage}</div>}
 
       <div className="card space-y-4 p-6">
         <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
@@ -65,139 +74,7 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
         </div>
       </div>
 
-      {bookings.length === 0 ? <p className="text-white/50">Aucune réservation.</p> : null}
-
-      <div className="space-y-4 md:hidden">
-        {bookings.map((booking) => (
-          <article key={booking.id} className="card p-5">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <h3 className="text-base font-semibold">{booking.client.name}</h3>
-                <p className="mt-1 truncate text-sm text-white/60">{booking.client.email}</p>
-                <p className="mt-2 text-sm font-medium text-white/80">
-                  {new Date(booking.startAt).toLocaleDateString("fr-FR", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short"
-                  })}
-                  {" à "}
-                  {new Date(booking.startAt).toLocaleTimeString("fr-FR", {
-                    hour: "2-digit",
-                    minute: "2-digit"
-                  })}
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <span
-                  className={
-                    booking.status === "CONFIRMED"
-                      ? "status-confirmed"
-                      : booking.status === "CANCELLED"
-                      ? "status-cancelled"
-                      : booking.status === "NO_SHOW"
-                      ? "status-noshow"
-                      : "status-done"
-                  }
-                >
-                  {booking.status}
-                </span>
-                {booking.googleEventId ? (
-                  <span className="pill text-[11px]">via Google</span>
-                ) : null}
-              </div>
-            </div>
-            <Link
-              href={`/admin/bookings/${booking.id}`}
-              className="btn-secondary touch-target block w-full text-center"
-            >
-              Voir les détails
-            </Link>
-          </article>
-        ))}
-      </div>
-
-      <div className="hidden space-y-4 md:block">
-        {bookings.map((booking) => (
-          <div key={booking.id} className="card-gm">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold">{booking.client.name}</p>
-                <p className="text-sm text-white/70">{booking.client.email}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={
-                    booking.status === "CONFIRMED"
-                      ? "status-confirmed"
-                      : booking.status === "CANCELLED"
-                      ? "status-cancelled"
-                      : booking.status === "NO_SHOW"
-                      ? "status-noshow"
-                      : "status-done"
-                  }
-                >
-                  {booking.status}
-                </span>
-                {booking.googleEventId ? (
-                  <span className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white">
-                    via Google
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="space-y-1 text-sm">
-              <p>
-                <strong>Date:</strong>{" "}
-                {new Date(booking.startAt).toLocaleDateString("fr-FR", {
-                  weekday: "long",
-                  day: "2-digit",
-                  month: "long",
-                  year: "numeric"
-                })}{" "}
-                à{" "}
-                {new Date(booking.startAt).toLocaleTimeString("fr-FR", {
-                  hour: "2-digit",
-                  minute: "2-digit"
-                })}{" "}
-                Brussels
-              </p>
-              <p>
-                <strong>Mode:</strong> {booking.mode}
-              </p>
-              {booking.cancelReason && (
-                <p>
-                  <strong>Raison annulation:</strong> {booking.cancelReason}
-                </p>
-              )}
-            </div>
-
-            {booking.status === "CONFIRMED" ? (
-              <div className="grid gap-2 pt-2 md:grid-cols-[1fr_auto] md:items-end">
-                <form action={adminRescheduleBookingAction} className="grid gap-2 md:grid-cols-3">
-                  <input type="hidden" name="bookingId" value={booking.id} />
-                  <input type="datetime-local" name="start" className="input" required />
-                  <input
-                    type="text"
-                    name="reason"
-                    placeholder="Motif (optionnel)"
-                    className="input md:col-span-2"
-                  />
-                  <button type="submit" className="btn-secondary touch-target text-sm md:col-span-3">
-                    Modifier
-                  </button>
-                </form>
-                <form action={cancelBookingAction}>
-                  <input type="hidden" name="bookingId" value={booking.id} />
-                  <button type="submit" className="btn-danger touch-target w-full text-sm">
-                    Annuler
-                  </button>
-                </form>
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      <BookingsList bookings={serializedBookings} errorMessage={errorMessage} />
     </section>
   );
 }

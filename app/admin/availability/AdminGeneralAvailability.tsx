@@ -471,81 +471,123 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         )}
 
         {view === "week" && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setWeekStart(weekStart.minus({ weeks: 1 }))}
-                className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-white/70 hover:bg-white/5 transition"
               >
-                {"<"}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
               <div className="text-lg font-semibold flex-1 text-center">
-                {weekStart.setLocale("fr").toFormat("dd LLL")} -{" "}
-                {weekStart.plus({ days: 6 }).setLocale("fr").toFormat("dd LLL")}
+                {weekStart.setLocale("fr").toFormat("dd LLL")} – {weekStart.plus({ days: 6 }).setLocale("fr").toFormat("dd LLL yyyy")}
               </div>
               <button
                 type="button"
                 onClick={() => setWeekStart(weekStart.plus({ weeks: 1 }))}
-                className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-white/70 hover:bg-white/5 transition"
               >
-                {">"}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
               <button
                 type="button"
                 onClick={() =>
                   setWeekStart(DateTime.now().setZone(MIAMI_TZ).startOf("week").plus({ days: 1 }))
                 }
-                className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+                className="rounded-full border border-border px-4 py-2 text-sm text-white/70 hover:bg-white/5 transition"
               >
                 Aujourd&apos;hui
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
-              {Array.from({ length: 7 }, (_, i) => i).map((i) => {
-                const day = weekStart.plus({ days: i });
-                const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
-                const slotsForDay = [...(dayMap.get(key)?.slots ?? [])].sort(
-                  (a, b) => a.start.getTime() - b.start.getTime()
-                );
-                const label = `${dayNames[i]} ${day.setLocale("fr").toFormat("dd MMM")}`;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => openDay(day)}
-                    className="space-y-2 rounded-xl border border-border bg-background-elevated p-3 text-left"
-                  >
-                    <div className="flex items-center justify-between text-sm font-semibold text-white">
-                      <span>{label}</span>
-                    </div>
-                    {slotsForDay.length === 0 ? (
-                      <div className="text-xs text-white/50">Aucun créneau</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {slotsForDay.map((slot) => {
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-7 gap-px min-w-[900px] rounded-xl border border-border overflow-hidden bg-border">
+                {/* Day headers */}
+                {Array.from({ length: 7 }, (_, i) => i).map((i) => {
+                  const day = weekStart.plus({ days: i });
+                  const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
+                  const isToday = key === (DateTime.now().setZone(MIAMI_TZ).toISODate() ?? "");
+                  const daySlots = dayMap.get(key)?.slots ?? [];
+                  const availCount = daySlots.filter((s: SlotView) => s.status === "available").length;
+                  const bookedCount = daySlots.filter((s: SlotView) => s.status === "booked").length;
+                  const hasBrussels = daySlots.some((s: SlotView) => (s as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM");
+                  return (
+                    <button
+                      key={`header-${key}`}
+                      type="button"
+                      onClick={() => openDay(day)}
+                      className={`bg-[#0F0F0F] px-3 py-3 text-center transition hover:bg-white/5 ${isToday ? "bg-[#C8A060]/10" : ""}`}
+                    >
+                      <div className="text-[11px] uppercase tracking-widest text-white/40">{dayNames[i]}</div>
+                      <div className={`text-lg font-semibold ${isToday ? "text-[#C8A060]" : "text-white"}`}>{day.day}</div>
+                      <div className="mt-1 flex items-center justify-center gap-1.5">
+                        {availCount > 0 && (
+                          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${hasBrussels ? "bg-blue-500/20 text-blue-400" : "bg-[#C8A060]/20 text-[#C8A060]"}`}>
+                            {availCount}
+                          </span>
+                        )}
+                        {bookedCount > 0 && (
+                          <span className="rounded-full bg-green-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-green-400">
+                            {bookedCount}
+                          </span>
+                        )}
+                        {availCount === 0 && bookedCount === 0 && (
+                          <span className="text-[10px] text-white/20">—</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+                {/* Slot rows */}
+                {Array.from({ length: 7 }, (_, i) => i).map((i) => {
+                  const day = weekStart.plus({ days: i });
+                  const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
+                  const slotsForDay = [...(dayMap.get(key)?.slots ?? [])].sort(
+                    (a, b) => a.start.getTime() - b.start.getTime()
+                  );
+                  return (
+                    <div key={`slots-${key}`} className="bg-[#0A0A0A] p-2 space-y-1 min-h-[200px]">
+                      {slotsForDay.length === 0 ? (
+                        <div className="flex h-full items-center justify-center text-[11px] text-white/20">
+                          Aucun créneau
+                        </div>
+                      ) : (
+                        slotsForDay.map((slot) => {
                           const isSlotBrussels = (slot as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM";
+                          const isAvailable = slot.status === "available";
+                          const isBooked = slot.status === "booked";
                           return (
-                            <div
+                            <button
                               key={slot.start.toISOString()}
-                              className={`rounded-xl border px-3 py-2 text-xs ${isSlotBrussels ? "border-l-2 border-l-blue-500 border-blue-500/30" : "border-border"}`}
+                              type="button"
+                              onClick={() => openDay(day)}
+                              className={`w-full rounded-lg px-2 py-1.5 text-left transition ${
+                                isBooked
+                                  ? "bg-green-500/10 border border-green-500/20 hover:bg-green-500/20"
+                                  : isAvailable
+                                  ? isSlotBrussels
+                                    ? "bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20"
+                                    : "bg-[#C8A060]/10 border border-[#C8A060]/20 hover:bg-[#C8A060]/20"
+                                  : "bg-white/5 border border-white/5 opacity-40"
+                              }`}
                             >
                               <div className="flex items-center justify-between">
-                                <span>{isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}</span>
-                                <span className="text-[10px] uppercase tracking-widest text-white/40">
-                                  {slot.status}
+                                <span className="text-[11px] font-semibold text-white">
+                                  {isSlotBrussels ? slot.brussels : slot.miami}
                                 </span>
+                                <span className={`h-1.5 w-1.5 rounded-full ${
+                                  isBooked ? "bg-green-400" : isAvailable ? isSlotBrussels ? "bg-blue-400" : "bg-[#C8A060]" : "bg-white/20"
+                                }`} />
                               </div>
-                              <div className="text-white/60">{isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}</div>
-                            </div>
+                            </button>
                           );
-                        })}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+                        })
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -578,7 +620,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                         <div className="flex items-center justify-between">
                           <span>{isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}</span>
                           <span className="text-[10px] uppercase tracking-widest text-white/40">
-                            {slot.status}
+                            {slot.status === "available" ? "Dispo" : slot.status === "booked" ? "Réservé" : "Bloqué"}
                           </span>
                         </div>
                         <div className="text-white/60">{isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}</div>

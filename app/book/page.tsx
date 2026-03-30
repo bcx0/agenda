@@ -109,10 +109,10 @@ export default async function BookPage({
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-base uppercase tracking-widest text-white/60">
-                  Vos credits mensuels
+                  Vos RDV mensuels
                 </div>
                 <div className="text-base font-semibold text-white">
-                  {quota.creditsUsedThisMonth}/{quota.creditsPerMonth} utilises ce mois-ci
+                  {quota.creditsUsedThisMonth}/{quota.creditsPerMonth} utilisés ce mois-ci
                 </div>
               </div>
               <form action={logoutAction} className="self-start">
@@ -125,7 +125,7 @@ export default async function BookPage({
               </form>
             </div>
             <p className="text-xs text-white/60">
-              Les credits sont bloques apres le quota mensuel. Pour un besoin exceptionnel, contactez Geoffrey.
+              Les RDV sont bloqués après le quota mensuel. Pour un besoin exceptionnel, contactez Geoffrey.
             </p>
             <Link
               href="/manage"

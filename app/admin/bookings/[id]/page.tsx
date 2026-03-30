@@ -62,11 +62,11 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
         </h2>
         <div className="space-y-2 text-sm">
           <p>
-            <strong>Client:</strong> {booking.client.name}
+            <strong>Client :</strong> {booking.client.name}
           </p>
           <p className="text-white/70">{booking.client.email}</p>
           <p>
-            <strong>Date:</strong>{" "}
+            <strong>Date :</strong>{" "}
             {new Date(booking.startAt).toLocaleDateString("fr-FR", {
               weekday: "long",
               day: "2-digit",
@@ -86,14 +86,14 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
             Brussels
           </p>
           <p>
-            <strong>Mode:</strong> {booking.mode}
+            <strong>Mode :</strong> {booking.mode === "VISIO" ? "Visio" : "Présentiel"}
           </p>
           <p>
-            <strong>Statut:</strong> {booking.status}
+            <strong>Statut :</strong> {booking.status === "CONFIRMED" ? "Confirmé" : booking.status === "CANCELLED" ? "Annulé" : booking.status === "NO_SHOW" ? "Absent" : "Terminé"}
           </p>
           {booking.rescheduleReason ? (
             <p className="text-white/70">
-              <strong>Notes:</strong> {booking.rescheduleReason}
+              <strong>Notes :</strong> {booking.rescheduleReason}
             </p>
           ) : null}
         </div>

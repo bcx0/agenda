@@ -97,7 +97,7 @@ export default async function ClientBookingsPage({ params }: Props) {
                   <span
                     className={`rounded px-3 py-1 text-xs font-semibold text-white ${getStatusClasses(booking.status)}`}
                   >
-                    {booking.status}
+                    {booking.status === "CONFIRMED" ? "Confirmé" : booking.status === "CANCELLED" ? "Annulé" : booking.status === "NO_SHOW" ? "Absent" : "Terminé"}
                   </span>
                   <Link
                     href={`/admin/bookings/${booking.id}`}

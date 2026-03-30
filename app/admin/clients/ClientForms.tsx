@@ -69,7 +69,7 @@ export function AddClientForm({ action }: { action: Action }) {
           type="number"
           min={1}
           name="creditsPerMonth"
-          placeholder="Crédits/mois"
+          placeholder="RDV/mois"
           required
           className="input"
         />

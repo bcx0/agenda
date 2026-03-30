@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "../../lib/session";
 import { adminLoginAction, adminLogoutAction } from "./actions";
-import { countCancelledBookings, listClients, listUpcomingBookingsThisMonth } from "../../lib/admin";
+import { listClients, listUpcomingBookingsThisMonth } from "../../lib/admin";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
 import { prisma } from "../../lib/prisma";
 
@@ -58,11 +58,10 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
   const now = new Date();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  const [clients, bookings, cancelledCount, thisMonthUpcomingBookings, recurringBlocks] =
+  const [clients, bookings, thisMonthUpcomingBookings, recurringBlocks] =
     await Promise.all([
       listClients(),
       listUpcomingBookingsThisMonth(),
-      countCancelledBookings(),
       prisma.booking.count({
         where: {
           status: "CONFIRMED",
@@ -102,10 +101,9 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
         </form>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <StatCard label="Clients actifs" value={clients.filter((c) => c.isActive).length} />
         <StatCard label="Rendez-vous" value={totalRdv} />
-        <StatCard label="Annulés" value={cancelledCount} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -128,7 +126,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
                   <div className="flex items-center justify-between">
                     <div className="font-semibold">{b.client.name}</div>
                     <span className="rounded-full bg-background-elevated/5 px-2 py-1 text-[11px] text-white/60">
-                      {b.status}
+                      {b.status === "CONFIRMED" ? "Confirmé" : b.status === "CANCELLED" ? "Annulé" : b.status === "NO_SHOW" ? "Absent" : "Terminé"}
                     </span>
                   </div>
                   <div className="text-white/70">

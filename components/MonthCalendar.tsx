@@ -5,6 +5,8 @@ import { DateTime } from "luxon";
 import type { SlotView } from "../lib/booking";
 import { MIAMI_TZ } from "../lib/time";
 
+type SlotWithLocation = SlotView & { activeLocation?: "MIAMI" | "BELGIUM" };
+
 type Props = {
   month: DateTime;
   daySlots: Map<string, SlotView[]>;
@@ -93,6 +95,9 @@ function MonthCalendarComponent({
           const isCurrentMonth = day.month === month.month;
           const isToday = key === todayKey;
           const isSelected = selectedDayKey === key;
+          const isBrusselsDay = slots.some(
+            (s) => (s as SlotWithLocation).activeLocation === "BELGIUM"
+          );
           const statusLabel =
             availableCount > 0
               ? availableCount === 1
@@ -113,7 +118,9 @@ function MonthCalendarComponent({
               onClick={() => onSelectDay(day)}
               className={`min-h-[100px] rounded-xl px-3 py-3 text-left transition ${
                 isSelectable
-                  ? "bg-[#0F0F0F] border-4 border-[#C8A060] text-white font-semibold hover:border-[#E8D7BE] hover:bg-[#1A1A1A]"
+                  ? isBrusselsDay
+                    ? "bg-[#0A0F1A] border-4 border-blue-500 text-white font-semibold hover:border-blue-400 hover:bg-[#0F1520]"
+                    : "bg-[#0F0F0F] border-4 border-[#C8A060] text-white font-semibold hover:border-[#E8D7BE] hover:bg-[#1A1A1A]"
                   : "bg-[#0F0F0F] border-4 border-gray-700 text-white/30 opacity-40 cursor-not-allowed"
               } ${isToday || isSelected ? "ring-2 ring-white" : ""}`}
               aria-label={`Selectionner le ${day.toFormat("dd LLLL")}`}
@@ -131,7 +138,9 @@ function MonthCalendarComponent({
                 <span
                   className={`inline-flex rounded-full px-2 py-1 text-[11px] ${
                     availableCount > 0
-                      ? "bg-[#C8A060] text-black"
+                      ? isBrusselsDay
+                        ? "bg-blue-500 text-white"
+                        : "bg-[#C8A060] text-black"
                       : "bg-white/10 text-white/60"
                   }`}
                 >
@@ -141,6 +150,22 @@ function MonthCalendarComponent({
             </button>
           );
         })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center justify-center gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-2">
+        <span className="flex items-center gap-2 text-xs text-white/60">
+          <span className="inline-block h-3 w-6 rounded border-2 border-[#C8A060]" />
+          Miami
+        </span>
+        <span className="flex items-center gap-2 text-xs text-white/60">
+          <span className="inline-block h-3 w-6 rounded border-2 border-blue-500" />
+          Belgique
+        </span>
+        <span className="flex items-center gap-2 text-xs text-white/60">
+          <span className="inline-block h-3 w-6 rounded border-2 border-gray-700" />
+          Indisponible
+        </span>
       </div>
     </div>
   );

@@ -97,9 +97,9 @@ export default async function AdminSettingsPage() {
       {/* ── Horaires Miami ─────────────────────────────────── */}
       <div className="card space-y-4 p-6">
         <div className="flex items-center gap-3">
-          <div className="h-3 w-3 rounded-full bg-blue-500" />
+          <div className="h-3 w-3 rounded-full bg-[#C8A060]" />
           <div>
-            <div className="text-xs uppercase tracking-widest text-blue-400">
+            <div className="text-xs uppercase tracking-widest text-[#C8A060]">
               Base — Miami ({MIAMI_TZ})
             </div>
             <div className="text-lg font-semibold">Horaires par jour de la semaine</div>
@@ -109,13 +109,13 @@ export default async function AdminSettingsPage() {
         <AvailabilityRulesBlock rules={miamiRules} location="MIAMI" />
       </div>
 
-      {/* ── Horaires Bruxelles ─────────────────────────────── */}
+      {/* ── Horaires Belgique ─────────────────────────────── */}
       <div className="card space-y-4 p-6">
         <div className="flex items-center gap-3">
-          <div className="h-3 w-3 rounded-full bg-amber-500" />
+          <div className="h-3 w-3 rounded-full bg-blue-500" />
           <div>
-            <div className="text-xs uppercase tracking-widest text-amber-400">
-              Bruxelles ({BRUSSELS_TZ})
+            <div className="text-xs uppercase tracking-widest text-blue-400">
+              Belgique ({BRUSSELS_TZ})
             </div>
             <div className="text-lg font-semibold">Horaires par jour de la semaine</div>
           </div>
@@ -124,17 +124,17 @@ export default async function AdminSettingsPage() {
         <AvailabilityRulesBlock rules={brusselsRules} location="BELGIUM" />
       </div>
 
-      {/* ── Périodes Bruxelles ─────────────────────────────── */}
-      <div className="card space-y-4 p-6 border border-amber-500/30">
+      {/* ── Périodes Belgique ──────────────────────────────── */}
+      <div className="card space-y-4 p-6 border border-blue-500/30">
         <div>
-          <div className="text-xs uppercase tracking-widest text-amber-400">
-            Séjours à Bruxelles
+          <div className="text-xs uppercase tracking-widest text-blue-400">
+            Séjours en Belgique
           </div>
           <div className="text-lg font-semibold">
-            Quand Geoffrey est à Bruxelles
+            Quand Geoffrey est en Belgique
           </div>
           <p className="text-sm text-white/60 mt-1">
-            Pendant ces périodes, les horaires Bruxelles remplacent les horaires Miami.
+            Pendant ces périodes, les horaires Belgique remplacent les horaires Miami.
             Les créneaux Miami disparaissent pour les clients.
           </p>
         </div>
@@ -184,7 +184,7 @@ export default async function AdminSettingsPage() {
                   key={period.id}
                   className={`flex items-center justify-between gap-3 rounded-lg border p-4 ${
                     isActive
-                      ? "border-amber-500/50 bg-amber-500/10"
+                      ? "border-blue-500/50 bg-blue-500/10"
                       : "border-white/10 bg-white/5"
                   }`}
                 >
@@ -192,7 +192,7 @@ export default async function AdminSettingsPage() {
                     <p className="font-semibold">
                       {start} → {end}
                       {isActive && (
-                        <span className="ml-2 inline-block rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-black">
+                        <span className="ml-2 inline-block rounded bg-blue-500 px-2 py-0.5 text-xs font-bold text-white">
                           EN COURS
                         </span>
                       )}
@@ -378,8 +378,8 @@ function AvailabilityRulesBlock({
                       type="submit"
                       className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm ${
                         location === "MIAMI"
-                          ? "bg-blue-500/20 text-blue-300 hover:bg-red-500/30 hover:text-red-300"
-                          : "bg-amber-500/20 text-amber-300 hover:bg-red-500/30 hover:text-red-300"
+                          ? "bg-[#C8A060]/20 text-[#C8A060] hover:bg-red-500/30 hover:text-red-300"
+                          : "bg-blue-500/20 text-blue-300 hover:bg-red-500/30 hover:text-red-300"
                       } transition-colors`}
                       title="Cliquer pour supprimer"
                     >
@@ -438,8 +438,8 @@ function AvailabilityRulesBlock({
           type="submit"
           className={`rounded-lg px-4 py-2 text-sm font-semibold ${
             location === "MIAMI"
-              ? "bg-blue-600 hover:bg-blue-700"
-              : "bg-amber-600 hover:bg-amber-700"
+              ? "bg-[#C8A060] text-black hover:bg-[#B8904F]"
+              : "bg-blue-600 hover:bg-blue-700"
           } transition-colors`}
         >
           + Ajouter

@@ -73,5 +73,5 @@ export function convertBrusselsToMiami(brusselsTime: string, referenceDate = new
 
 export function formatTimeSlot(slot: Pick<TimeSlot, "startTime" | "date">): string {
   const miamiTime = convertBrusselsToMiami(slot.startTime, slot.date);
-  return `${slot.startTime} (Brussels) / ${miamiTime} (Miami)`;
+  return `${slot.startTime} Brussels / ${miamiTime} Miami`;
 }

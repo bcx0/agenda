@@ -132,7 +132,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
                     </span>
                   </div>
                   <div className="text-white/70">
-                    {formatInZone(b.startAt, "dd LLL yyyy HH:mm", BRUSSELS_TZ)} (Brussels)
+                    {formatInZone(b.startAt, "dd LLL yyyy HH:mm", BRUSSELS_TZ)} Brussels
                   </div>
                 </div>
               ))

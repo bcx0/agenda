@@ -311,7 +311,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 </span>
                 <div className="mt-0.5 h-1.5 flex items-center gap-0.5">
                   {isBrusselsDay && !isSelected && (
-                    <span className="block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <span className="block h-1.5 w-1.5 rounded-full bg-blue-500" />
                   )}
                   {availableCount > 0 && !isSelected && !isBrusselsDay && (
                     <span className="block h-1.5 w-1.5 rounded-full bg-[#C8A060]" />
@@ -342,8 +342,8 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
             <span className="text-[10px] text-white/50">Bloqué</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="block h-2 w-2 rounded-full bg-amber-500" />
-            <span className="text-[10px] text-white/50">Bruxelles</span>
+            <span className="block h-2 w-2 rounded-full bg-blue-500" />
+            <span className="text-[10px] text-white/50">Belgique</span>
           </div>
         </div>
       </div>
@@ -374,11 +374,11 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               <div
                 key={slot.start.toISOString()}
                 className={`rounded-xl border px-4 py-3 ${
-                  isBrusselsSlot ? "border-l-4 border-l-amber-500 " : ""
+                  isBrusselsSlot ? "border-l-4 border-l-blue-500 " : ""
                 }${
                   slot.status === "available"
                     ? isBrusselsSlot
-                      ? "border-amber-500/30 bg-amber-500/5"
+                      ? "border-blue-500/30 bg-blue-500/5"
                       : "border-[#C8A060]/30 bg-[#0F0F0F]"
                     : slot.status === "booked"
                     ? "border-green-800 bg-green-900/10"
@@ -387,7 +387,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">
-                    {isBrusselsSlot ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}
+                    {isBrusselsSlot ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                     slot.status === "available"
@@ -400,12 +400,12 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   </span>
                 </div>
                 <div className="text-xs text-white/60">
-                  {isBrusselsSlot ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}
+                  {isBrusselsSlot ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}
                 </div>
                 {isBrusselsSlot && (
                   <div className="mt-1 flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-                    <span className="text-[11px] font-medium text-amber-400">Bruxelles</span>
+                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                    <span className="text-[11px] font-medium text-blue-400">Belgique</span>
                   </div>
                 )}
               </div>
@@ -436,7 +436,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               </div>
               <div className="text-xs text-white/60">
                 {DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")} -{" "}
-                {DateTime.fromJSDate(booking.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")} (Brussels)
+                {DateTime.fromJSDate(booking.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")} Brussels
               </div>
             </Link>
           ))}
@@ -451,7 +451,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         <div className="flex items-center justify-between">
           <CalendarViewToggle value={view} onChange={setView} />
           <span className="text-xs uppercase tracking-widest text-white/50">
-            Brussels / Miami
+            Belgique / Miami
           </span>
         </div>
 
@@ -529,15 +529,15 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                           return (
                             <div
                               key={slot.start.toISOString()}
-                              className={`rounded-xl border px-3 py-2 text-xs ${isSlotBrussels ? "border-l-2 border-l-amber-500 border-amber-500/30" : "border-border"}`}
+                              className={`rounded-xl border px-3 py-2 text-xs ${isSlotBrussels ? "border-l-2 border-l-blue-500 border-blue-500/30" : "border-border"}`}
                             >
                               <div className="flex items-center justify-between">
-                                <span>{isSlotBrussels ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}</span>
+                                <span>{isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}</span>
                                 <span className="text-[10px] uppercase tracking-widest text-white/40">
                                   {slot.status}
                                 </span>
                               </div>
-                              <div className="text-white/60">{isSlotBrussels ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}</div>
+                              <div className="text-white/60">{isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}</div>
                             </div>
                           );
                         })}
@@ -564,7 +564,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     {group.label}
                   </h3>
                   <span className="text-xs uppercase tracking-widest text-white/50">
-                    Brussels / Miami
+                    Belgique / Miami
                   </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
@@ -573,15 +573,15 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     return (
                       <div
                         key={slot.start.toISOString()}
-                        className={`rounded-xl border px-3 py-3 text-xs ${isSlotBrussels ? "border-l-2 border-l-amber-500 border-amber-500/30" : "border-border"}`}
+                        className={`rounded-xl border px-3 py-3 text-xs ${isSlotBrussels ? "border-l-2 border-l-blue-500 border-blue-500/30" : "border-border"}`}
                       >
                         <div className="flex items-center justify-between">
-                          <span>{isSlotBrussels ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}</span>
+                          <span>{isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}</span>
                           <span className="text-[10px] uppercase tracking-widest text-white/40">
                             {slot.status}
                           </span>
                         </div>
-                        <div className="text-white/60">{isSlotBrussels ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}</div>
+                        <div className="text-white/60">{isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}</div>
                       </div>
                     );
                   })}
@@ -601,7 +601,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 <div>
                   <h3 className="text-lg font-semibold">Récapitulatif du {selectedDay.label}</h3>
                   <p className="text-sm text-white/60">
-                    Brussels: {selectedDay.date.setZone(BRUSSELS_TZ).toFormat("dd LLL yyyy")}
+                    Belgique : {selectedDay.date.setZone(BRUSSELS_TZ).toFormat("dd LLL yyyy")}
                   </p>
                 </div>
                 <button
@@ -624,13 +624,13 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                       return (
                         <div
                           key={slot.start.toISOString()}
-                          className={`rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm ${isSlotBrussels ? "border-l-2 border-l-amber-500 border-amber-500/30" : "border-gray-700"}`}
+                          className={`rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm ${isSlotBrussels ? "border-l-2 border-l-blue-500 border-blue-500/30" : "border-gray-700"}`}
                         >
                           <p className="font-semibold text-white">
-                            {isSlotBrussels ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}
+                            {isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}
                           </p>
                           <p className="text-xs text-white/70">
-                            {isSlotBrussels ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}
+                            {isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}
                           </p>
                         </div>
                       );
@@ -662,7 +662,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                             {DateTime.fromJSDate(booking.endDate, { zone: "utc" })
                               .setZone(BRUSSELS_TZ)
                               .toFormat("HH:mm")}{" "}
-                            (Brussels)
+                            Brussels
                           </p>
                           <p className="text-xs text-white/60">
                             {DateTime.fromJSDate(booking.startDate, { zone: "utc" })
@@ -672,7 +672,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                             {DateTime.fromJSDate(booking.endDate, { zone: "utc" })
                               .setZone(MIAMI_TZ)
                               .toFormat("HH:mm")}{" "}
-                            (Miami)
+                            Miami
                           </p>
                         </div>
                         <Link

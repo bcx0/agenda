@@ -227,7 +227,7 @@ export default async function AdminAvailabilityPage({
                     <div>
                       <div className="font-semibold">
                         {WEEK_DAYS.find((d) => d.value === rule.dayOfWeek)?.label} ·{" "}
-                        {rule.startTime} → {rule.endTime} (Brussels)
+                        {rule.startTime} → {rule.endTime} Brussels
                       </div>
                     </div>
                     <form action={deleteAvailabilityRuleAction}>
@@ -332,11 +332,11 @@ export default async function AdminAvailabilityPage({
                         <p className="text-sm text-white/70">
                           {formatInZone(booking.startAt, "dd LLL yyyy", BRUSSELS_TZ)} •{" "}
                           {formatInZone(booking.startAt, "HH:mm", BRUSSELS_TZ)} -{" "}
-                          {formatInZone(booking.endAt, "HH:mm", BRUSSELS_TZ)} (Brussels)
+                          {formatInZone(booking.endAt, "HH:mm", BRUSSELS_TZ)} Brussels
                         </p>
                         <p className="text-xs text-white/60">
                           {formatInZone(booking.startAt, "HH:mm", MIAMI_TZ)} -{" "}
-                          {formatInZone(booking.endAt, "HH:mm", MIAMI_TZ)} (Miami)
+                          {formatInZone(booking.endAt, "HH:mm", MIAMI_TZ)} Miami
                         </p>
                         {note ? <p className="mt-1 text-sm text-white/50">{note}</p> : null}
                       </div>
@@ -411,11 +411,11 @@ export default async function AdminAvailabilityPage({
                     <div>
                       <div className="font-semibold">
                         {formatInZone(override.date, "dd LLL yyyy", BRUSSELS_TZ)} ·{" "}
-                        {override.startTime} → {override.endTime} (Brussels)
+                        {override.startTime} → {override.endTime} Brussels
                       </div>
                       <div className="text-white/60">
                         {override.type === "OPEN" ? "Ouverture" : "Blocage"} ·{" "}
-                        {formatInZone(override.date, "dd LLL yyyy", MIAMI_TZ)} (Miami)
+                        {formatInZone(override.date, "dd LLL yyyy", MIAMI_TZ)} Miami
                       </div>
                       {override.note ? (
                         <div className="text-xs text-white/60">Note: {override.note}</div>
@@ -447,11 +447,11 @@ export default async function AdminAvailabilityPage({
                     <div>
                       <div className="font-semibold">
                         {formatInZone(block.startAt, "dd LLL yyyy HH:mm", BRUSSELS_TZ)} →{" "}
-                        {formatInZone(block.endAt, "HH:mm", BRUSSELS_TZ)} (Brussels)
+                        {formatInZone(block.endAt, "HH:mm", BRUSSELS_TZ)} Brussels
                       </div>
                       <div className="text-white/60">
                         {formatInZone(block.startAt, "HH:mm", MIAMI_TZ)} →{" "}
-                        {formatInZone(block.endAt, "HH:mm", MIAMI_TZ)} (Miami)
+                        {formatInZone(block.endAt, "HH:mm", MIAMI_TZ)} Miami
                       </div>
                       {block.reason ? (
                         <div className="text-xs text-white/60">Raison: {block.reason}</div>
@@ -510,7 +510,7 @@ export default async function AdminAvailabilityPage({
                 ))}
               </select>
               <select name="timeZone" className="input sm:col-span-2 md:col-span-1" required>
-                <option value="America/New_York">America/New_York (Miami)</option>
+                <option value="America/New_York">America/New_York Miami</option>
                 <option value="Europe/Brussels">Europe/Brussels (Bruxelles)</option>
               </select>
               <input

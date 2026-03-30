@@ -1034,7 +1034,7 @@ export async function createLocationPeriodAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/availability");
   revalidatePath("/book");
-  redirect("/admin/settings?success=Période%20Bruxelles%20ajoutée");
+  redirect("/admin/settings?success=Période%20Belgique%20ajoutée");
 }
 
 export async function deleteLocationPeriodAction(formData: FormData) {
@@ -1050,5 +1050,5 @@ export async function deleteLocationPeriodAction(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/availability");
   revalidatePath("/book");
-  redirect("/admin/settings?success=Période%20Bruxelles%20supprimée");
+  redirect("/admin/settings?success=Période%20Belgique%20supprimée");
 }

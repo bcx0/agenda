@@ -83,7 +83,7 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
               hour: "2-digit",
               minute: "2-digit"
             })}{" "}
-            (Brussels)
+            Brussels
           </p>
           <p>
             <strong>Mode:</strong> {booking.mode}

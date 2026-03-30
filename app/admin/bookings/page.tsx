@@ -160,7 +160,7 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
                   hour: "2-digit",
                   minute: "2-digit"
                 })}{" "}
-                (Brussels)
+                Brussels
               </p>
               <p>
                 <strong>Mode:</strong> {booking.mode}

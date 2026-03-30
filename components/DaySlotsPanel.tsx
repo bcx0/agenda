@@ -29,7 +29,7 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose 
       <div className="w-full max-h-[90vh] max-w-xl overflow-hidden rounded-t-3xl bg-background-elevated shadow-xl sm:rounded-2xl md:h-[calc(100vh-3rem)] md:max-h-none md:rounded-2xl md:border md:border-border md:shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border bg-background-elevated px-6 py-4">
           <div>
-            <div className="text-xs uppercase tracking-widest text-white/50">Brussels / Miami</div>
+            <div className="text-xs uppercase tracking-widest text-white/50">Belgique / Miami</div>
             <div className="text-lg font-semibold leading-snug">{dateLabel}</div>
           </div>
           <button

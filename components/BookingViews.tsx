@@ -172,20 +172,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
         />
       </div>
 
-      {/* ── Legend ── */}
-      {hasBrusselsSlots && (
-        <div className="mt-6 flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-          <span className="text-xs uppercase tracking-widest text-white/50">Légende</span>
-          <span className="flex items-center gap-2 text-sm text-white/70">
-            <span className="inline-block h-3 w-3 rounded-full bg-[#C8A060]" />
-            Miami
-          </span>
-          <span className="flex items-center gap-2 text-sm text-white/70">
-            <span className="inline-block h-3 w-3 rounded-full bg-amber-500" />
-            Bruxelles
-          </span>
-        </div>
-      )}
+      {/* Legend is now in MonthCalendar */}
     </>
   );
 }

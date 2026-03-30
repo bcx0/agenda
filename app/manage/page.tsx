@@ -64,7 +64,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
                   <div>
                     <div className="text-lg font-semibold">{dateLabel}</div>
                     <div className="text-sm text-white/70">
-                      {brussels} (Brussels) / {miami} (Miami)
+                      {brussels} Brussels / {miami} Miami
                     </div>
                   </div>
                   <span className="pill">{booking.status}</span>

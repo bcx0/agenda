@@ -81,7 +81,7 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
       <div className="card space-y-2 p-6">
         <div className="text-sm text-white/60">Créneau actuel</div>
         <div className="text-lg font-semibold">
-          {bookingDate} · {bookingBrussels} (Brussels) / {bookingMiami} (Miami)
+          {bookingDate} · {bookingBrussels} Brussels / {bookingMiami} Miami
         </div>
         <div className="text-xs uppercase tracking-widest text-white/60">
           Statut : {booking.status} · Mode : {booking.mode}
@@ -130,7 +130,7 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
               >
                 <option value="">Sélectionner un créneau</option>
                 {availableSlots.map((slot) => {
-                  const label = `${formatInZone(slot.start, "dd LLL yyyy HH:mm", BRUSSELS_TZ)} (Brussels) / ${formatInZone(slot.start, "HH:mm", MIAMI_TZ)} (Miami)`;
+                  const label = `${formatInZone(slot.start, "dd LLL yyyy HH:mm", BRUSSELS_TZ)} Brussels / ${formatInZone(slot.start, "HH:mm", MIAMI_TZ)} Miami`;
                   return (
                     <option key={slot.start.toISOString()} value={slot.start.toISOString()}>
                       {label}

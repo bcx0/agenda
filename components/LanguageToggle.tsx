@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "./LanguageProvider";
 import type { Locale } from "../lib/i18n";
 
@@ -11,6 +12,7 @@ const languages: { code: Locale; label: string; Flag: React.FC<{ className?: str
 
 export function LanguageToggle() {
   const { locale, setLocale } = useLanguage();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -57,6 +59,7 @@ export function LanguageToggle() {
               onClick={() => {
                 setLocale(lang.code);
                 setOpen(false);
+                router.refresh();
               }}
               className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm transition-colors ${
                 locale === lang.code

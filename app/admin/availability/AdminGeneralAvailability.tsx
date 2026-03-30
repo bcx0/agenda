@@ -386,7 +386,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">{slot.brussels} (Brussels)</span>
+                  <span className="text-sm font-semibold">
+                    {isBrusselsSlot ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}
+                  </span>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                     slot.status === "available"
                       ? "bg-[#C8A060] text-black"
@@ -397,7 +399,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     {slot.status === "available" ? "Disponible" : slot.status === "booked" ? "Réservé" : "Bloqué"}
                   </span>
                 </div>
-                <div className="text-xs text-white/60">{slot.miami} (Miami)</div>
+                <div className="text-xs text-white/60">
+                  {isBrusselsSlot ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}
+                </div>
                 {isBrusselsSlot && (
                   <div className="mt-1 flex items-center gap-1">
                     <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
@@ -520,20 +524,23 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                       <div className="text-xs text-white/50">Aucun créneau</div>
                     ) : (
                       <div className="space-y-2">
-                        {slotsForDay.map((slot) => (
-                          <div
-                            key={slot.start.toISOString()}
-                            className="rounded-xl border border-border px-3 py-2 text-xs"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span>{slot.brussels} (Brussels)</span>
-                              <span className="text-[10px] uppercase tracking-widest text-white/40">
-                                {slot.status}
-                              </span>
+                        {slotsForDay.map((slot) => {
+                          const isSlotBrussels = (slot as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM";
+                          return (
+                            <div
+                              key={slot.start.toISOString()}
+                              className={`rounded-xl border px-3 py-2 text-xs ${isSlotBrussels ? "border-l-2 border-l-amber-500 border-amber-500/30" : "border-border"}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{isSlotBrussels ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}</span>
+                                <span className="text-[10px] uppercase tracking-widest text-white/40">
+                                  {slot.status}
+                                </span>
+                              </div>
+                              <div className="text-white/60">{isSlotBrussels ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}</div>
                             </div>
-                            <div className="text-white/60">{slot.miami} (Miami)</div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </button>
@@ -561,20 +568,23 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                  {group.slots.map((slot) => (
-                    <div
-                      key={slot.start.toISOString()}
-                      className="rounded-xl border border-border px-3 py-3 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span>{slot.brussels} (Brussels)</span>
-                        <span className="text-[10px] uppercase tracking-widest text-white/40">
-                          {slot.status}
-                        </span>
+                  {group.slots.map((slot) => {
+                    const isSlotBrussels = (slot as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM";
+                    return (
+                      <div
+                        key={slot.start.toISOString()}
+                        className={`rounded-xl border px-3 py-3 text-xs ${isSlotBrussels ? "border-l-2 border-l-amber-500 border-amber-500/30" : "border-border"}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>{isSlotBrussels ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}</span>
+                          <span className="text-[10px] uppercase tracking-widest text-white/40">
+                            {slot.status}
+                          </span>
+                        </div>
+                        <div className="text-white/60">{isSlotBrussels ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}</div>
                       </div>
-                      <div className="text-white/60">{slot.miami} (Miami)</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </button>
             ))}
@@ -609,15 +619,22 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 </h4>
                 {availabilitiesForDay.length > 0 ? (
                   <div className="space-y-2">
-                    {availabilitiesForDay.map((slot) => (
-                      <div
-                        key={slot.start.toISOString()}
-                        className="rounded-lg border border-gray-700 bg-[#0F0F0F] px-3 py-2 text-sm"
-                      >
-                        <p className="font-semibold text-white">{slot.brussels} (Brussels)</p>
-                        <p className="text-xs text-white/70">{slot.miami} (Miami)</p>
-                      </div>
-                    ))}
+                    {availabilitiesForDay.map((slot) => {
+                      const isSlotBrussels = (slot as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM";
+                      return (
+                        <div
+                          key={slot.start.toISOString()}
+                          className={`rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm ${isSlotBrussels ? "border-l-2 border-l-amber-500 border-amber-500/30" : "border-gray-700"}`}
+                        >
+                          <p className="font-semibold text-white">
+                            {isSlotBrussels ? `${slot.brussels} (Brussels)` : `${slot.miami} (Miami)`}
+                          </p>
+                          <p className="text-xs text-white/70">
+                            {isSlotBrussels ? `${slot.miami} (Miami)` : `${slot.brussels} (Brussels)`}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-white/50">Aucune disponibilité</p>

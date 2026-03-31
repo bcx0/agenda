@@ -63,12 +63,20 @@ export default async function BookPage({
 
   const locale = await getServerLocale();
 
-  const [slots, quota, settings, sessionModes] = await Promise.all([
+  const [allSlots, settings, sessionModes] = await Promise.all([
     getAvailableTimeSlots(),
-    getQuotaStatus(client.id),
     getSettings(),
     prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } })
   ]);
+
+  // Filter out slots less than 48h from now for clients
+  const minBookingTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  const slots = allSlots.filter((slot) => slot.start >= minBookingTime);
+
+  // Check quota for the month of the FIRST available slot (not current month)
+  const firstAvailableSlot = slots.find((s) => s.isAvailable);
+  const quotaTargetDate = firstAvailableSlot?.start ?? new Date();
+  const quota = await getQuotaStatus(client.id, quotaTargetDate);
 
   const slotsWithModeByDate = slots.map((slot) => {
     const modeForDate = getModeForDate(

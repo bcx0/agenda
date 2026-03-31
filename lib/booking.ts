@@ -202,10 +202,10 @@ async function getAvailabilityData(rangeStart: Date, rangeEnd: Date) {
   return { rules, overrides, recurringBlocks, legacyBlocks, bookings, locationPeriods };
 }
 
-export async function getQuotaStatus(clientId: number) {
+export async function getQuotaStatus(clientId: number, targetDate?: Date) {
   const client = await prisma.client.findUnique({ where: { id: clientId } });
   if (!client) throw new Error("Client introuvable");
-  const { startUtc, endUtc } = monthBoundsUtc();
+  const { startUtc, endUtc } = monthBoundsUtc(targetDate ?? new Date());
   const count = await prisma.booking.count({
     where: {
       clientId,
@@ -415,6 +415,14 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
 
   // Monthly quota is enforced below via getQuotaStatus — no weekly cap needed
 
+  // Clients cannot book less than 48 hours in advance
+  const hoursUntilSlot = (startUtc.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (hoursUntilSlot < 48) {
+    return {
+      error: "Les réservations doivent être faites au moins 48h à l'avance."
+    };
+  }
+
   const settings = await getSettings();
   const availability = await checkSlotAvailability(startUtc, endUtc);
   if (!availability.ok) {
@@ -426,7 +434,8 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
   const locationPeriods = await prisma.locationPeriod.findMany();
   const isBrusselsSlot = isDateInBrusselsPeriod(slotDay, locationPeriods);
 
-  const { creditsPerMonth, creditsUsedThisMonth } = await getQuotaStatus(clientId);
+  // Check quota for the MONTH OF THE BOOKING, not the current month
+  const { creditsPerMonth, creditsUsedThisMonth } = await getQuotaStatus(clientId, startUtc);
   if (creditsUsedThisMonth >= creditsPerMonth) {
     return {
       error:

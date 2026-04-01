@@ -68,7 +68,13 @@ export function setClientSession(payload: ClientPayload) {
 }
 
 export function clearClientSession() {
-  cookies().set(CLIENT_COOKIE, "", { path: "/", maxAge: 0 });
+  cookies().set(CLIENT_COOKIE, "", {
+        path: "/",
+        maxAge: 0,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production"
+  });
 }
 
 export function getAdminSession(): AdminPayload | null {
@@ -91,5 +97,11 @@ export function setAdminSession() {
 }
 
 export function clearAdminSession() {
-  cookies().set(ADMIN_COOKIE, "", { path: "/", maxAge: 0 });
+    cookies().set(ADMIN_COOKIE, "", {
+          path: "/",
+          maxAge: 0,
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production"
+    });
 }

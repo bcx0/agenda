@@ -521,18 +521,40 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
       ? "VISIO"
       : settings.defaultMode;
 
-  const booking = await prisma.booking.create({
-    data: {
-      clientId,
-      startAt: startUtc,
-      endAt: endUtc,
-      status: "CONFIRMED",
-      mode: bookingMode,
-      manageToken: crypto.randomBytes(32).toString("hex"),
-      manageTokenExpiresAt: addDays(new Date(), 7),
-      bookedBy: "client"
+  // Use transaction to prevent race condition (double-booking same slot)
+    const booking = await prisma.$transaction(async (tx) => {
+          // Re-check for conflicts inside the transaction (serializable check)
+          const conflict = await tx.booking.findFirst({
+                  where: {
+                            status: "CONFIRMED",
+                            startAt: { lt: endUtc },
+                            endAt: { gt: startUtc }
+                  }
+          });
+          if (conflict) {
+                  throw new Error("SLOT_TAKEN");
+          }
+
+          return tx.booking.create({
+                  data: {
+                            clientId,
+                            startAt: startUtc,
+                            endAt: endUtc,
+                            status: "CONFIRMED",
+                            mode: bookingMode,
+                            manageToken: crypto.randomBytes(32).toString("hex"),
+                            manageTokenExpiresAt: addDays(new Date(), 7),
+                            bookedBy: "client"
+                  }
+          });
+    }).catch((err) => {
+          if (err instanceof Error && err.message === "SLOT_TAKEN") return null;
+          throw err;
+    });
+
+    if (!booking) {
+          return { error: "Ce créneau vient d'être pris." };
     }
-  });
   pushBookingToGoogle(booking.id, "create").catch((err) =>
     console.error("[GoogleSync] Booking create failed:", err)
   );

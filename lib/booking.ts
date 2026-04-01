@@ -215,7 +215,7 @@ export async function getQuotaStatus(clientId: number, targetDate?: Date) {
   });
   return {
     creditsPerMonth: client.creditsPerMonth,
-  creditsUsedThisMonth: count
+    creditsUsedThisMonth: count
   };
 }
 
@@ -230,9 +230,40 @@ export async function getAvailability() {
   const { rules, overrides, recurringBlocks, legacyBlocks, bookings, locationPeriods } =
     await getAvailabilityData(rangeStart, rangeEnd);
 
-  const miamiRules = rules.filter((r: AvailabilityRuleRow) => r.location === "MIAMI");
-  const brusselsRules = rules.filter((r: AvailabilityRuleRow) => r.location === "BELGIUM");
-  const hasOpenOverrides = overrides.some((override: AvailabilityOverrideRow) => override.type === "OPEN");
+  // Pre-index rules by location and dayOfWeek for O(1) lookup
+  const ruleIndex = new Map<string, AvailabilityRuleRow[]>();
+  for (const rule of rules) {
+    const key = `${rule.location}:${rule.dayOfWeek}`;
+    const arr = ruleIndex.get(key);
+    if (arr) arr.push(rule);
+    else ruleIndex.set(key, [rule]);
+  }
+
+  // Pre-index OPEN overrides by Brussels date
+  const openOverridesByDate = new Map<string, AvailabilityOverrideRow[]>();
+  for (const override of overrides) {
+    if (override.type !== "OPEN") continue;
+    const key = DateTime.fromJSDate(override.date, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
+    if (key) {
+      const arr = openOverridesByDate.get(key);
+      if (arr) arr.push(override);
+      else openOverridesByDate.set(key, [override]);
+    }
+  }
+
+  const hasMiamiRules = rules.some((r: AvailabilityRuleRow) => r.location === "MIAMI");
+  const hasBrusselsRules = rules.some((r: AvailabilityRuleRow) => r.location === "BELGIUM");
+
+  // Pre-build fallback rules indexed by dayOfWeek
+  const miamiFallback = !hasMiamiRules ? buildFallbackRules("MIAMI") : [];
+  const brusselsFallback = !hasBrusselsRules ? buildFallbackRules("BELGIUM") : [];
+  const fallbackIndex = new Map<string, AvailabilityRuleRow[]>();
+  for (const rule of [...miamiFallback, ...brusselsFallback]) {
+    const key = `${rule.location}:${rule.dayOfWeek}`;
+    const arr = fallbackIndex.get(key);
+    if (arr) arr.push(rule);
+    else fallbackIndex.set(key, [rule]);
+  }
 
   // Track which slots belong to which location
   const slots = new Map<string, { start: Date; end: Date; activeLocation: "MIAMI" | "BELGIUM" }>();
@@ -241,16 +272,15 @@ export async function getAvailability() {
     const day = todayBrussels.plus({ days: i });
     const isBrussels = isDateInBrusselsPeriod(day, locationPeriods);
     const activeLocation = isBrussels ? "BELGIUM" : "MIAMI";
-    const locationRules = isBrussels ? brusselsRules : miamiRules;
-    const hasLocationRules = locationRules.length > 0;
+    const hasLocationRules = isBrussels ? hasBrusselsRules : hasMiamiRules;
+    const ruleKey = `${activeLocation === "BELGIUM" ? "BELGIUM" : "MIAMI"}:${day.weekday}`;
 
     const dayRules = hasLocationRules
-      ? locationRules.filter((rule: AvailabilityRuleRow) => rule.dayOfWeek === day.weekday)
-      : buildFallbackRules(activeLocation).filter((rule: AvailabilityRuleRow) => rule.dayOfWeek === day.weekday);
+      ? (ruleIndex.get(ruleKey) ?? [])
+      : (fallbackIndex.get(ruleKey) ?? []);
 
-    const openOverrides = overrides.filter(
-      (override: AvailabilityOverrideRow) => override.type === "OPEN" && sameBrusselsDate(override.date, day)
-    );
+    const dateKey = day.toISODate() ?? "";
+    const openOverrides = openOverridesByDate.get(dateKey) ?? [];
     const activeRanges: { startTime: string; endTime: string }[] = openOverrides.length ? openOverrides : dayRules;
 
     const addSlotsFromRange = (startTime: string, endTime: string) => {
@@ -281,14 +311,46 @@ export async function getAvailability() {
     (a, b) => a.start.getTime() - b.start.getTime()
   );
 
+  // Pre-index overrides by Brussels date for O(1) lookup
+  const overridesByDate = new Map<string, AvailabilityOverrideRow[]>();
+  for (const override of overrides) {
+    const key = DateTime.fromJSDate(override.date, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
+    if (key) {
+      const arr = overridesByDate.get(key);
+      if (arr) arr.push(override);
+      else overridesByDate.set(key, [override]);
+    }
+  }
+
+  // Pre-index recurring blocks by dayOfWeek for O(1) lookup
+  const recurringBlocksByDay = new Map<number, RecurringBlockRow[]>();
+  for (const block of recurringBlocks) {
+    const arr = recurringBlocksByDay.get(block.dayOfWeek);
+    if (arr) arr.push(block);
+    else recurringBlocksByDay.set(block.dayOfWeek, [block]);
+  }
+
+  // Pre-index bookings by Brussels date for O(1) lookup
+  const bookingsByDate = new Map<string, { startAt: Date; endAt: Date }[]>();
+  for (const booking of bookings) {
+    const key = DateTime.fromJSDate(booking.startAt, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
+    if (key) {
+      const arr = bookingsByDate.get(key);
+      if (arr) arr.push(booking);
+      else bookingsByDate.set(key, [booking]);
+    }
+  }
+
   const slotViews = slotEntries.map<SlotView>((slot) => {
     const minutes = slotMinutesInBrussels(slot.start, slot.end);
     const day =
       minutes?.day ??
       DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(BRUSSELS_TZ);
-    const dayOverrides = overrides.filter((override: AvailabilityOverrideRow) => sameBrusselsDate(override.date, day));
+    const dateKey = day.toISODate() ?? "";
+    const dayOverrides = overridesByDate.get(dateKey) ?? [];
     const blockOverrides = dayOverrides.filter((override: AvailabilityOverrideRow) => override.type === "BLOCK");
-    const dayRecurringBlocks = recurringBlocks.filter((block: RecurringBlockRow) => block.dayOfWeek === day.weekday);
+    const dayRecurringBlocks = recurringBlocksByDay.get(day.weekday) ?? [];
+    const dayBookings = bookingsByDate.get(dateKey) ?? [];
 
     const isBlocked =
       (!!minutes &&
@@ -296,7 +358,7 @@ export async function getAvailability() {
           dayRecurringBlocks.some((block: RecurringBlockRow) => slotOverlapsRecurring(minutes, block)))) ||
       legacyBlocks.some((block: { startAt: Date; endAt: Date }) => overlaps(block.startAt, block.endAt, slot.start, slot.end));
 
-    const isBooked = bookings.some((booking: { startAt: Date; endAt: Date }) =>
+    const isBooked = dayBookings.some((booking: { startAt: Date; endAt: Date }) =>
       overlaps(booking.startAt, booking.endAt, slot.start, slot.end)
     );
 
@@ -588,3 +650,4 @@ export async function ensureManageTokenForBooking(bookingId: number) {
 
   return { token: updated.manageToken! } as const;
 }
+

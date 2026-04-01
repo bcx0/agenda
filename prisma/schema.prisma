@@ -41,6 +41,12 @@ model Booking {
   syncSource            String    @default("app")
   lastSyncedAt          DateTime?
   bookedBy              String    @default("client") @map("booked_by")
+
+
+  @@index([clientId])
+  @@index([status])
+  @@index([startAt])
+  @@index([clientId, status])
 }
 
 model Block {
@@ -54,6 +60,9 @@ model Block {
   syncStatus    String   @default("pending")
   syncSource    String   @default("app")
   lastSyncedAt  DateTime?
+
+
+  @@index([startAt])
 }
 
 enum AvailabilityOverrideType {

@@ -118,10 +118,12 @@ export default async function AdminAvailabilityPage({
     }),
     prisma.booking.findMany({
       where: {
-        status: "CONFIRMED"
+        status: "CONFIRMED",
+        startAt: { gte: new Date() }
       },
       include: { client: true },
-      orderBy: { startAt: "asc" }
+      orderBy: { startAt: "asc" },
+      take: 50
     })
   ]);
 

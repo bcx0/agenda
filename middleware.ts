@@ -27,7 +27,7 @@ async function verifyAdminCookie(cookieValue: string): Promise<boolean> {
     const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
 
     // Encode as base64url (matching Node.js hmac.digest("base64url"))
-    const expected = btoa(String.fromCharCode(...new Uint8Array(sig)))
+    const expected = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(sig))))
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
       .replace(/=+$/, "");

@@ -1,38 +1,55 @@
-import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Verify admin session cookie signature without importing lib/session
- * (Edge Runtime cannot use Node.js-only modules from lib/).
+ * Verify admin session cookie HMAC signature using Web Crypto API.
+ * Edge Runtime does NOT have Node.js crypto — must use subtle crypto.
  */
-function verifyAdminCookie(cookieValue: string): boolean {
+async function verifyAdminCookie(cookieValue: string): Promise<boolean> {
   const secret = process.env.SESSION_SECRET;
   if (!secret) return false;
 
   const [data, signature] = cookieValue.split(".");
   if (!data || !signature) return false;
 
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(data);
-  const expected = hmac.digest("base64url");
-
-  // Timing-safe comparison to prevent timing attacks
-  if (expected.length !== signature.length) return false;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
-  if (a.length !== b.length) return false;
-  if (!crypto.timingSafeEqual(a, b)) return false;
-
-  // Verify payload is actually an admin session
   try {
-    const payload = JSON.parse(Buffer.from(data, "base64url").toString());
+    const encoder = new TextEncoder();
+
+    // Import the secret as an HMAC key
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    // Sign the data part
+    const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
+
+    // Encode as base64url (matching Node.js hmac.digest("base64url"))
+    const expected = btoa(String.fromCharCode(...new Uint8Array(sig)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    // Constant-time comparison
+    if (expected.length !== signature.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) {
+      diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+    }
+    if (diff !== 0) return false;
+
+    // Verify payload is actually an admin session
+    const raw = atob(data.replace(/-/g, "+").replace(/_/g, "/"));
+    const payload = JSON.parse(raw);
     return payload?.type === "admin";
   } catch {
     return false;
   }
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Protect /admin/* routes (except /admin login page itself)
@@ -40,7 +57,11 @@ export function middleware(req: NextRequest) {
     const adminCookie = req.cookies.get("gm_admin_session");
 
     // Validate cookie existence AND cryptographic signature
-    if (!adminCookie || !adminCookie.value || !verifyAdminCookie(adminCookie.value)) {
+    if (
+      !adminCookie ||
+      !adminCookie.value ||
+      !(await verifyAdminCookie(adminCookie.value))
+    ) {
       const loginUrl = new URL("/admin", req.url);
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);

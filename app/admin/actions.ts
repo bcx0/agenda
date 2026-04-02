@@ -30,6 +30,7 @@ import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle } from "@/lib/sync-engine";
 import { Prisma } from "@prisma/client";
+import { cancelBooking } from "../../lib/booking";
 
 function assertAdmin() {
   const session = getAdminSession();
@@ -760,16 +761,12 @@ export async function deleteRecurringBlockAction(formData: FormData) {
         .map((booking) => booking.id);
 
       if (matchingBookingIds.length > 0) {
-        await prisma.booking.updateMany({
-          where: {
-            id: { in: matchingBookingIds },
-            status: "CONFIRMED"
-          },
-          data: {
-            status: "CANCELLED",
-            cancelReason: "Annule via suppression du bloc recurrent"
-          }
-        });
+        // Cancel each booking individually to trigger email notifications & Google Calendar sync
+        await Promise.allSettled(
+          matchingBookingIds.map((id) =>
+            cancelBooking(id, "Annulé via suppression du bloc récurrent")
+          )
+        );
       }
     }
   }

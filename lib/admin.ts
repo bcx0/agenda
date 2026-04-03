@@ -164,10 +164,12 @@ export async function deleteBlock(blockId: number) {
 }
 
 export async function listUpcomingBookingsThisMonth() {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   return prisma.booking.findMany({
     where: {
       status: { not: "CANCELLED" },
-      startAt: { gte: new Date() }
+      startAt: { gte: todayStart }
     },
     orderBy: { startAt: "asc" },
     include: { client: true }

@@ -429,13 +429,35 @@ export async function pullFromGoogle(
   const parsed = parseGoogleEventSummary(googleEvent.summary)
 
   if (parsed.type === 'booking') {
+    const startDate = new Date(eventStartDt)
+    const endDate = new Date(eventEndDt)
+
+    // Check for existing booking on same time slot to prevent double bookings
+    const conflictingBooking = await prisma.booking.findFirst({
+      where: {
+        status: 'CONFIRMED',
+        startAt: { lt: endDate },
+        endAt: { gt: startDate },
+      },
+    })
+
+    if (conflictingBooking) {
+      logSync('Booking', conflictingBooking.id, 'pull_conflict_skipped', 'google_to_app', {
+        reason: 'Slot already booked',
+        googleEventId,
+        existingBookingId: conflictingBooking.id,
+        summary: googleEvent.summary,
+      })
+      return { action: 'conflict_skipped', existingBookingId: conflictingBooking.id }
+    }
+
     const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')
 
     const newBooking = await prisma.booking.create({
       data: {
         clientId: client.id,
-        startAt: new Date(eventStartDt),
-        endAt: new Date(eventEndDt),
+        startAt: startDate,
+        endAt: endDate,
         status: 'CONFIRMED',
         mode: 'VISIO',
         googleEventId,

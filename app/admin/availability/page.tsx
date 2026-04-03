@@ -98,6 +98,9 @@ export default async function AdminAvailabilityPage({
   const successMessage = rawSuccess ? decodeURIComponent(rawSuccess) : undefined;
   const tab = searchParams?.tab ?? "general";
 
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
   const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates, upcomingBookings] = await Promise.all([
     listAvailabilityRules(),
     listAvailabilityOverrides(),
@@ -109,7 +112,7 @@ export default async function AdminAvailabilityPage({
     prisma.booking.findMany({
       where: {
         status: "CONFIRMED",
-        startAt: { gte: new Date() },
+        startAt: { gte: todayStart },
         rescheduleReason: { startsWith: ADMIN_BLOCK_NOTE_PREFIX }
       },
       include: { client: true },
@@ -119,7 +122,7 @@ export default async function AdminAvailabilityPage({
     prisma.booking.findMany({
       where: {
         status: "CONFIRMED",
-        startAt: { gte: new Date() }
+        startAt: { gte: todayStart }
       },
       include: { client: true },
       orderBy: { startAt: "asc" },

@@ -98,8 +98,13 @@ export default async function AdminAvailabilityPage({
   const successMessage = rawSuccess ? decodeURIComponent(rawSuccess) : undefined;
   const tab = searchParams?.tab ?? "general";
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // Load bookings for the full calendar view: 30 days back + 90 days ahead
+  const rangeStart = new Date();
+  rangeStart.setDate(rangeStart.getDate() - 30);
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date();
+  rangeEnd.setDate(rangeEnd.getDate() + 90);
+  rangeEnd.setHours(23, 59, 59, 999);
 
   const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates, upcomingBookings] = await Promise.all([
     listAvailabilityRules(),
@@ -112,21 +117,19 @@ export default async function AdminAvailabilityPage({
     prisma.booking.findMany({
       where: {
         status: "CONFIRMED",
-        startAt: { gte: todayStart },
+        startAt: { gte: rangeStart, lte: rangeEnd },
         rescheduleReason: { startsWith: ADMIN_BLOCK_NOTE_PREFIX }
       },
       include: { client: true },
-      orderBy: { startAt: "asc" },
-      take: 30
+      orderBy: { startAt: "asc" }
     }),
     prisma.booking.findMany({
       where: {
         status: "CONFIRMED",
-        startAt: { gte: todayStart }
+        startAt: { gte: rangeStart, lte: rangeEnd }
       },
       include: { client: true },
-      orderBy: { startAt: "asc" },
-      take: 50
+      orderBy: { startAt: "asc" }
     })
   ]);
 

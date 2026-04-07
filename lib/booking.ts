@@ -222,7 +222,7 @@ export async function getQuotaStatus(clientId: number, targetDate?: Date) {
 export async function getAvailability() {
   const settings = await getSettings();
   const baseLocation = "MIAMI" as const; // Miami is always the base
-  const daysAhead = 60;
+  const daysAhead = 120;
   const todayBrussels = DateTime.now().setZone(BRUSSELS_TZ).startOf("day");
   const rangeStart = todayBrussels.toUTC().toJSDate();
   const rangeEnd = todayBrussels.plus({ days: daysAhead + 1 }).toUTC().toJSDate();

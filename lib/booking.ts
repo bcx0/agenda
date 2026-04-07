@@ -564,16 +564,20 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     ? `${appUrl.replace(/\/$/, "")}/rdv/manage/${booking.manageToken}`
     : null;
 
-  // Fire-and-forget: don't block the response waiting for email delivery
-  sendBookingConfirmationEmail({
-    bookingId: booking.id,
-    clientName: client.name,
-    clientEmail: client.email,
-    startAt: booking.startAt,
-    endAt: booking.endAt,
-    timeZone: "Europe/Brussels",
-    manageUrl
-  }).catch((err) => console.error("[Email] Confirmation send failed:", err));
+  // Await email sending - fire-and-forget does not work reliably on Vercel serverless
+  try {
+    await sendBookingConfirmationEmail({
+      bookingId: booking.id,
+      clientName: client.name,
+      clientEmail: client.email,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      timeZone: "Europe/Brussels",
+      manageUrl
+    });
+  } catch (err) {
+    console.error("[Email] Confirmation send failed:", err);
+  }
 
   void sendMakeBookingWebhook(
     makePayloadFromBooking({
@@ -624,15 +628,19 @@ export async function cancelBooking(bookingId: number, reason?: string) {
     console.error("[GoogleSync] Booking delete failed:", err);
   }
 
-  // Email in fire-and-forget (don't block the response)
-  sendBookingCancelledEmail({
-    bookingId: booking.id,
-    clientName: booking.client.name,
-    clientEmail: booking.client.email,
-    startAt: booking.startAt,
-    endAt: booking.endAt,
-    timeZone: "Europe/Brussels"
-  }).catch((err) => console.error("[Email] Cancellation email failed:", err));
+  // Await email sending - fire-and-forget does not work reliably on Vercel serverless
+  try {
+    await sendBookingCancelledEmail({
+      bookingId: booking.id,
+      clientName: booking.client.name,
+      clientEmail: booking.client.email,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      timeZone: "Europe/Brussels"
+    });
+  } catch (err) {
+    console.error("[Email] Cancellation email failed:", err);
+  }
 
   return result;
 }

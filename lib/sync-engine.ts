@@ -63,7 +63,7 @@ async function findOrCreateGoogleClient(clientName: string) {
   // 3. Fuzzy match on real clients
   if (realClients.length > 0) {
     const candidateNames = realClients.map((c) => c.name)
-    const fuzzyResult = fuzzyMatchName(normalizedName, candidateNames, 0.65)
+    const fuzzyResult = fuzzyMatchName(normalizedName, candidateNames, 0.5)
     if (fuzzyResult) {
       console.log(
         `[FuzzyMatch] "${normalizedName}" → "${candidateNames[fuzzyResult.index]}" (score: ${fuzzyResult.score.toFixed(2)})`
@@ -81,7 +81,7 @@ async function findOrCreateGoogleClient(clientName: string) {
   // 5. Fuzzy match on all clients
   if (allClients.length > 0) {
     const allNames = allClients.map((c) => c.name)
-    const fuzzyAll = fuzzyMatchName(normalizedName, allNames, 0.65)
+    const fuzzyAll = fuzzyMatchName(normalizedName, allNames, 0.5)
     if (fuzzyAll) {
       console.log(
         `[FuzzyMatch-All] "${normalizedName}" → "${allNames[fuzzyAll.index]}" (score: ${fuzzyAll.score.toFixed(2)})`
@@ -90,26 +90,9 @@ async function findOrCreateGoogleClient(clientName: string) {
     }
   }
 
-  // 6. No match found — create new import client
-  const safeSlug = normalizedName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/^-+|-+$/g, '')
-  const email = `google-${safeSlug || 'client'}-${Date.now()}@import.local`
-
-  const newClient = await prisma.client.create({
-    data: {
-      name: normalizedName,
-      email,
-      passwordHash: crypto.randomBytes(16).toString('hex'),
-      creditsPerMonth: 0,
-      isActive: true,
-    },
-  })
-  invalidateClientCache() // force reload on next call
-  return newClient
+  // 6. No match found — return null (will create Block instead of fake client)
+  console.log(`[Sync] No matching client for "${normalizedName}" — will create Block instead`)
+  return null
 }
 
 export async function pushBookingToGoogle(
@@ -452,6 +435,29 @@ export async function pullFromGoogle(
     }
 
     const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')
+
+    // If no matching real client found, create a Block instead of a fake client booking
+    if (!client) {
+      const newBlock = await prisma.block.create({
+        data: {
+          startAt: startDate,
+          endAt: endDate,
+          reason: `RDV — ${parsed.clientName || 'Client Google'} (non trouvé)`,
+          googleEventId,
+          syncSource: 'google',
+          syncStatus: 'synced',
+          lastSyncedAt: new Date(),
+          createdAt: new Date(),
+        },
+      })
+      logSync('Block', newBlock.id, 'pull_create_no_client', 'google_to_app', {
+        source: 'google_external_event',
+        summary: googleEvent.summary,
+        clientName: parsed.clientName,
+        reason: 'No matching real client found',
+      })
+      return { action: 'block_created_no_client', id: newBlock.id, clientName: parsed.clientName }
+    }
 
     const newBooking = await prisma.booking.create({
       data: {

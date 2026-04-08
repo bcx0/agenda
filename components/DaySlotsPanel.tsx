@@ -1,19 +1,27 @@
 "use client";
 
 import { memo, useEffect } from "react";
+import { DateTime } from "luxon";
 import SlotButton from "./SlotButton";
 import type { SlotView } from "../lib/booking";
+import { BRUSSELS_TZ } from "../lib/time";
 import { useLanguage } from "./LanguageProvider";
+
+function getSlotMonthKey(slotStart: Date): string {
+  const dt = DateTime.fromJSDate(slotStart, { zone: "utc" }).setZone(BRUSSELS_TZ);
+  return `${dt.year}-${String(dt.month).padStart(2, "0")}`;
+}
 
 type Props = {
   open: boolean;
   dateLabel: string;
   slots: SlotView[];
   quotaReached: boolean;
+  quotaByMonth?: Record<string, boolean>;
   onClose: () => void;
 };
 
-function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose }: Props) {
+function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, quotaByMonth, onClose }: Props) {
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -61,7 +69,7 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, onClose 
                 presentielLocation={slot.presentielLocation}
                 presentielNote={slot.presentielNote}
                 status={slot.status}
-                quotaReached={quotaReached}
+                quotaReached={quotaByMonth ? (quotaByMonth[getSlotMonthKey(slot.start)] ?? false) : quotaReached}
               />
             ))
           )}

@@ -98,12 +98,12 @@ export default async function AdminAvailabilityPage({
   const successMessage = rawSuccess ? decodeURIComponent(rawSuccess) : undefined;
   const tab = searchParams?.tab ?? "general";
 
-  // Load bookings for the full calendar view: 30 days back + 90 days ahead
+  // Load bookings for the full calendar view: 30 days back + 365 days ahead
   const rangeStart = new Date();
   rangeStart.setDate(rangeStart.getDate() - 30);
   rangeStart.setHours(0, 0, 0, 0);
   const rangeEnd = new Date();
-  rangeEnd.setDate(rangeEnd.getDate() + 90);
+  rangeEnd.setDate(rangeEnd.getDate() + 365);
   rangeEnd.setHours(23, 59, 59, 999);
 
   const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates, upcomingBookings] = await Promise.all([

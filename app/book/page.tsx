@@ -85,7 +85,7 @@ export default async function BookPage({
 
   // Query quota for each month
   const quotaByMonth: Record<string, boolean> = {};
-  for (const monthKey of uniqueMonthKeys) {
+  for (const monthKey of Array.from(uniqueMonthKeys)) {
     const [year, month] = monthKey.split("-").map(Number);
     const targetDate = DateTime.fromObject({ year, month, day: 15 }, { zone: BRUSSELS_TZ }).toJSDate();
     const q = await getQuotaStatus(client.id, targetDate);

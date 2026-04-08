@@ -5,7 +5,7 @@ import { DateTime } from "luxon";
 import { useSearchParams } from "next/navigation";
 import { useLanguage } from "./LanguageProvider";
 import type { SlotView } from "../lib/booking";
-import { MIAMI_TZ } from "../lib/time";
+import { MIAMI_TZ, BRUSSELS_TZ } from "../lib/time";
 import { CalendarViewToggle, type ViewMode } from "./CalendarViewToggle";
 import { DaySlotsPanel } from "./DaySlotsPanel";
 import { MobileBookingView } from "./MobileBookingView";
@@ -16,6 +16,7 @@ import SlotButton from "./SlotButton";
 type Props = {
   slots: SlotView[];
   quotaReached: boolean;
+  quotaByMonth?: Record<string, boolean>;
 };
 
 type DayGroup = {
@@ -25,7 +26,12 @@ type DayGroup = {
   date: DateTime;
 };
 
-export function BookingViews({ slots, quotaReached }: Props) {
+function getSlotMonthKey(slotStart: Date): string {
+  const dt = DateTime.fromJSDate(slotStart, { zone: "utc" }).setZone(BRUSSELS_TZ);
+  return `${dt.year}-${String(dt.month).padStart(2, "0")}`;
+}
+
+export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
   const { locale } = useLanguage();
   const normalizedSlots = useMemo(
     () =>
@@ -91,7 +97,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
     <>
       {/* ── Mobile: compact calendar + inline slots ── */}
       <div className="md:hidden">
-        <MobileBookingView slots={slots} quotaReached={quotaReached} />
+        <MobileBookingView slots={slots} quotaReached={quotaReached} quotaByMonth={quotaByMonth} />
       </div>
 
       {/* ── Desktop: existing 3-view layout ── */}
@@ -120,6 +126,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
             weekStart={weekStart}
             daySlots={daySlotsMap}
             quotaReached={quotaReached}
+            quotaByMonth={quotaByMonth}
             onChangeWeek={(next) => {
               startTransition(() => {
                 setWeekStart(next);
@@ -155,7 +162,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
                         presentielLocation={slot.presentielLocation}
                         presentielNote={slot.presentielNote}
                         status={slot.status}
-                        quotaReached={quotaReached}
+                        quotaReached={quotaByMonth ? (quotaByMonth[getSlotMonthKey(slot.start)] ?? false) : quotaReached}
                       />
                     );
                   })}
@@ -170,6 +177,7 @@ export function BookingViews({ slots, quotaReached }: Props) {
           dateLabel={selectedDay?.label ?? ""}
           slots={selectedDay?.slots ?? []}
           quotaReached={quotaReached}
+          quotaByMonth={quotaByMonth}
           onClose={() => setSelectedDay(null)}
         />
       </div>
@@ -198,4 +206,3 @@ function groupSlotsByDay(slots: SlotView[], locale: string): Map<string, DayGrou
 
   return map;
 }
-

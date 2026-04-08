@@ -73,10 +73,24 @@ export default async function BookPage({
   const minBookingTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
   const slots = allSlots.filter((slot) => slot.start >= minBookingTime);
 
-  // Check quota for the month of the FIRST available slot (not current month)
-  const firstAvailableSlot = slots.find((s) => s.isAvailable);
-  const quotaTargetDate = firstAvailableSlot?.start ?? new Date();
-  const quota = await getQuotaStatus(client.id, quotaTargetDate);
+  // Compute per-month quotas so slots are only disabled for months where credits are used up
+  const currentMonthQuota = await getQuotaStatus(client.id, new Date());
+
+  // Collect unique months (BRUSSELS_TZ) from all slots
+  const uniqueMonthKeys = new Set<string>();
+  for (const slot of slots) {
+    const dt = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(BRUSSELS_TZ);
+    uniqueMonthKeys.add(`${dt.year}-${String(dt.month).padStart(2, "0")}`);
+  }
+
+  // Query quota for each month
+  const quotaByMonth: Record<string, boolean> = {};
+  for (const monthKey of uniqueMonthKeys) {
+    const [year, month] = monthKey.split("-").map(Number);
+    const targetDate = DateTime.fromObject({ year, month, day: 15 }, { zone: BRUSSELS_TZ }).toJSDate();
+    const q = await getQuotaStatus(client.id, targetDate);
+    quotaByMonth[monthKey] = q.creditsUsedThisMonth >= q.creditsPerMonth;
+  }
 
   const slotsWithModeByDate = slots.map((slot) => {
     const modeForDate = getModeForDate(
@@ -94,7 +108,7 @@ export default async function BookPage({
     };
   });
 
-  const quotaReached = quota.creditsUsedThisMonth >= quota.creditsPerMonth;
+  const currentMonthReached = currentMonthQuota.creditsUsedThisMonth >= currentMonthQuota.creditsPerMonth;
   const rawError = Array.isArray(searchParams?.error)
     ? searchParams?.error[0]
     : searchParams?.error;
@@ -123,7 +137,7 @@ export default async function BookPage({
                   {t("book.monthlyRdv", locale)}
                 </div>
                 <div className="text-base font-semibold text-white">
-                  {quota.creditsUsedThisMonth}/{quota.creditsPerMonth} {t("book.usedThisMonth", locale)}
+                  {currentMonthQuota.creditsUsedThisMonth}/{currentMonthQuota.creditsPerMonth} {t("book.usedThisMonth", locale)}
                 </div>
               </div>
               <form action={logoutAction} className="self-start">
@@ -150,15 +164,13 @@ export default async function BookPage({
 
       {success ? <div className="alert-success">{t("book.confirmed", locale)}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
-      {quotaReached ? (
+      {currentMonthReached ? (
         <div className="alert-warning">
           {t("book.quotaWarning", locale)}
         </div>
       ) : null}
 
-      <BookingViews slots={slotsWithModeByDate} quotaReached={quotaReached} />
+      <BookingViews slots={slotsWithModeByDate} quotaReached={false} quotaByMonth={quotaByMonth} />
     </section>
   );
 }
-
-

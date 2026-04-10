@@ -522,7 +522,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
       : settings.defaultMode;
 
   // Use transaction to prevent race condition (double-booking same slot)
-    const booking = await prisma.$transaction(async (tx) => {
+    const booking = await prisma.$transaction(async (tx: any) => {
           // Re-check for conflicts inside the transaction (serializable check)
           const conflict = await tx.booking.findFirst({
                   where: {
@@ -547,7 +547,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
                             bookedBy: "client"
                   }
           });
-    }).catch((err) => {
+    }).catch((err: unknown) => {
           if (err instanceof Error && err.message === "SLOT_TAKEN") return null;
           throw err;
     });
@@ -555,7 +555,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     if (!booking) {
           return { error: "Ce créneau vient d'être pris." };
     }
-  pushBookingToGoogle(booking.id, "create").catch((err) =>
+  pushBookingToGoogle(booking.id, "create").catch((err: unknown) =>
     console.error("[GoogleSync] Booking create failed:", err)
   );
 
@@ -591,7 +591,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
   return { booking };
 }
 export async function cancelBooking(bookingId: number, reason?: string) {
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
       include: { client: true }

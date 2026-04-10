@@ -164,8 +164,8 @@ export default async function AdminAvailabilityPage({
           bookings={upcomingBookings}
           rules={rules}
           overrides={overrides
-            .filter((o) => o.type === "OPEN")
-            .map((o) => ({
+            .filter((o: any) => o.type === "OPEN")
+            .map((o: any) => ({
               id: o.id,
               date: o.date.toISOString(),
               startTime: o.startTime,
@@ -222,7 +222,7 @@ export default async function AdminAvailabilityPage({
               <p className="text-sm text-white/60">{t("avail.noRuleShort", locale)}</p>
             ) : (
               <div className="space-y-2">
-                {rules.map((rule) => (
+                {rules.map((rule: any) => (
                   <div
                     key={rule.id}
                     className="flex flex-col gap-2 rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm md:flex-row md:items-center md:justify-between"
@@ -258,9 +258,10 @@ export default async function AdminAvailabilityPage({
                 <label className="text-xs uppercase tracking-widest text-white/60">{t("avail.client", locale)}</label>
                 <select name="clientId" required className="input">
                   <option value="">{t("avail.selectClient", locale)}</option>
-                  {clients.map((client) => {
-                    const used = usageMap.get(client.id) ?? 0;
-                    const remaining = Math.max(client.creditsPerMonth - used, 0);
+                  {clients.map((client: any) => {
+                    const used = (usageMap.get(client.id) ?? 0) as number;
+                    const credits = (client.creditsPerMonth as number);
+                    const remaining = Math.max(credits - used, 0);
                     return (
                       <option key={client.id} value={client.id}>
                         {client.name} ({remaining} {t("avail.rdvRemaining", locale)})
@@ -322,7 +323,7 @@ export default async function AdminAvailabilityPage({
               <p className="text-sm text-white/60">{t("avail.noBlocked", locale)}</p>
             ) : (
               <div className="space-y-3">
-                {upcomingBlockedDates.map((booking) => {
+                {upcomingBlockedDates.map((booking: any) => {
                   const rawNote = booking.rescheduleReason ?? "";
                   const note = rawNote.replace(ADMIN_BLOCK_NOTE_PREFIX, "").trim();
                   return (
@@ -406,7 +407,7 @@ export default async function AdminAvailabilityPage({
               <p className="text-sm text-white/60">{t("avail.noException", locale)}</p>
             ) : (
               <div className="space-y-2">
-                {overrides.map((override) => (
+                {overrides.map((override: any) => (
                   <div
                     key={override.id}
                     className="flex flex-col gap-2 rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm md:flex-row md:items-center md:justify-between"
@@ -442,7 +443,7 @@ export default async function AdminAvailabilityPage({
                 {t("avail.legacyBlocks", locale)}
               </h3>
               <div className="space-y-2">
-                {legacyBlocks.map((block) => (
+                {legacyBlocks.map((block: any) => (
                   <div
                     key={block.id}
                     className="flex flex-col gap-2 rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm md:flex-row md:items-center md:justify-between"
@@ -506,7 +507,7 @@ export default async function AdminAvailabilityPage({
               </select>
               <select name="clientId" className="input">
                 <option value="">{t("avail.noClient", locale)}</option>
-                {clients.map((client) => (
+                {clients.map((client: any) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
                   </option>
@@ -536,7 +537,7 @@ export default async function AdminAvailabilityPage({
               <p className="text-sm text-white/60">{t("avail.noRecurring", locale)}</p>
             ) : (
               <div className="space-y-2">
-                {recurringBlocks.map((block) => (
+                {recurringBlocks.map((block: any) => (
                   <div
                     key={block.id}
                     className="flex flex-col gap-2 rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm md:flex-row md:items-center md:justify-between"

@@ -236,7 +236,7 @@ export async function clientUsageThisMonth() {
     where: { status: { not: "CANCELLED" }, startAt: { gte: startUtc, lt: endUtc } },
     _count: { id: true }
   });
-  return new Map(grouped.map((g) => [g.clientId, g._count.id]));
+  return new Map(grouped.map((g: any) => [g.clientId, g._count.id]));
 }
 
 export async function updateBookingMode(id: number, mode: string) {

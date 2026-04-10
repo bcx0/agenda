@@ -29,7 +29,6 @@ import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle } from "@/lib/sync-engine";
-import { Prisma } from "@prisma/client";
 import { cancelBooking } from "../../lib/booking";
 
 function assertAdmin() {
@@ -177,7 +176,7 @@ export async function addClientAction(formData: FormData) {
       creditsPerMonth
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    if (err instanceof PrismaClientKnownRequestError && err.code === "P2002") {
       redirect(
         buildClientsErrorUrl("❌ Cette adresse email est déjà utilisée par un autre client.", {
           name,
@@ -246,8 +245,8 @@ export async function updateClientEmailAction(formData: FormData) {
       where: { id: clientId },
       data: { email }
     });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+  } catch (err: unknown) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === "P2002") {
       redirect(
         `/admin/clients?error=${encodeURIComponent("❌ Cette adresse email est déjà utilisée par un autre client.")}`
       );
@@ -337,7 +336,7 @@ export async function setGeneralAvailabilityForDateAction(
     }
   });
 
-  const invalidBooking = bookings.find((booking) => {
+  const invalidBooking = bookings.find((booking: any) => {
     const startBrussels = DateTime.fromJSDate(booking.startAt, { zone: "utc" }).setZone(
       BRUSSELS_TZ
     );
@@ -351,7 +350,7 @@ export async function setGeneralAvailabilityForDateAction(
     } as const;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     await tx.availabilityOverride.deleteMany({
       where: {
         type: "OPEN",
@@ -419,7 +418,7 @@ export async function setGeneralRecurringForDayAction(
       startAt: { gte: horizonStart.toUTC().toJSDate(), lt: horizonEnd.toUTC().toJSDate() }
     }
   });
-  const invalidBooking = bookings.find((booking) => {
+  const invalidBooking = bookings.find((booking: any) => {
     const startBrussels = DateTime.fromJSDate(booking.startAt, { zone: "utc" }).setZone(
       BRUSSELS_TZ
     );
@@ -433,7 +432,7 @@ export async function setGeneralRecurringForDayAction(
     } as const;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     await tx.availabilityRule.deleteMany({ where: { dayOfWeek } });
     await tx.availabilityRule.createMany({
       data: ranges.map((range) => ({
@@ -653,7 +652,7 @@ export async function createRecurringBlockAction(formData: FormData) {
   }[] = [];
 
   for (const candidate of candidates) {
-    const conflict = existingConflicts.some((existing) =>
+    const conflict = existingConflicts.some((existing: any) =>
       overlaps(existing.startAt, existing.endAt, candidate.startAt, candidate.endAt)
     );
     if (conflict) continue;
@@ -747,7 +746,7 @@ export async function deleteRecurringBlockAction(formData: FormData) {
       });
 
       const matchingBookingIds = candidates
-        .filter((booking) => {
+        .filter((booking: any) => {
           const startInZone = DateTime.fromJSDate(booking.startAt, { zone: "utc" }).setZone(tz);
           const endInZone = DateTime.fromJSDate(booking.endAt, { zone: "utc" }).setZone(tz);
           const bookingStartMinutes = startInZone.hour * 60 + startInZone.minute;
@@ -758,12 +757,12 @@ export async function deleteRecurringBlockAction(formData: FormData) {
             bookingEndMinutes === endMinutes
           );
         })
-        .map((booking) => booking.id);
+        .map((booking: any) => booking.id);
 
       if (matchingBookingIds.length > 0) {
         // Cancel each booking individually to trigger email notifications & Google Calendar sync
         await Promise.allSettled(
-          matchingBookingIds.map((id) =>
+          matchingBookingIds.map((id: any) =>
             cancelBooking(id, "Annulé via suppression du bloc récurrent")
           )
         );

@@ -49,34 +49,34 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
   return (
         <section className="space-y-6">
               <div className="space-y-2">
-                      <p className="pill w-fit">{t("common.admin", locale)}</p>p>
+                      <p className="pill w-fit">{t("common.admin", locale)}</p>
                       <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
                         {t("bookings.title", locale)}
-                      </h1>h1>
+                      </h1>
                       <p className="text-sm text-white/70">
                         {t("bookings.subtitle", locale)}
-                      </p>p>
-              </div>div>
+                      </p>
+              </div>
         
               <div className="card space-y-4 p-6">
                       <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
                         {t("ical.title", locale)}
-                      </h2>h2>
+                      </h2>
                       <div className="space-y-3 text-sm text-white/70">
-                                <p>{t("ical.url", locale)}</p>p>
+                                <p>{t("ical.url", locale)}</p>
                                 <code className="block break-all rounded-md border border-border bg-background-elevated px-3 py-2 text-xs text-primary">
                                   {feedUrl}
-                                </code>code>
+                                </code>
                                 <ol className="list-decimal space-y-1 pl-5">
-                                            <li>{t("ical.step1", locale)}</li>li>
-                                            <li>{t("ical.step2", locale)}</li>li>
-                                            <li>{t("ical.step3", locale)}</li>li>
-                                            <li>{t("ical.step4", locale)}</li>li>
-                                </ol>ol>
-                      </div>div>
-              </div>div>
+                                            <li>{t("ical.step1", locale)}</li>
+                                            <li>{t("ical.step2", locale)}</li>
+                                            <li>{t("ical.step3", locale)}</li>
+                                            <li>{t("ical.step4", locale)}</li>
+                                </ol>
+                      </div>
+              </div>
         
               <BookingsList bookings={serializedBookings} errorMessage={errorMessage} />
-        </section>section>
+        </section>
       );
 }</section>

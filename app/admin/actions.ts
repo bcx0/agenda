@@ -30,6 +30,7 @@ import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle } from "@/lib/sync-engine";
 import { cancelBooking } from "../../lib/booking";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 function assertAdmin() {
   const session = getAdminSession();

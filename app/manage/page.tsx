@@ -55,7 +55,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
         <div className="card p-6 text-sm text-white/60">{t("manage.noBookings2", locale)}</div>
       ) : (
         <div className="space-y-4">
-          {bookings.map((booking) => {
+          {bookings.map((booking: any) => {
             const canManage = booking.startAt.getTime() - Date.now() > MANAGE_WINDOW_MS;
             const dateLabel = formatInZone(booking.startAt, "EEEE dd LLL yyyy", BRUSSELS_TZ);
             const brussels = formatInZone(booking.startAt, "HH:mm", BRUSSELS_TZ);

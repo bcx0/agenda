@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   const dtStamp = toIcsDate(now);
 
   const events = bookings
-    .map((booking) => {
+    .map((booking: any) => {
       const uid = `booking-${booking.id}@agenda-geoffreymahieu`;
       const summary = escapeIcs(`Rendez-vous Geoffrey Mahieu - ${booking.client.name}`);
       const description = escapeIcs(

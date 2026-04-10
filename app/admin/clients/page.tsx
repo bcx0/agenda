@@ -39,7 +39,7 @@ export default async function AdminClientsPage({ searchParams }: { searchParams?
 
   return (
     <ClientsList
-      initialClients={clients.map((client) => ({
+      initialClients={clients.map((client: any) => ({
         id: client.id,
         name: client.name,
         email: client.email,

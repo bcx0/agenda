@@ -80,7 +80,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
     // JS getDay() : 0=dim, 1=lun... on convertit en Prisma dayOfWeek (1=lun, 7=dim)
     const jsDay = cursor.getDay();
     const prismaDay = jsDay === 0 ? 7 : jsDay;
-    const todayBlocks = recurringBlocks.filter((b) => b.dayOfWeek === prismaDay);
+    const todayBlocks = recurringBlocks.filter((b: any) => b.dayOfWeek === prismaDay);
     recurringCount += todayBlocks.length;
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -104,7 +104,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <StatCard label={t("dashboard.activeClients", locale)} value={clients.filter((c) => c.isActive).length} />
+        <StatCard label={t("dashboard.activeClients", locale)} value={clients.filter((c: any) => c.isActive).length} />
         <StatCard label={t("dashboard.appointments", locale)} value={totalRdv} />
       </div>
 
@@ -120,7 +120,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
             {upcoming.length === 0 ? (
               <p className="text-sm text-white/60">{t("dashboard.noBookings", locale)}</p>
             ) : (
-              upcoming.map((b) => (
+              upcoming.map((b: any) => (
                 <div
                   key={b.id}
                   className="rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm"

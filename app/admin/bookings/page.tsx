@@ -79,4 +79,4 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
               <BookingsList bookings={serializedBookings} errorMessage={errorMessage} />
         </section>
       );
-}</section>
+}

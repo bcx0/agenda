@@ -30,14 +30,31 @@ export default async function AdminSettingsPage() {
 
   const locale = await getServerLocale();
 
-  const [settings, sessionModes, googleToken, availabilityRules, locationPeriods] =
+  const [settings, sessionModes, googleToken, availabilityRules, locationPeriods, recentAuthError] =
     await Promise.all([
       getSettings(),
       prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } }),
       prisma.googleToken.findFirst(),
       prisma.availabilityRule.findMany({ orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] }),
       prisma.locationPeriod.findMany({ orderBy: { startDate: "asc" } }),
+      // Dernière entrée d'erreur auth sur GoogleToken.
+      // On l'affiche comme "reauth requise" UNIQUEMENT si elle est plus
+      // récente que la dernière mise à jour du token (sinon l'utilisateur
+      // a déjà reconnecté).
+      prisma.syncLog.findFirst({
+        where: {
+          table: "GoogleToken",
+          action: "auth_error",
+        },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
+
+  const googleNeedsReauth = Boolean(
+    googleToken &&
+      recentAuthError &&
+      recentAuthError.createdAt > googleToken.updatedAt
+  );
 
   const miamiRules = availabilityRules.filter((r: { location: string }) => r.location === "MIAMI");
   const brusselsRules = availabilityRules.filter((r: { location: string }) => r.location === "BELGIUM");
@@ -228,6 +245,7 @@ export default async function AdminSettingsPage() {
         <GoogleCalendarConnect
           isConnected={Boolean(googleToken)}
           googleEmail={googleToken?.googleEmail ?? null}
+          needsReauth={googleNeedsReauth}
         />
       </div>
 

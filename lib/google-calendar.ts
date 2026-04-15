@@ -1,6 +1,24 @@
 import { prisma } from './prisma'
+import { GoogleReauthRequiredError } from './google-errors'
 
 const DEFAULT_TIMEZONE = 'Europe/Paris'
+
+// Log an auth error in SyncLog so admin UI / monitoring can surface it.
+// Fire-and-forget — never block or rethrow on logging failure.
+async function logAuthError(message: string, reason: string): Promise<void> {
+  try {
+    await prisma.syncLog.create({
+      data: {
+        table: 'GoogleToken',
+        action: 'auth_error',
+        direction: 'google',
+        details: { message, reason },
+      },
+    })
+  } catch (e) {
+    console.error('[GoogleCalendar] Failed to log auth error:', e)
+  }
+}
 
 // ─── Types exportés ───────────────────────────────────────────────
 
@@ -84,10 +102,12 @@ export async function getValidAccessToken(
     // Si invalid_grant → le refresh token est expiré/révoqué
     // (projet Google Cloud en mode "Testing" = expiration 7 jours)
     if (refreshed.error === 'invalid_grant') {
-      throw new Error(
+      await logAuthError(errorDetail, 'invalid_grant')
+      throw new GoogleReauthRequiredError(
         'Refresh token Google expiré ou révoqué. ' +
-        'Reconnectez Google Calendar depuis le panel admin. ' +
-        'Si le problème revient tous les 7 jours, passez le projet Google Cloud en mode "Production".'
+          'Reconnectez Google Calendar depuis le panel admin. ' +
+          'Si le problème revient tous les 7 jours, passez le projet Google Cloud en mode "Production".',
+        'invalid_grant'
       )
     }
 
@@ -141,6 +161,22 @@ async function googleApiFetch(
         Authorization: `Bearer ${accessToken}`,
       },
     })
+
+    // Si toujours 401 après refresh forcé → le refresh a "réussi" côté
+    // OAuth mais l'API Calendar rejette toujours. Signifie que le token
+    // est probablement révoqué côté utilisateur ou les scopes sont invalides.
+    if (res.status === 401) {
+      const errBody = await res.clone().text().catch(() => 'no body')
+      await logAuthError(
+        `Calendar API 401 after forced refresh: ${errBody.slice(0, 500)}`,
+        'post_refresh_401'
+      )
+      throw new GoogleReauthRequiredError(
+        'Google Calendar rejette encore le token après refresh. ' +
+          'Reconnectez Google Calendar depuis le panel admin.',
+        'post_refresh_401'
+      )
+    }
   }
 
   return res

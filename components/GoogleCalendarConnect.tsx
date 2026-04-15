@@ -5,9 +5,10 @@ import { useState, useEffect, useRef } from 'react'
 interface Props {
   isConnected: boolean
   googleEmail?: string | null
+  needsReauth?: boolean
 }
 
-export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
+export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }: Props) {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(null)
   const [progress, setProgress] = useState('')
@@ -127,23 +128,51 @@ export function GoogleCalendarConnect({ isConnected, googleEmail }: Props) {
   if (isConnected) {
     return (
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-sm
-            text-green-700 bg-green-50 border border-green-200
-            rounded-full px-3 py-1">
-            <svg className="w-3.5 h-3.5" fill="currentColor"
-              viewBox="0 0 20 20">
-              <path fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414
-                0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1
-                0 011.414 0z" clipRule="evenodd" />
-            </svg>
-            Google Calendar connecté
-          </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {needsReauth ? (
+            <span className="inline-flex items-center gap-1.5 text-sm
+              text-red-700 bg-red-50 border border-red-200
+              rounded-full px-3 py-1">
+              <svg className="w-3.5 h-3.5" fill="currentColor"
+                viewBox="0 0 20 20">
+                <path fillRule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58
+                  9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53
+                  0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0
+                  11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002
+                  0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              Reconnexion requise
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-sm
+              text-green-700 bg-green-50 border border-green-200
+              rounded-full px-3 py-1">
+              <svg className="w-3.5 h-3.5" fill="currentColor"
+                viewBox="0 0 20 20">
+                <path fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414
+                  0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1
+                  0 011.414 0z" clipRule="evenodd" />
+              </svg>
+              Google Calendar connecté
+            </span>
+          )}
           {googleEmail && (
             <span className="text-xs text-gray-500">{googleEmail}</span>
           )}
         </div>
+
+        {needsReauth && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <p className="font-semibold mb-0.5">Synchronisation interrompue</p>
+            <p>
+              Le token Google a expiré ou a été révoqué. La synchronisation
+              automatique est en pause jusqu'à la reconnexion. Cliquez sur{' '}
+              <strong>« Reconnecter »</strong> ci-dessous.
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <button

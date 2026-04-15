@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '../../../../lib/prisma'
 import { pullFromGoogle } from '../../../../lib/sync-engine'
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
+import { isReauthError } from '../../../../lib/google-errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +73,25 @@ export async function GET(req: NextRequest) {
       errors,
     })
   } catch (error: unknown) {
+    // Reauth requise (token révoqué/expiré côté Google) → on skip proprement.
+    // Retourner 200 pour éviter le spam d'erreurs 500 dans les logs Vercel
+    // toutes les heures jusqu'à reconnexion manuelle.
+    if (isReauthError(error)) {
+      console.warn(
+        '[Cron sync] Skipped — Google reauth required:',
+        error.message
+      )
+      return NextResponse.json(
+        {
+          success: false,
+          skipped: 'reauth_required',
+          message:
+            'Google Calendar doit être reconnecté depuis /admin/settings.',
+        },
+        { status: 200 }
+      )
+    }
+
     console.error('[Cron sync] Error:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Sync error' },

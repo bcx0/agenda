@@ -60,6 +60,11 @@ export async function GET(request: NextRequest) {
         })
   }
 
+  // Note: GoogleToken.updatedAt vient d'être rafraîchi ci-dessus, ce qui
+  // rend automatiquement caduques les auth_error SyncLog antérieurs
+  // (le badge "Reconnexion requise" dans /admin/settings compare
+  // recentAuthError.createdAt vs googleToken.updatedAt).
+
   await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/calendar/watch`, { method: 'POST' })
 
   return NextResponse.redirect(

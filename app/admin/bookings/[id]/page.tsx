@@ -6,6 +6,7 @@ import { adminRescheduleBookingAction, cancelBookingAction } from "../../actions
 import { prisma } from "../../../../lib/prisma";
 import { getAdminSession } from "../../../../lib/session";
 import { getServerLocale, t, translateStatus, translateMode } from "../../../../lib/i18n";
+import { formatInZone, BRUSSELS_TZ } from "../../../../lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +15,9 @@ type PageProps = {
 };
 
 function toDateTimeLocalValue(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${d}T${hh}:${mm}`;
+  // Format in Brussels timezone for the <input type="datetime-local"> default value.
+  // Server runs in UTC on Vercel, so naive date.getHours() would be wrong.
+  return formatInZone(date, "yyyy-LL-dd'T'HH:mm", BRUSSELS_TZ);
 }
 
 export default async function AdminBookingDetailPage({ params }: PageProps) {
@@ -74,17 +72,20 @@ export default async function AdminBookingDetailPage({ params }: PageProps) {
               weekday: "long",
               day: "2-digit",
               month: "long",
-              year: "numeric"
+              year: "numeric",
+              timeZone: "Europe/Brussels"
             })}{" "}
             à{" "}
             {new Date(booking.startAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
               hour: "2-digit",
-              minute: "2-digit"
+              minute: "2-digit",
+              timeZone: "Europe/Brussels"
             })}{" "}
             -{" "}
             {new Date(booking.endAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
               hour: "2-digit",
-              minute: "2-digit"
+              minute: "2-digit",
+              timeZone: "Europe/Brussels"
             })}{" "}
             Brussels
           </p>

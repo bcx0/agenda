@@ -177,8 +177,8 @@ export default async function AdminSettingsPage() {
         {locationPeriods.length > 0 ? (
           <div className="space-y-3">
             {locationPeriods.map((period: { id: number; startDate: Date; endDate: Date; note: string | null }) => {
-              const start = new Date(period.startDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR");
-              const end = new Date(period.endDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR");
+              const start = new Date(period.startDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", { timeZone: "Europe/Brussels" });
+              const end = new Date(period.endDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", { timeZone: "Europe/Brussels" });
               const now = new Date();
               const isActive =
                 now >= new Date(period.startDate) && now <= new Date(period.endDate);
@@ -299,8 +299,8 @@ export default async function AdminSettingsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="font-semibold">
-                        {t("settings.from", locale)} {new Date(sessionMode.startDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR")} {t("settings.to", locale)}{" "}
-                        {new Date(sessionMode.endDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR")}
+                        {t("settings.from", locale)} {new Date(sessionMode.startDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", { timeZone: "Europe/Brussels" })} {t("settings.to", locale)}{" "}
+                        {new Date(sessionMode.endDate).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", { timeZone: "Europe/Brussels" })}
                       </p>
                       <p className="text-sm text-white/70">
                         Mode :{" "}

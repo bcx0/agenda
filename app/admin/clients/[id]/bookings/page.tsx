@@ -72,18 +72,21 @@ export default async function ClientBookingsPage({ params }: Props) {
                       weekday: "long",
                       day: "numeric",
                       month: "long",
-                      year: "numeric"
+                      year: "numeric",
+                      timeZone: "Europe/Brussels"
                     })}
                   </p>
                   <p className="text-white/70">
                     {new Date(booking.startAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
                       hour: "2-digit",
-                      minute: "2-digit"
+                      minute: "2-digit",
+                      timeZone: "Europe/Brussels"
                     })}{" "}
                     -{" "}
                     {new Date(booking.endAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
                       hour: "2-digit",
-                      minute: "2-digit"
+                      minute: "2-digit",
+                      timeZone: "Europe/Brussels"
                     })}
                   </p>
                   <p className="text-sm text-white/50">{t("bookingDetail.mode", locale)}: {translateMode(booking.mode, locale)}</p>

@@ -27,24 +27,13 @@ export default async function LoginPage() {
         <LoginForm />
       </div>
 
-      <div className="mt-8 flex flex-col items-center gap-2">
+      <div className="mt-8 flex justify-center">
         <Link
           href="/admin"
           className="text-xs uppercase tracking-widest text-white/40 hover:text-[#C8A060] transition-colors"
         >
           {t("common.admin", locale)}
         </Link>
-        <p className="text-xs text-white/30">
-          {t("footer.madeBy", locale)}{" "}
-          <a
-            href="https://lagencepartners.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-white/50 underline hover:text-[#C8A060] transition-colors"
-          >
-            {t("footer.agency", locale)}
-          </a>
-        </p>
       </div>
     </section>
   );

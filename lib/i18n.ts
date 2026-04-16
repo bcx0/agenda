@@ -105,6 +105,11 @@ export const translations = {
   "book.usedThisMonth": { fr: "utilisés ce mois-ci", en: "used this month" },
   "book.blocked": { fr: "Les RDV sont bloqués après le quota mensuel. Pour un besoin exceptionnel, contactez Geoffrey.", en: "Bookings are blocked after the monthly quota. For exceptional needs, contact Geoffrey." },
   "book.disconnect": { fr: "Déconnexion", en: "Log out" },
+  "book.creditsRemaining": { fr: "crédits restants", en: "credits remaining" },
+  "book.creditRemaining": { fr: "crédit restant", en: "credit remaining" },
+  "book.noCredits": { fr: "aucun crédit", en: "no credits" },
+  "book.yourCredits": { fr: "Vos crédits", en: "Your credits" },
+  "book.inMonth": { fr: "En", en: "In" },
 
   // Settings
   "settings.title": { fr: "Paramètres", en: "Settings" },
@@ -131,6 +136,8 @@ export const translations = {
   // Footer
   "footer.madeBy": { fr: "Réalisé par", en: "Made by" },
   "footer.agency": { fr: "L'agence", en: "The Agency" },
+  "footer.legal": { fr: "Mentions légales", en: "Legal notice" },
+  "footer.followUs": { fr: "Suivez-nous", en: "Follow us" },
 
   // Admin login
   "adminLogin.title": { fr: "Connexion requise", en: "Login required" },
@@ -362,6 +369,20 @@ export const translations = {
   "dayName.5": { fr: "Vendredi", en: "Friday" },
   "dayName.6": { fr: "Samedi", en: "Saturday" },
   "dayName.7": { fr: "Dimanche", en: "Sunday" },
+
+  // Month names
+  "month.1": { fr: "janvier", en: "January" },
+  "month.2": { fr: "février", en: "February" },
+  "month.3": { fr: "mars", en: "March" },
+  "month.4": { fr: "avril", en: "April" },
+  "month.5": { fr: "mai", en: "May" },
+  "month.6": { fr: "juin", en: "June" },
+  "month.7": { fr: "juillet", en: "July" },
+  "month.8": { fr: "août", en: "August" },
+  "month.9": { fr: "septembre", en: "September" },
+  "month.10": { fr: "octobre", en: "October" },
+  "month.11": { fr: "novembre", en: "November" },
+  "month.12": { fr: "décembre", en: "December" },
 
   // BookingViews
   "bookingViews.brusselsMiami": { fr: "Brussels / Miami", en: "Brussels / Miami" },

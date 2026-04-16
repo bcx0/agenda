@@ -13,6 +13,7 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
   const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(null)
   const [progress, setProgress] = useState('')
   const abortRef = useRef(false)
+  const autoSyncDone = useRef(false)
 
   useEffect(() => {
     if (syncResult) {
@@ -20,6 +21,14 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
       return () => clearTimeout(timer)
     }
   }, [syncResult])
+
+  // Auto-sync on page load if connected and not needing reauth
+  useEffect(() => {
+    if (isConnected && !needsReauth && !autoSyncDone.current) {
+      autoSyncDone.current = true
+      handleSync()
+    }
+  }, [isConnected, needsReauth]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFullResync = async () => {
     if (!confirm('Cela va supprimer tous les RDV importés de Google et tout re-synchroniser. Continuer ?')) return

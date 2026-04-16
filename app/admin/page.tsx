@@ -8,6 +8,7 @@ import { adminLoginAction, adminLogoutAction } from "./actions";
 import { listUpcomingBookingsThisMonth } from "../../lib/admin";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
 import { prisma } from "../../lib/prisma";
+import PasswordInput from "../../components/PasswordInput";
 
 export const dynamic = "force-dynamic";
 
@@ -42,10 +43,8 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
           <label className="text-xs uppercase tracking-widest text-white/60">
             {t("adminLogin.password", locale)}
           </label>
-          <input
-            type="password"
+          <PasswordInput
             name="password"
-            className="w-full rounded-md border border-border bg-background-elevated px-3 py-3 text-sm focus:border-border focus:outline-none"
             placeholder={t("adminLogin.placeholder", locale)}
             required
           />

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&amp;display=swap');
+  </style>
+  <text x="200" y="65" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-size="58" font-weight="400" fill="white" letter-spacing="1">L'agence</text>
+  <text x="200" y="95" text-anchor="middle" font-family="'Playfair Display', Georgia, serif" font-size="10" font-weight="400" fill="white" letter-spacing="6" opacity="0.7">VOS IDEES DEVIENNENT DES PROJETS.</text>
+</svg>

@@ -3,6 +3,7 @@
 import { useFormState } from "react-dom";
 import { loginAction } from "./actions";
 import type { LoginState } from "./types";
+import PasswordInput from "../../components/PasswordInput";
 
 const initialState: LoginState = {};
 
@@ -27,11 +28,9 @@ export default function LoginForm() {
         <label className="text-xs font-semibold tracking-widest uppercase">
           Mot de passe
         </label>
-        <input
-          type="password"
+        <PasswordInput
           name="password"
           required
-          className="w-full rounded-md border border-border bg-background-elevated px-3 py-3 text-sm focus:border-border focus:outline-none"
           placeholder="Mot de passe"
         />
       </div>

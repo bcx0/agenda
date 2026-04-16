@@ -11,7 +11,8 @@ import { formatTimeSlot, getAvailableTimeSlots } from "../../lib/timeSlots";
 import { logoutAction } from "../login/actions";
 import { prisma } from "../../lib/prisma";
 import { getSettings } from "../../lib/settings";
-import { getServerLocale, t } from "../../lib/i18n";
+import { getServerLocale, t, type TranslationKey } from "../../lib/i18n";
+import { AgencyBranding } from "../../components/AgencyBranding";
 
 export const dynamic = "force-dynamic";
 
@@ -63,18 +64,36 @@ export default async function BookPage({
 
   const locale = await getServerLocale();
 
-  const [allSlots, settings, sessionModes] = await Promise.all([
+  // Build the next 4 months starting from current month
+  const nowBrussels = DateTime.now().setZone(BRUSSELS_TZ);
+  const next4Months = Array.from({ length: 4 }, (_, i) => {
+    const m = nowBrussels.plus({ months: i });
+    return { year: m.year, month: m.month };
+  });
+
+  const [allSlots, settings, sessionModes, ...next4QuotaResults] = await Promise.all([
     getAvailableTimeSlots(),
     getSettings(),
-    prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } })
+    prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } }),
+    ...next4Months.map(({ year, month }) => {
+      const targetDate = DateTime.fromObject({ year, month, day: 15 }, { zone: BRUSSELS_TZ }).toJSDate();
+      return getQuotaStatus(client.id, targetDate);
+    })
   ]);
+
+  // Build rolling 4-month credit info
+  const monthlyCredits = next4Months.map(({ year, month }, i) => {
+    const q = next4QuotaResults[i];
+    const remaining = Math.max(0, q.creditsPerMonth - q.creditsUsedThisMonth);
+    return { year, month, remaining, total: q.creditsPerMonth, used: q.creditsUsedThisMonth };
+  });
+
+  // Current month quota for the warning
+  const currentMonthQuota = next4QuotaResults[0];
 
   // Filter out slots less than 48h from now for clients
   const minBookingTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
   const slots = allSlots.filter((slot) => slot.start >= minBookingTime);
-
-  // Compute per-month quotas so slots are only disabled for months where credits are used up
-  const currentMonthQuota = await getQuotaStatus(client.id, new Date());
 
   // Collect unique months (BRUSSELS_TZ) from all slots
   const uniqueMonthKeys = new Set<string>();
@@ -83,14 +102,19 @@ export default async function BookPage({
     uniqueMonthKeys.add(`${dt.year}-${String(dt.month).padStart(2, "0")}`);
   }
 
-  // Query quota for each month
+  // Query quota for each month — all in parallel
+  const monthKeysArray = Array.from(uniqueMonthKeys);
+  const quotaResults = await Promise.all(
+    monthKeysArray.map((monthKey) => {
+      const [year, month] = monthKey.split("-").map(Number);
+      const targetDate = DateTime.fromObject({ year, month, day: 15 }, { zone: BRUSSELS_TZ }).toJSDate();
+      return getQuotaStatus(client.id, targetDate);
+    })
+  );
   const quotaByMonth: Record<string, boolean> = {};
-  for (const monthKey of Array.from(uniqueMonthKeys)) {
-    const [year, month] = monthKey.split("-").map(Number);
-    const targetDate = DateTime.fromObject({ year, month, day: 15 }, { zone: BRUSSELS_TZ }).toJSDate();
-    const q = await getQuotaStatus(client.id, targetDate);
-    quotaByMonth[monthKey] = q.creditsUsedThisMonth >= q.creditsPerMonth;
-  }
+  monthKeysArray.forEach((key, i) => {
+    quotaByMonth[key] = quotaResults[i].creditsUsedThisMonth >= quotaResults[i].creditsPerMonth;
+  });
 
   const slotsWithModeByDate = slots.map((slot) => {
     const modeForDate = getModeForDate(
@@ -132,13 +156,8 @@ export default async function BookPage({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="card space-y-3 p-5 md:p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <div className="text-base uppercase tracking-widest text-white/60">
-                  {t("book.monthlyRdv", locale)}
-                </div>
-                <div className="text-base font-semibold text-white">
-                  {currentMonthQuota.creditsUsedThisMonth}/{currentMonthQuota.creditsPerMonth} {t("book.usedThisMonth", locale)}
-                </div>
+              <div className="text-xs uppercase tracking-widest text-white/60">
+                {t("book.yourCredits", locale)}
               </div>
               <form action={logoutAction} className="self-start">
                 <button
@@ -149,9 +168,26 @@ export default async function BookPage({
                 </button>
               </form>
             </div>
-            <p className="text-xs text-white/60">
-              {t("book.blocked", locale)}
-            </p>
+            <div className="space-y-1.5 text-sm text-white/80">
+              {monthlyCredits.map((mc) => {
+                const monthName = t(`month.${mc.month}` as TranslationKey, locale);
+                const creditsLabel = mc.remaining <= 0
+                  ? t("book.noCredits", locale)
+                  : mc.remaining === 1
+                    ? `${mc.remaining} ${t("book.creditRemaining", locale)}`
+                    : `${mc.remaining} ${t("book.creditsRemaining", locale)}`;
+                return (
+                  <div key={`${mc.year}-${mc.month}`} className={mc.remaining <= 0 ? "text-white/40" : ""}>
+                    {t("book.inMonth", locale)} <span className="font-semibold capitalize">{monthName}</span>{locale === "fr" ? " il vous reste " : ": "}<span className={mc.remaining <= 0 ? "text-red-400" : "text-[#C8A060]"}>{creditsLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-4 pt-1">
+              <p className="text-xs text-white/40">
+                {t("book.blocked", locale)}
+              </p>
+            </div>
             <Link
               href="/manage"
               className="inline-flex text-xs uppercase tracking-widest text-white/60 underline underline-offset-4 hover:text-white"
@@ -159,6 +195,7 @@ export default async function BookPage({
               {t("book.myRdv", locale)}
             </Link>
           </div>
+          <AgencyBranding />
         </div>
       </div>
 

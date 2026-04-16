@@ -166,17 +166,12 @@ export async function deleteBlock(blockId: number) {
 export async function listUpcomingBookingsThisMonth() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  // Limite à 90 jours + max 200 résultats pour éviter de charger des
-  // milliers de lignes. Le dashboard n'affiche que les 4 premiers.
-  const ninetyDaysLater = new Date(todayStart);
-  ninetyDaysLater.setDate(ninetyDaysLater.getDate() + 90);
   return prisma.booking.findMany({
     where: {
       status: { not: "CANCELLED" },
-      startAt: { gte: todayStart, lte: ninetyDaysLater }
+      startAt: { gte: todayStart }
     },
     orderBy: { startAt: "asc" },
-    take: 200,
     include: { client: true }
   });
 }

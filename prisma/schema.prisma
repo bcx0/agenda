@@ -47,6 +47,7 @@ model Booking {
   @@index([status])
   @@index([startAt])
   @@index([clientId, status])
+  @@index([status, startAt])
 }
 
 model Block {
@@ -172,4 +173,6 @@ model SyncLog {
   direction String
   details   Json?
   createdAt DateTime @default(now())
+
+  @@index([table, action, createdAt])
 }

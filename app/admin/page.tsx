@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "../../lib/session";
 import { getServerLocale, t, translateStatus } from "../../lib/i18n";
 import { adminLoginAction, adminLogoutAction } from "./actions";
-import { listClients, listUpcomingBookingsThisMonth } from "../../lib/admin";
+import { listUpcomingBookingsThisMonth } from "../../lib/admin";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
 import { prisma } from "../../lib/prisma";
 
@@ -60,9 +60,9 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
   const now = new Date();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  const [clients, bookings, thisMonthUpcomingBookings, recurringBlocks] =
+  const [activeClientCount, bookings, thisMonthUpcomingBookings, recurringBlocks] =
     await Promise.all([
-      listClients(),
+      prisma.client.count({ where: { isActive: true } }),
       listUpcomingBookingsThisMonth(),
       prisma.booking.count({
         where: {
@@ -104,7 +104,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <StatCard label={t("dashboard.activeClients", locale)} value={clients.filter((c: any) => c.isActive).length} />
+        <StatCard label={t("dashboard.activeClients", locale)} value={activeClientCount} />
         <StatCard label={t("dashboard.appointments", locale)} value={totalRdv} />
       </div>
 

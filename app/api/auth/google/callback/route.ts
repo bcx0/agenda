@@ -65,7 +65,17 @@ export async function GET(request: NextRequest) {
   // (le badge "Reconnexion requise" dans /admin/settings compare
   // recentAuthError.createdAt vs googleToken.updatedAt).
 
+  // Renouvelle le webhook push-notification.
   await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/calendar/watch`, { method: 'POST' })
+
+  // ── Auto-sync : rattrape tous les événements manqués pendant la panne ──
+  // syncToken a été mis à null ci-dessus, donc le cron fera un full sync
+  // au prochain run. Mais on déclenche aussi un sync immédiat (fire-and-forget)
+  // pour que les RDV manquants apparaissent dès maintenant sans attendre le cron.
+  fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cron/sync-calendar`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+  }).catch((err) => console.error('[OAuth callback] Auto-sync failed:', err))
 
   return NextResponse.redirect(
         'https://agenda-geoffreymahieu.vercel.app/admin?success=google_connected'

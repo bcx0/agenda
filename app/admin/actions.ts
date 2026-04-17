@@ -131,6 +131,18 @@ export async function adminLogoutAction() {
   redirect("/admin");
 }
 
+export async function toggleBookingLockAction() {
+  assertAdmin();
+  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const currentLock = settings?.bookingLocked ?? false;
+  await prisma.settings.upsert({
+    where: { id: 1 },
+    update: { bookingLocked: !currentLock },
+    create: { id: 1, location: "MIAMI", presentielLocation: "Vander Valk", defaultMode: "VISIO", bookingLocked: true },
+  });
+  redirect("/admin");
+}
+
 export async function addClientAction(formData: FormData) {
   assertAdmin();
   const name = formData.get("name")?.toString().trim() ?? "";

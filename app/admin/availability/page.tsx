@@ -106,7 +106,7 @@ export default async function AdminAvailabilityPage({
   rangeEnd.setDate(rangeEnd.getDate() + 365);
   rangeEnd.setHours(23, 59, 59, 999);
 
-  const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates, upcomingBookings] = await Promise.all([
+  const [rules, overrides, recurringBlocks, legacyBlocks, clients, slots, usageMap, upcomingBlockedDates, upcomingBookings, noAccountBlocks] = await Promise.all([
     listAvailabilityRules(),
     listAvailabilityOverrides(),
     listRecurringBlocks(),
@@ -129,6 +129,13 @@ export default async function AdminAvailabilityPage({
         startAt: { gte: rangeStart, lte: rangeEnd }
       },
       include: { client: true },
+      orderBy: { startAt: "asc" }
+    }),
+    prisma.block.findMany({
+      where: {
+        reason: { startsWith: "[NO_ACCOUNT]" },
+        startAt: { gte: rangeStart, lte: rangeEnd }
+      },
       orderBy: { startAt: "asc" }
     })
   ]);
@@ -172,6 +179,12 @@ export default async function AdminAvailabilityPage({
               endTime: o.endTime,
               type: "OPEN" as const
             }))}
+          noAccountBlocks={noAccountBlocks.map((b: any) => ({
+            id: b.id,
+            startAt: b.startAt,
+            endAt: b.endAt,
+            reason: b.reason,
+          }))}
         />
       ) : null}
 

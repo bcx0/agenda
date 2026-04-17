@@ -90,8 +90,8 @@ async function findOrCreateGoogleClient(clientName: string) {
     }
   }
 
-  // 6. No match found — return null (will create Block instead of fake client)
-  console.log(`[Sync] No matching client for "${normalizedName}" — will create Block instead`)
+  // 6. No match found — return null (will create Block instead)
+  console.log(`[Sync] No matching client for "${normalizedName}" — will create Block`)
   return null
 }
 
@@ -436,13 +436,13 @@ export async function pullFromGoogle(
 
     const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')
 
-    // If no matching real client found, create a Block instead of a fake client booking
+    // No matching client → create a Block that blocks the slot + shows a warning in admin
     if (!client) {
       const newBlock = await prisma.block.create({
         data: {
           startAt: startDate,
           endAt: endDate,
-          reason: `RDV — ${parsed.clientName || 'Client Google'} (non trouvé)`,
+          reason: `[NO_ACCOUNT] RDV — ${parsed.clientName || 'Client Google'}`,
           googleEventId,
           syncSource: 'google',
           syncStatus: 'synced',
@@ -454,9 +454,8 @@ export async function pullFromGoogle(
         source: 'google_external_event',
         summary: googleEvent.summary,
         clientName: parsed.clientName,
-        reason: 'No matching real client found',
       })
-      return { action: 'block_created_no_client', id: newBlock.id, clientName: parsed.clientName }
+      return { action: 'block_created_no_account', id: newBlock.id, clientName: parsed.clientName }
     }
 
     const newBooking = await prisma.booking.create({

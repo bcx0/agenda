@@ -40,6 +40,13 @@ type DayGroup = {
   date: DateTime;
 };
 
+type NoAccountBlock = {
+  id: number;
+  startAt: Date | string;
+  endAt: Date | string;
+  reason: string;
+};
+
 type Props = {
   slots: SlotView[];
   bookings: {
@@ -50,6 +57,7 @@ type Props = {
   }[];
   rules: AvailabilityRule[];
   overrides: AvailabilityOverride[];
+  noAccountBlocks?: NoAccountBlock[];
 };
 
 const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
@@ -87,7 +95,7 @@ function toRangeJson(ranges: Range[]) {
 }
 
 
-export default function AdminGeneralAvailability({ slots, bookings, rules, overrides }: Props) {
+export default function AdminGeneralAvailability({ slots, bookings, rules, overrides, noAccountBlocks = [] }: Props) {
   const { t, translateSlotStatus, locale } = useLanguage();
   const normalized = useMemo(() => normalizeSlots(slots), [slots]);
   const dayMap = useMemo(() => groupSlotsByDay(normalized, locale), [normalized, locale]);
@@ -183,6 +191,26 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         return dayKey === selectedDay.key;
       });
   }, [bookings, selectedDay]);
+
+  // Blocks from Google with no matching client account
+  const noAccountForDay = useMemo(() => {
+    if (!selectedDay) return [];
+    return noAccountBlocks
+      .map((block) => ({
+        ...block,
+        startDate: new Date(block.startAt),
+        endDate: new Date(block.endAt),
+        clientName: (block.reason || "").replace("[NO_ACCOUNT] RDV — ", "").replace(" (non trouvé)", ""),
+      }))
+      .filter((block) => {
+        const dayKey =
+          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
+          DateTime.fromJSDate(block.startDate, { zone: "utc" })
+            .setZone(MIAMI_TZ)
+            .toFormat("yyyy-LL-dd");
+        return dayKey === selectedDay.key;
+      });
+  }, [noAccountBlocks, selectedDay]);
 
   // Mobile compact calendar (like MobileBookingView)
   const todayKey = useMemo(() => {
@@ -731,6 +759,55 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   <p className="text-sm text-white/50">{t("availability.noReservation")}</p>
                 )}
               </div>
+
+              {/* NO_ACCOUNT blocks — Google RDV with no matching client */}
+              {noAccountForDay.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-red-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    {locale === "fr" ? "Sans compte client" : "No client account"}
+                  </h4>
+                  <div className="space-y-2">
+                    {noAccountForDay.map((block) => (
+                      <div
+                        key={block.id}
+                        className="rounded-lg border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm"
+                      >
+                        <p className="font-semibold text-red-300">{block.clientName}</p>
+                        <p className="text-xs text-red-300/70">
+                          {DateTime.fromJSDate(block.startDate, { zone: "utc" })
+                            .setZone(BRUSSELS_TZ)
+                            .toFormat("HH:mm")}{" "}
+                          -{" "}
+                          {DateTime.fromJSDate(block.endDate, { zone: "utc" })
+                            .setZone(BRUSSELS_TZ)
+                            .toFormat("HH:mm")}{" "}
+                          Brussels
+                        </p>
+                        <p className="text-xs text-red-300/50">
+                          {DateTime.fromJSDate(block.startDate, { zone: "utc" })
+                            .setZone(MIAMI_TZ)
+                            .toFormat("HH:mm")}{" "}
+                          -{" "}
+                          {DateTime.fromJSDate(block.endDate, { zone: "utc" })
+                            .setZone(MIAMI_TZ)
+                            .toFormat("HH:mm")}{" "}
+                          Miami
+                        </p>
+                        <p className="mt-1 text-xs text-red-400/80">
+                          {locale === "fr"
+                            ? "Cette personne n'a pas de compte. Créez-lui un compte pour convertir en RDV."
+                            : "This person has no account. Create an account to convert to a booking."}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex min-h-[240px] items-center justify-center text-center text-white/50">

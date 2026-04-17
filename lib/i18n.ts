@@ -267,6 +267,12 @@ export const translations = {
   "slotButton.reserving": { fr: "Réservation...", en: "Booking..." },
   "slotButton.confirmQ": { fr: "Confirmer ?", en: "Confirm?" },
 
+  // Booking lock
+  "dashboard.bookingLocked": { fr: "Réservations bloquées", en: "Bookings locked" },
+  "dashboard.bookingUnlocked": { fr: "Réservations ouvertes", en: "Bookings open" },
+  "dashboard.toggleLock": { fr: "Bloquer/Débloquer les réservations", en: "Lock/Unlock bookings" },
+  "book.locked": { fr: "Les réservations sont temporairement suspendues. Veuillez réessayer plus tard.", en: "Bookings are temporarily suspended. Please try again later." },
+
   // Availability page tabs
   "avail.tabAgenda": { fr: "Agenda", en: "Agenda" },
   "avail.tabWeekly": { fr: "Mes horaires fixes", en: "My fixed hours" },

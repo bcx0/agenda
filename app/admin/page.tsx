@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "../../lib/session";
 import { getServerLocale, t, translateStatus } from "../../lib/i18n";
-import { adminLoginAction, adminLogoutAction } from "./actions";
+import { adminLoginAction, adminLogoutAction, toggleBookingLockAction } from "./actions";
 import { listUpcomingBookingsThisMonth } from "../../lib/admin";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
 import { prisma } from "../../lib/prisma";
@@ -59,7 +59,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
   const now = new Date();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  const [activeClientCount, bookings, thisMonthUpcomingBookings, recurringBlocks] =
+  const [activeClientCount, bookings, thisMonthUpcomingBookings, recurringBlocks, settings] =
     await Promise.all([
       prisma.client.count({ where: { isActive: true } }),
       listUpcomingBookingsThisMonth(),
@@ -69,8 +69,11 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
           startAt: { gte: now, lte: endOfMonth }
         }
       }),
-      prisma.recurringBlock.findMany()
+      prisma.recurringBlock.findMany(),
+      prisma.settings.findUnique({ where: { id: 1 } })
     ]);
+
+  const bookingLocked = settings?.bookingLocked ?? false;
   // Compter les occurrences de RecurringBlocks restantes ce mois
   let recurringCount = 0;
   const cursor = new Date(now);
@@ -144,6 +147,21 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">{t("dashboard.quickActions", locale)}</h2>
           </div>
           <div className="grid gap-2 text-sm">
+            <form action={toggleBookingLockAction}>
+              <button
+                type="submit"
+                className={`touch-target flex w-full items-center justify-between rounded-md border px-4 py-3.5 font-medium transition-all ${
+                  bookingLocked
+                    ? "border-red-500/40 bg-red-950/30 text-red-400 hover:border-red-500/60"
+                    : "border-emerald-500/40 bg-emerald-950/30 text-emerald-400 hover:border-emerald-500/60"
+                }`}
+              >
+                <span>{bookingLocked ? t("dashboard.bookingLocked", locale) : t("dashboard.bookingUnlocked", locale)}</span>
+                <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${bookingLocked ? "bg-red-500" : "bg-emerald-500"}`}>
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${bookingLocked ? "translate-x-6" : "translate-x-1"}`} />
+                </span>
+              </button>
+            </form>
             <Link className="touch-target flex items-center rounded-md border border-gray-800 bg-[#0F0F0F] px-4 py-3.5 font-medium text-white hover:border-[#C8A060]/30 transition-all" href="/admin/availability">
               {t("dashboard.viewAgenda", locale)}
             </Link>

@@ -470,6 +470,12 @@ export async function checkSlotAvailability(
 }
 
 export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
+  // Safety net: block bookings when admin has locked them
+  const lockSettings = await prisma.settings.findUnique({ where: { id: 1 } });
+  if (lockSettings?.bookingLocked) {
+    return { error: "Les réservations sont temporairement suspendues." };
+  }
+
   const client = await prisma.client.findUnique({ where: { id: clientId } });
   if (!client || !client.isActive) {
     return { error: "Acces reserve aux clients sous contrat." };

@@ -71,6 +71,9 @@ export default async function BookPage({
     return { year: m.year, month: m.month };
   });
 
+  const settingsData = await prisma.settings.findUnique({ where: { id: 1 } });
+  const bookingLocked = settingsData?.bookingLocked ?? false;
+
   const [allSlots, settings, sessionModes, ...next4QuotaResults] = await Promise.all([
     getAvailableTimeSlots(),
     getSettings(),
@@ -201,13 +204,20 @@ export default async function BookPage({
 
       {success ? <div className="alert-success">{t("book.confirmed", locale)}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
-      {currentMonthReached ? (
-        <div className="alert-warning">
-          {t("book.quotaWarning", locale)}
+      {bookingLocked ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-5 py-4 text-sm text-red-300">
+          {t("book.locked", locale)}
         </div>
-      ) : null}
-
-      <BookingViews slots={slotsWithModeByDate} quotaReached={false} quotaByMonth={quotaByMonth} />
+      ) : (
+        <>
+          {currentMonthReached ? (
+            <div className="alert-warning">
+              {t("book.quotaWarning", locale)}
+            </div>
+          ) : null}
+          <BookingViews slots={slotsWithModeByDate} quotaReached={false} quotaByMonth={quotaByMonth} />
+        </>
+      )}
     </section>
   );
 }

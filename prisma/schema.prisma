@@ -131,6 +131,7 @@ model Settings {
   presentielLocation String      @default("Vander Valk")
   presentielNote     String?
   defaultMode        String      @default("VISIO") // VISIO | PRESENTIEL
+  bookingLocked      Boolean     @default(false)
   updatedAt          DateTime    @updatedAt
 }
 

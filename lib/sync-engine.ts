@@ -267,6 +267,11 @@ export async function pullFromGoogle(
   googleEvent: GoogleCalendarEvent | null,
   googleEventId: string
 ): Promise<{ action: string; [key: string]: any }> {
+  // Debug: log every event being processed
+  if (googleEvent) {
+    console.log(`[Sync:pull] Processing: "${googleEvent.summary}" (${googleEvent.start?.dateTime ?? 'no-time'}) id=${googleEventId}`)
+  }
+
   if (!googleEvent || googleEvent.status === 'cancelled') {
     const booking = await prisma.booking.findFirst({
       where: { googleEventId },
@@ -416,22 +421,43 @@ export async function pullFromGoogle(
     const endDate = new Date(eventEndDt)
 
     // Check for existing booking on same time slot to prevent double bookings
+    // Only skip if the conflicting booking was NOT imported from Google
+    // (Google-imported bookings are already handled by the existingBooking check above)
     const conflictingBooking = await prisma.booking.findFirst({
       where: {
         status: 'CONFIRMED',
         startAt: { lt: endDate },
         endAt: { gt: startDate },
+        googleEventId: null,  // Only conflict with app-created bookings
       },
     })
 
     if (conflictingBooking) {
       logSync('Booking', conflictingBooking.id, 'pull_conflict_skipped', 'google_to_app', {
-        reason: 'Slot already booked',
+        reason: 'Slot already booked (app-created)',
         googleEventId,
         existingBookingId: conflictingBooking.id,
         summary: googleEvent.summary,
       })
       return { action: 'conflict_skipped', existingBookingId: conflictingBooking.id }
+    }
+
+    // Also check for conflicting blocks (non-Google) on the same slot
+    const conflictingBlock = await prisma.block.findFirst({
+      where: {
+        startAt: { lt: endDate },
+        endAt: { gt: startDate },
+        googleEventId: null,
+      },
+    })
+    // If a non-Google block exists, skip — but still log it
+    if (conflictingBlock) {
+      logSync('Block', conflictingBlock.id, 'pull_conflict_block_skipped', 'google_to_app', {
+        reason: 'Slot blocked by app block',
+        googleEventId,
+        existingBlockId: conflictingBlock.id,
+        summary: googleEvent.summary,
+      })
     }
 
     const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')

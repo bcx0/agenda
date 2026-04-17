@@ -798,11 +798,25 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                             .toFormat("HH:mm")}{" "}
                           Miami
                         </p>
-                        <p className="mt-1 text-xs text-red-400/80">
-                          {locale === "fr"
-                            ? "Cette personne n'a pas de compte. Créez-lui un compte pour convertir en RDV."
-                            : "This person has no account. Create an account to convert to a booking."}
-                        </p>
+                        <div className="mt-2 flex items-center gap-3">
+                          <p className="text-xs text-red-400/80">
+                            {locale === "fr"
+                              ? "Pas de compte client."
+                              : "No client account."}
+                          </p>
+                          <Link
+                            href={`/admin/clients?create=${encodeURIComponent(block.clientName)}`}
+                            className="inline-flex items-center gap-1 rounded-md border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-300 hover:bg-red-500/30 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                              <circle cx="9" cy="7" r="4" />
+                              <line x1="19" y1="8" x2="19" y2="14" />
+                              <line x1="22" y1="11" x2="16" y2="11" />
+                            </svg>
+                            {locale === "fr" ? "Créer le compte" : "Create account"}
+                          </Link>
+                        </div>
                       </div>
                     ))}
                   </div>

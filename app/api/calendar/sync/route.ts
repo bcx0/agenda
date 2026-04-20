@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getValidAccessToken, type GoogleCalendarEvent } from "../../../../lib/google-calendar";
-import { pullFromGoogle } from "../../../../lib/sync-engine";
+import { pullFromGoogle, bulkImportFromGoogle } from "../../../../lib/sync-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -175,33 +175,67 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ─── BULK PROCESS: fast path for full resync (after purge) ─────
+    // Processes ALL events at once with batch DB operations.
+    // ~5 DB queries total instead of ~4 per event.
+    if (step === "bulk-process") {
+      const body = await req.json();
+      const events = (body.events ?? []) as GoogleCalendarEvent[];
+
+      const result = await bulkImportFromGoogle(events);
+
+      return NextResponse.json({
+        step: "bulk-process",
+        processed: events.length,
+        imported: result.bookingsCreated + result.blocksCreated,
+        bookingsCreated: result.bookingsCreated,
+        blocksCreated: result.blocksCreated,
+        noAccountBlocks: result.noAccountBlocks,
+        skippedAllDay: result.skippedAllDay,
+        skippedCancelled: result.skippedCancelled,
+      });
+    }
+
+    // ─── INCREMENTAL PROCESS: for normal sync (not after purge) ──
+    // Uses alreadyImported to skip known events, processes new ones individually.
     if (step === "process") {
       const body = await req.json();
       const events = (body.events ?? []) as GoogleCalendarEvent[];
 
-      // Process every event through pullFromGoogle — no pre-filtering.
-      // pullFromGoogle handles duplicates internally via googleEventId lookup.
-      const results: Array<{ eventId: string; summary: string; action: string }> = [];
+      // Bulk pre-check: skip events already in DB (fast lookup)
+      const eventIds = events.map((e) => e.id);
+      const [existingBookings, existingBlocks] = await Promise.all([
+        prisma.booking.findMany({
+          where: { googleEventId: { in: eventIds } },
+          select: { googleEventId: true },
+        }),
+        prisma.block.findMany({
+          where: { googleEventId: { in: eventIds } },
+          select: { googleEventId: true },
+        }),
+      ]);
+      const alreadyImported = new Set([
+        ...existingBookings.map((b: { googleEventId: string | null }) => b.googleEventId),
+        ...existingBlocks.map((b: { googleEventId: string | null }) => b.googleEventId),
+      ]);
+
+      const results: Array<{ eventId: string; action: string }> = [];
 
       for (const event of events) {
+        if (alreadyImported.has(event.id) && event.status !== "cancelled") {
+          results.push({ eventId: event.id, action: "already_exists" });
+          continue;
+        }
         try {
           const result = await pullFromGoogle(
             event.status === "cancelled" ? null : event,
             event.id
           );
-          results.push({
-            eventId: event.id,
-            summary: event.summary ?? '(no summary)',
-            action: result.action,
-          });
+          results.push({ eventId: event.id, action: result.action });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
-          console.error(`[Sync:process] Error ${event.id} "${event.summary}":`, message);
-          results.push({
-            eventId: event.id,
-            summary: event.summary ?? '(no summary)',
-            action: `error: ${message}`,
-          });
+          console.error(`[Sync:process] Error ${event.id}:`, message);
+          results.push({ eventId: event.id, action: `error: ${message}` });
         }
       }
 
@@ -211,19 +245,10 @@ export async function POST(req: NextRequest) {
                r.action === "block_created_no_account"
       ).length;
 
-      // Count each action type for debugging
       const actionCounts: Record<string, number> = {};
       for (const r of results) {
         const key = r.action.startsWith("error") ? "error" : r.action;
         actionCounts[key] = (actionCounts[key] ?? 0) + 1;
-      }
-
-      // Log skipped/errored events for debugging
-      const problems = results.filter(
-        (r) => r.action.startsWith("error") || r.action === "conflict_skipped"
-      );
-      if (problems.length > 0) {
-        console.log(`[Sync:process] Problems:`, JSON.stringify(problems));
       }
 
       return NextResponse.json({

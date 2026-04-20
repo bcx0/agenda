@@ -30,31 +30,74 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
     }
   }, [isConnected, needsReauth]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── FULL RESYNC: purge → fetch → bulk import (fast) ─────────
   const handleFullResync = async () => {
     if (!confirm('Cela va supprimer tous les RDV importés de Google et tout re-synchroniser. Continuer ?')) return
     setSyncing(true)
     setSyncResult(null)
-    setProgress('Nettoyage des anciens imports...')
+    abortRef.current = false
 
     try {
+      // Step 1: Purge all existing sync data
+      setProgress('Nettoyage...')
       const purgeRes = await fetch('/api/calendar/sync?step=purge', { method: 'POST' })
       if (!purgeRes.ok) throw new Error('Erreur lors du nettoyage')
       const purgeData = await purgeRes.json()
       setProgress(`Nettoyé: ${purgeData.deletedBookings} RDV, ${purgeData.deletedBlocks} blocks`)
-      // Small delay then trigger normal sync
-      await new Promise((r) => setTimeout(r, 500))
+
+      // Step 2: Fetch ALL events from Google (paginated)
+      const allEvents: any[] = []
+      let pageToken: string | null = null
+      let isFirst = true
+      do {
+        if (abortRef.current) break
+        const params = new URLSearchParams({ step: 'fetch' })
+        if (pageToken) params.set('pageToken', pageToken)
+        if (isFirst) params.set('reset', 'true')
+        const res = await fetch(`/api/calendar/sync?${params.toString()}`, { method: 'POST' })
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
+        const data = await res.json()
+        allEvents.push(...(data.events ?? []))
+        pageToken = data.nextPageToken ?? null
+        isFirst = false
+        setProgress(`Récupération... ${allEvents.length} événements`)
+        if (pageToken) await new Promise((r) => setTimeout(r, 300))
+      } while (pageToken)
+
+      // Step 3: BULK IMPORT — one single call, batch DB operations
+      setProgress(`Import de ${allEvents.length} événements...`)
+      const BULK_BATCH = 500
+      let totalBookings = 0
+      let totalBlocks = 0
+      let totalNoAccount = 0
+      for (let i = 0; i < allEvents.length; i += BULK_BATCH) {
+        if (abortRef.current) break
+        const batch = allEvents.slice(i, i + BULK_BATCH)
+        const res = await fetch('/api/calendar/sync?step=bulk-process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events: batch }),
+        })
+        if (!res.ok) throw new Error(`Bulk process failed: ${res.status}`)
+        const data = await res.json()
+        totalBookings += data.bookingsCreated ?? 0
+        totalBlocks += data.blocksCreated ?? 0
+        totalNoAccount += data.noAccountBlocks ?? 0
+        setProgress(`Import... ${Math.min(i + BULK_BATCH, allEvents.length)}/${allEvents.length}`)
+      }
+
+      setSyncResult('success')
+      setProgress(`${totalBookings} RDV + ${totalBlocks} blocks importés (${totalNoAccount} sans compte)`)
     } catch (err) {
+      console.error('[Sync:resync] Error:', err)
       setSyncResult('error')
       setProgress(err instanceof Error ? err.message : 'Erreur')
+    } finally {
       setSyncing(false)
-      return
     }
-
-    setSyncing(false)
-    // Now trigger a normal full sync
-    await handleSync()
   }
 
+  // ─── INCREMENTAL SYNC: fast skip of known events ──────────────
   const handleSync = async () => {
     setSyncing(true)
     setSyncResult(null)
@@ -66,71 +109,48 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
 
     try {
       // Step 1: Fetch all events page by page
-      let allEvents: any[] = []
+      const allEvents: any[] = []
       let pageToken: string | null = null
       let isFirst = true
 
       do {
         if (abortRef.current) break
-
         const params = new URLSearchParams({ step: 'fetch' })
         if (pageToken) params.set('pageToken', pageToken)
         if (isFirst) params.set('reset', 'true')
-
-        const res = await fetch(`/api/calendar/sync?${params.toString()}`, {
-          method: 'POST',
-        })
+        const res = await fetch(`/api/calendar/sync?${params.toString()}`, { method: 'POST' })
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: 'Erreur' }))
           throw new Error(err.error || `HTTP ${res.status}`)
         }
-
         const data = await res.json()
-        allEvents = allEvents.concat(data.events ?? [])
+        allEvents.push(...(data.events ?? []))
         pageToken = data.nextPageToken ?? null
         isFirst = false
-
         setProgress(`Récupération... ${allEvents.length} événements`)
-
-        // Small delay between pages to avoid Google rate limit
-        if (pageToken) await new Promise((r) => setTimeout(r, 500))
+        if (pageToken) await new Promise((r) => setTimeout(r, 300))
       } while (pageToken)
 
       setProgress(`Traitement de ${allEvents.length} événements...`)
 
-      // Step 2: Process events in batches of 100 (bulk pre-check skips existing)
-      const BATCH_SIZE = 100
+      // Step 2: Process in batches (alreadyImported skips known events → fast)
+      const BATCH_SIZE = 250
       for (let i = 0; i < allEvents.length; i += BATCH_SIZE) {
         if (abortRef.current) break
-
         const batch = allEvents.slice(i, i + BATCH_SIZE)
-
-        // Retry batch up to 2 times on failure
-        let batchData: { imported?: number; processed?: number } | null = null
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const res = await fetch('/api/calendar/sync?step=process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ events: batch }),
-          })
-
-          if (res.ok) {
-            batchData = await res.json()
-            break
-          }
-          console.error(`[Sync] Process batch failed (attempt ${attempt + 1}):`, res.status)
-          if (attempt === 0) await new Promise((r) => setTimeout(r, 1000))
-        }
-
-        if (batchData) {
-          totalImported += batchData.imported ?? 0
-          totalProcessed += batchData.processed ?? 0
-        } else {
-          // Count as processed even if failed, to not stall progress
+        const res = await fetch('/api/calendar/sync?step=process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events: batch }),
+        })
+        if (!res.ok) {
+          console.error('[Sync] Batch failed:', res.status)
           totalProcessed += batch.length
-          console.error(`[Sync] Batch permanently failed, ${batch.length} events lost`)
+          continue
         }
-
+        const data = await res.json()
+        totalImported += data.imported ?? 0
+        totalProcessed += data.processed ?? 0
         setProgress(`Traitement... ${totalProcessed}/${allEvents.length}`)
       }
 

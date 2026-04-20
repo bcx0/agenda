@@ -463,6 +463,179 @@ export async function pullFromGoogle(
   return { action: 'block_created', id: newBlock.id, type: parsed.type }
 }
 
+// ─── BULK IMPORT (used after purge — fast, no per-event DB queries) ──
+export type BulkImportResult = {
+  bookingsCreated: number
+  blocksCreated: number
+  noAccountBlocks: number
+  skippedAllDay: number
+  skippedCancelled: number
+  errors: number
+  details: Array<{ summary: string; action: string }>
+}
+
+export async function bulkImportFromGoogle(
+  events: GoogleCalendarEvent[]
+): Promise<BulkImportResult> {
+  const result: BulkImportResult = {
+    bookingsCreated: 0,
+    blocksCreated: 0,
+    noAccountBlocks: 0,
+    skippedAllDay: 0,
+    skippedCancelled: 0,
+    errors: 0,
+    details: [],
+  }
+
+  // 1. Pre-fetch all clients ONCE
+  const allClients = await prisma.client.findMany({
+    select: { id: true, name: true, email: true, isActive: true },
+  })
+  const realClients = allClients.filter(
+    (c) => c.isActive && !c.email.endsWith('@import.local')
+  )
+
+  // Helper: match client name in-memory (same logic as findOrCreateGoogleClient)
+  function matchClient(clientName: string): { id: number; name: string } | null {
+    const normalizedName = clientName.trim().replace(/\s+/g, ' ')
+    const normalizedLower = normalizedName.toLowerCase()
+
+    // Exact match on real clients
+    const exact = realClients.find((c) => c.name.toLowerCase() === normalizedLower)
+    if (exact) return exact
+
+    // Partial/substring match
+    const partial = realClients.find((c) => {
+      const cLower = c.name.toLowerCase()
+      return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
+    })
+    if (partial) return partial
+
+    // Fuzzy match on real clients
+    if (realClients.length > 0) {
+      const names = realClients.map((c) => c.name)
+      const fuzzy = fuzzyMatchName(normalizedName, names, 0.5)
+      if (fuzzy) return realClients[fuzzy.index]
+    }
+
+    // Exact on all clients
+    const exactAll = allClients.find((c) => c.name.toLowerCase() === normalizedLower)
+    if (exactAll) return exactAll
+
+    // Fuzzy on all clients
+    if (allClients.length > 0) {
+      const allNames = allClients.map((c) => c.name)
+      const fuzzyAll = fuzzyMatchName(normalizedName, allNames, 0.5)
+      if (fuzzyAll) return allClients[fuzzyAll.index]
+    }
+
+    return null
+  }
+
+  // 2. Parse all events and classify them
+  const bookingsToCreate: Array<{
+    clientId: number
+    startAt: Date
+    endAt: Date
+    googleEventId: string
+  }> = []
+  const blocksToCreate: Array<{
+    startAt: Date
+    endAt: Date
+    reason: string
+    googleEventId: string
+  }> = []
+
+  for (const event of events) {
+    if (!event || event.status === 'cancelled') {
+      result.skippedCancelled++
+      continue
+    }
+
+    const startDt = event.start?.dateTime
+    const endDt = event.end?.dateTime
+    if (!startDt || !endDt) {
+      result.skippedAllDay++
+      continue
+    }
+
+    const parsed = parseGoogleEventSummary(event.summary)
+    const startAt = new Date(startDt)
+    const endAt = new Date(endDt)
+
+    if (parsed.type === 'booking') {
+      const client = matchClient(parsed.clientName || 'Client Google')
+      if (client) {
+        bookingsToCreate.push({
+          clientId: client.id,
+          startAt,
+          endAt,
+          googleEventId: event.id,
+        })
+        result.details.push({ summary: event.summary ?? '', action: `booking → ${client.name}` })
+      } else {
+        blocksToCreate.push({
+          startAt,
+          endAt,
+          reason: `[NO_ACCOUNT] RDV — ${parsed.clientName || 'Client Google'}`,
+          googleEventId: event.id,
+        })
+        result.noAccountBlocks++
+        result.details.push({ summary: event.summary ?? '', action: `no_account → ${parsed.clientName}` })
+      }
+    } else {
+      blocksToCreate.push({
+        startAt,
+        endAt,
+        reason: parsed.reason,
+        googleEventId: event.id,
+      })
+      result.details.push({ summary: event.summary ?? '', action: `block → ${parsed.reason}` })
+    }
+  }
+
+  // 3. Batch create all records (2 queries instead of hundreds)
+  if (bookingsToCreate.length > 0) {
+    const created = await prisma.booking.createMany({
+      data: bookingsToCreate.map((b) => ({
+        clientId: b.clientId,
+        startAt: b.startAt,
+        endAt: b.endAt,
+        status: 'CONFIRMED',
+        mode: 'VISIO',
+        googleEventId: b.googleEventId,
+        syncSource: 'google',
+        syncStatus: 'synced',
+        lastSyncedAt: new Date(),
+        bookedBy: 'google',
+      })),
+      skipDuplicates: true,
+    })
+    result.bookingsCreated = created.count
+  }
+
+  if (blocksToCreate.length > 0) {
+    const created = await prisma.block.createMany({
+      data: blocksToCreate.map((b) => ({
+        startAt: b.startAt,
+        endAt: b.endAt,
+        reason: b.reason,
+        googleEventId: b.googleEventId,
+        syncSource: 'google',
+        syncStatus: 'synced',
+        lastSyncedAt: new Date(),
+        createdAt: new Date(),
+      })),
+      skipDuplicates: true,
+    })
+    result.blocksCreated = created.count
+  }
+
+  console.log(`[Sync:bulk] ${result.bookingsCreated} bookings, ${result.blocksCreated} blocks (${result.noAccountBlocks} no-account), ${result.skippedAllDay} all-day skipped`)
+
+  return result
+}
+
 function logSync(
   table: string,
   recordId: number | undefined,

@@ -394,14 +394,20 @@ export async function pullFromGoogle(
   const endDate = new Date(eventEndDt)
 
   if (parsed.type === 'booking') {
-    // NO conflict check — Google Calendar is the source of truth.
-    // If there's an overlap with an app-created booking, both will
-    // appear in the admin and Geoffrey can resolve manually.
-
     const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')
 
     if (!client) {
-      // No matching client → [NO_ACCOUNT] block visible in admin
+      // Dedupe: don't create a second [NO_ACCOUNT] block for same name + same time
+      const existingNoAccount = await prisma.block.findFirst({
+        where: {
+          startAt: startDate,
+          reason: { startsWith: `[NO_ACCOUNT] RDV — ${parsed.clientName}` },
+        },
+      })
+      if (existingNoAccount) {
+        return { action: 'duplicate_skipped', clientName: parsed.clientName }
+      }
+
       const newBlock = await prisma.block.create({
         data: {
           startAt: startDate,
@@ -422,6 +428,18 @@ export async function pullFromGoogle(
       return { action: 'block_created_no_account', id: newBlock.id, clientName: parsed.clientName }
     }
 
+    // Dedupe: don't create a second booking for same client + same start time
+    const existingDupe = await prisma.booking.findFirst({
+      where: {
+        clientId: client.id,
+        startAt: startDate,
+        status: 'CONFIRMED',
+      },
+    })
+    if (existingDupe) {
+      return { action: 'duplicate_skipped', clientName: parsed.clientName }
+    }
+
     const newBooking = await prisma.booking.create({
       data: {
         clientId: client.id,
@@ -440,7 +458,6 @@ export async function pullFromGoogle(
       summary: googleEvent.summary,
       clientName: parsed.clientName,
     })
-    console.log(`[Sync:pull] → booking #${newBooking.id} for "${parsed.clientName}" (client #${client.id})`)
     return { action: 'booking_created', id: newBooking.id, clientName: parsed.clientName }
   }
 
@@ -594,10 +611,30 @@ export async function bulkImportFromGoogle(
     }
   }
 
-  // 3. Batch create all records (2 queries instead of hundreds)
-  if (bookingsToCreate.length > 0) {
+  // 3. Deduplicate: same client + same start time = keep only the first
+  const seenBookings = new Set<string>()
+  const dedupedBookings = bookingsToCreate.filter((b) => {
+    const key = `${b.clientId}-${b.startAt.getTime()}`
+    if (seenBookings.has(key)) return false
+    seenBookings.add(key)
+    return true
+  })
+  const seenBlocks = new Set<string>()
+  const dedupedBlocks = blocksToCreate.filter((b) => {
+    const key = `${b.reason}-${b.startAt.getTime()}`
+    if (seenBlocks.has(key)) return false
+    seenBlocks.add(key)
+    return true
+  })
+  const skippedDupes = (bookingsToCreate.length - dedupedBookings.length) + (blocksToCreate.length - dedupedBlocks.length)
+  if (skippedDupes > 0) {
+    console.log(`[Sync:bulk] Skipped ${skippedDupes} duplicate entries`)
+  }
+
+  // 4. Batch create all records (2 queries instead of hundreds)
+  if (dedupedBookings.length > 0) {
     const created = await prisma.booking.createMany({
-      data: bookingsToCreate.map((b) => ({
+      data: dedupedBookings.map((b) => ({
         clientId: b.clientId,
         startAt: b.startAt,
         endAt: b.endAt,
@@ -614,9 +651,9 @@ export async function bulkImportFromGoogle(
     result.bookingsCreated = created.count
   }
 
-  if (blocksToCreate.length > 0) {
+  if (dedupedBlocks.length > 0) {
     const created = await prisma.block.createMany({
-      data: blocksToCreate.map((b) => ({
+      data: dedupedBlocks.map((b) => ({
         startAt: b.startAt,
         endAt: b.endAt,
         reason: b.reason,

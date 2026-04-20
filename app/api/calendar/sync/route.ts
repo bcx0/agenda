@@ -133,12 +133,22 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === "purge") {
-      // Nuclear purge: delete EVERYTHING that has a googleEventId
-      // This catches all imports regardless of syncSource (fixes duplicates)
-      const [deletedBookings, deletedBlocks] = await Promise.all([
+      // NUCLEAR PURGE: delete ALL synced data + ALL confirmed bookings
+      // Google Calendar is source of truth — everything will be re-imported
+      const [deletedGoogleBookings, deletedGoogleBlocks] = await Promise.all([
         prisma.booking.deleteMany({ where: { googleEventId: { not: null } } }),
         prisma.block.deleteMany({ where: { googleEventId: { not: null } } }),
       ]);
+
+      // Also delete ALL remaining confirmed bookings (app-created orphans
+      // that survived because their Google push failed or never happened)
+      const deletedOrphanBookings = await prisma.booking.deleteMany({
+        where: {
+          status: 'CONFIRMED',
+          syncSource: { not: 'app' },
+        },
+      });
+
       // Clean up import-only clients
       const importClients = await prisma.client.findMany({
         where: { email: { endsWith: "@import.local" } },
@@ -154,11 +164,13 @@ export async function POST(req: NextRequest) {
       await prisma.googleToken.updateMany({ data: { syncToken: null } });
 
       const remainingBookings = await prisma.booking.count();
-      console.log(`[Sync:purge] Deleted ${deletedBookings.count} bookings, ${deletedBlocks.count} blocks. Remaining: ${remainingBookings}`);
+      const totalDeleted = deletedGoogleBookings.count + deletedOrphanBookings.count;
+      console.log(`[Sync:purge] Deleted ${totalDeleted} bookings (${deletedGoogleBookings.count} google + ${deletedOrphanBookings.count} orphans), ${deletedGoogleBlocks.count} blocks. Remaining: ${remainingBookings}`);
       return NextResponse.json({
         step: "purge",
-        deletedBookings: deletedBookings.count,
-        deletedBlocks: deletedBlocks.count,
+        deletedBookings: totalDeleted,
+        deletedOrphanBookings: deletedOrphanBookings.count,
+        deletedBlocks: deletedGoogleBlocks.count,
         remainingBookings,
       });
     }
@@ -167,47 +179,36 @@ export async function POST(req: NextRequest) {
       const body = await req.json();
       const events = (body.events ?? []) as GoogleCalendarEvent[];
 
-      // Bulk pre-check: 2 queries to find ALL already-imported events
-      const eventIds = events.map((e) => e.id);
-      const [existingBookings, existingBlocks] = await Promise.all([
-        prisma.booking.findMany({
-          where: { googleEventId: { in: eventIds } },
-          select: { googleEventId: true },
-        }),
-        prisma.block.findMany({
-          where: { googleEventId: { in: eventIds } },
-          select: { googleEventId: true },
-        }),
-      ]);
-      const alreadyImported = new Set([
-        ...existingBookings.map((b: { googleEventId: string | null }) => b.googleEventId),
-        ...existingBlocks.map((b: { googleEventId: string | null }) => b.googleEventId),
-      ]);
-
-      const results: Array<{ eventId: string; action: string }> = [];
+      // Process every event through pullFromGoogle — no pre-filtering.
+      // pullFromGoogle handles duplicates internally via googleEventId lookup.
+      const results: Array<{ eventId: string; summary: string; action: string }> = [];
 
       for (const event of events) {
-        // Skip already-imported events instantly (no DB query needed)
-        if (alreadyImported.has(event.id) && event.status !== "cancelled") {
-          results.push({ eventId: event.id, action: "already_exists" });
-          continue;
-        }
-
         try {
           const result = await pullFromGoogle(
             event.status === "cancelled" ? null : event,
             event.id
           );
-          results.push({ eventId: event.id, action: result.action });
+          results.push({
+            eventId: event.id,
+            summary: event.summary ?? '(no summary)',
+            action: result.action,
+          });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
-          console.error(`[Sync:process] Error ${event.id}:`, message);
-          results.push({ eventId: event.id, action: `error: ${message}` });
+          console.error(`[Sync:process] Error ${event.id} "${event.summary}":`, message);
+          results.push({
+            eventId: event.id,
+            summary: event.summary ?? '(no summary)',
+            action: `error: ${message}`,
+          });
         }
       }
 
       const imported = results.filter(
-        (r) => r.action === "booking_created" || r.action === "block_created"
+        (r) => r.action === "booking_created" ||
+               r.action === "block_created" ||
+               r.action === "block_created_no_account"
       ).length;
 
       // Count each action type for debugging
@@ -215,6 +216,14 @@ export async function POST(req: NextRequest) {
       for (const r of results) {
         const key = r.action.startsWith("error") ? "error" : r.action;
         actionCounts[key] = (actionCounts[key] ?? 0) + 1;
+      }
+
+      // Log skipped/errored events for debugging
+      const problems = results.filter(
+        (r) => r.action.startsWith("error") || r.action === "conflict_skipped"
+      );
+      if (problems.length > 0) {
+        console.log(`[Sync:process] Problems:`, JSON.stringify(problems));
       }
 
       return NextResponse.json({

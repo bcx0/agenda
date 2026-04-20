@@ -105,20 +105,31 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
 
         const batch = allEvents.slice(i, i + BATCH_SIZE)
 
-        const res = await fetch('/api/calendar/sync?step=process', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ events: batch }),
-        })
+        // Retry batch up to 2 times on failure
+        let batchData: { imported?: number; processed?: number } | null = null
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const res = await fetch('/api/calendar/sync?step=process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ events: batch }),
+          })
 
-        if (!res.ok) {
-          console.error('[Sync] Process batch failed:', res.status)
-          continue
+          if (res.ok) {
+            batchData = await res.json()
+            break
+          }
+          console.error(`[Sync] Process batch failed (attempt ${attempt + 1}):`, res.status)
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 1000))
         }
 
-        const data = await res.json()
-        totalImported += data.imported ?? 0
-        totalProcessed += data.processed ?? 0
+        if (batchData) {
+          totalImported += batchData.imported ?? 0
+          totalProcessed += batchData.processed ?? 0
+        } else {
+          // Count as processed even if failed, to not stall progress
+          totalProcessed += batch.length
+          console.error(`[Sync] Batch permanently failed, ${batch.length} events lost`)
+        }
 
         setProgress(`Traitement... ${totalProcessed}/${allEvents.length}`)
       }

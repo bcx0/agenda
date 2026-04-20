@@ -267,15 +267,9 @@ export async function pullFromGoogle(
   googleEvent: GoogleCalendarEvent | null,
   googleEventId: string
 ): Promise<{ action: string; [key: string]: any }> {
-  // Debug: log every event being processed
-  if (googleEvent) {
-    console.log(`[Sync:pull] Processing: "${googleEvent.summary}" (${googleEvent.start?.dateTime ?? 'no-time'}) id=${googleEventId}`)
-  }
-
+  // ─── CANCELLED / DELETED events ───────────────────────────────
   if (!googleEvent || googleEvent.status === 'cancelled') {
-    const booking = await prisma.booking.findFirst({
-      where: { googleEventId },
-    })
+    const booking = await prisma.booking.findFirst({ where: { googleEventId } })
     if (booking) {
       await prisma.booking.update({
         where: { id: booking.id },
@@ -284,25 +278,31 @@ export async function pullFromGoogle(
           syncStatus: 'cancelled',
           syncSource: 'google',
           lastSyncedAt: new Date(),
-          cancelReason: 'Supprim\u00e9 depuis Google Calendar',
+          cancelReason: 'Supprimé depuis Google Calendar',
         },
       })
       logSync('Booking', booking.id, 'pull_delete', 'google_to_app')
       return { action: 'booking_cancelled' }
     }
-
-    const block = await prisma.block.findFirst({
-      where: { googleEventId },
-    })
+    const block = await prisma.block.findFirst({ where: { googleEventId } })
     if (block) {
       await prisma.block.delete({ where: { id: block.id } })
       logSync('Block', block.id, 'pull_delete', 'google_to_app')
       return { action: 'block_deleted' }
     }
-
     return { action: 'not_found' }
   }
 
+  console.log(`[Sync:pull] "${googleEvent.summary}" (${googleEvent.start?.dateTime ?? 'all-day'}) id=${googleEventId}`)
+
+  // ─── Skip all-day events (no specific time) ───────────────────
+  const eventStartDt = googleEvent.start?.dateTime
+  const eventEndDt = googleEvent.end?.dateTime
+  if (!eventStartDt || !eventEndDt) {
+    return { action: 'skipped_all_day' }
+  }
+
+  // ─── APP-CREATED events (have our tag) — update if record exists ─
   const appSource = googleEvent.extendedProperties?.private?.appSource
   const recordType = googleEvent.extendedProperties?.private?.recordType
   const recordId = googleEvent.extendedProperties?.private?.recordId
@@ -314,156 +314,94 @@ export async function pullFromGoogle(
           where: { id: parseInt(recordId) },
           data: { googleEtag: googleEvent.etag },
         })
+        return { action: 'etag_updated', skipped: true }
       }
       if (recordType === 'block') {
         await prisma.block.update({
           where: { id: parseInt(recordId) },
           data: { googleEtag: googleEvent.etag },
         })
+        return { action: 'etag_updated', skipped: true }
       }
-      return { action: 'etag_updated', skipped: true }
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2025') {
-        // Record was purged/deleted — fall through to re-import as new
-        console.log(`[Sync] Record ${recordType}#${recordId} purged, re-importing event ${googleEventId}`)
+        // Record was purged — fall through to re-import
+        console.log(`[Sync] Record ${recordType}#${recordId} purged, re-importing ${googleEventId}`)
       } else {
         throw error
       }
     }
   }
 
-  // Parallel lookup: check booking AND block simultaneously (halves latency)
+  // ─── EXISTING record with same googleEventId — update it ──────
   const [existingBooking, existingBlock] = await Promise.all([
     prisma.booking.findFirst({ where: { googleEventId } }),
     prisma.block.findFirst({ where: { googleEventId } }),
   ])
 
   if (existingBooking) {
-    const appTime = existingBooking.updatedAt.getTime()
-    const googleTime = new Date(googleEvent.updated).getTime()
-
-    if (appTime > googleTime) {
-      await pushBookingToGoogle(existingBooking.id, 'update')
-      logSync('Booking', existingBooking.id, 'conflict', 'app_to_google', {
-        winner: 'app',
+    try {
+      await prisma.booking.update({
+        where: { id: existingBooking.id },
+        data: {
+          startAt: new Date(eventStartDt),
+          endAt: new Date(eventEndDt),
+          googleEtag: googleEvent.etag,
+          syncSource: 'google',
+          syncStatus: 'synced',
+          lastSyncedAt: new Date(),
+        },
       })
-      return { action: 'conflict_app_wins' }
-    } else {
-      const startDt = googleEvent.start.dateTime
-      const endDt = googleEvent.end.dateTime
-      if (!startDt || !endDt) {
-        return { action: 'skipped_missing_datetime', id: existingBooking.id }
+      return { action: 'booking_updated' }
+    } catch (error: unknown) {
+      if ((error as { code?: string })?.code === 'P2025') {
+        return { action: 'record_deleted_skipped', skipped: true }
       }
-      try {
-        await prisma.booking.update({
-          where: { id: existingBooking.id },
-          data: {
-            startAt: new Date(startDt),
-            endAt: new Date(endDt),
-            googleEtag: googleEvent.etag,
-            syncSource: 'google',
-            syncStatus: 'synced',
-            lastSyncedAt: new Date(),
-          },
-        })
-        logSync('Booking', existingBooking.id, 'pull_update', 'google_to_app')
-        return { action: 'booking_updated' }
-      } catch (error: any) {
-        if (error?.code === 'P2025') {
-          return { action: 'record_deleted_skipped', skipped: true }
-        }
-        throw error
-      }
+      throw error
     }
   }
-
-
 
   if (existingBlock) {
-    const blockStartDt = googleEvent.start.dateTime
-    const blockEndDt = googleEvent.end.dateTime
-    if (blockStartDt && blockEndDt) {
-      try {
-        await prisma.block.update({
-          where: { id: existingBlock.id },
-          data: {
-            startAt: new Date(blockStartDt),
-            endAt: new Date(blockEndDt),
-            reason: googleEvent.summary || existingBlock.reason,
-            googleEtag: googleEvent.etag,
-            syncSource: 'google',
-            syncStatus: 'synced',
-            lastSyncedAt: new Date(),
-          },
-        })
-        logSync('Block', existingBlock.id, 'pull_update', 'google_to_app')
-        return { action: 'block_updated', id: existingBlock.id }
-      } catch (error: any) {
-        if (error?.code === 'P2025') {
-          return { action: 'record_deleted_skipped', skipped: true }
-        }
-        throw error
+    // Preserve [NO_ACCOUNT] prefix if block was tagged
+    const existingReason = existingBlock.reason ?? ''
+    const isNoAccount = existingReason.startsWith('[NO_ACCOUNT]')
+    const newReason = isNoAccount ? existingReason : (googleEvent.summary || existingReason)
+    try {
+      await prisma.block.update({
+        where: { id: existingBlock.id },
+        data: {
+          startAt: new Date(eventStartDt),
+          endAt: new Date(eventEndDt),
+          reason: newReason,
+          googleEtag: googleEvent.etag,
+          syncSource: 'google',
+          syncStatus: 'synced',
+          lastSyncedAt: new Date(),
+        },
+      })
+      return { action: 'block_updated', id: existingBlock.id }
+    } catch (error: unknown) {
+      if ((error as { code?: string })?.code === 'P2025') {
+        return { action: 'record_deleted_skipped', skipped: true }
       }
+      throw error
     }
-    return { action: 'block_exists_skipped', id: existingBlock.id }
   }
 
-  const eventStartDt = googleEvent.start.dateTime
-  const eventEndDt = googleEvent.end.dateTime
-  if (!eventStartDt || !eventEndDt) {
-    return { action: 'skipped_all_day' }
-  }
-
+  // ─── NEW EVENT — parse and import ─────────────────────────────
   const parsed = parseGoogleEventSummary(googleEvent.summary)
+  const startDate = new Date(eventStartDt)
+  const endDate = new Date(eventEndDt)
 
   if (parsed.type === 'booking') {
-    const startDate = new Date(eventStartDt)
-    const endDate = new Date(eventEndDt)
-
-    // Check for existing booking on same time slot to prevent double bookings
-    // Only skip if the conflicting booking was NOT imported from Google
-    // (Google-imported bookings are already handled by the existingBooking check above)
-    const conflictingBooking = await prisma.booking.findFirst({
-      where: {
-        status: 'CONFIRMED',
-        startAt: { lt: endDate },
-        endAt: { gt: startDate },
-        googleEventId: null,  // Only conflict with app-created bookings
-      },
-    })
-
-    if (conflictingBooking) {
-      logSync('Booking', conflictingBooking.id, 'pull_conflict_skipped', 'google_to_app', {
-        reason: 'Slot already booked (app-created)',
-        googleEventId,
-        existingBookingId: conflictingBooking.id,
-        summary: googleEvent.summary,
-      })
-      return { action: 'conflict_skipped', existingBookingId: conflictingBooking.id }
-    }
-
-    // Also check for conflicting blocks (non-Google) on the same slot
-    const conflictingBlock = await prisma.block.findFirst({
-      where: {
-        startAt: { lt: endDate },
-        endAt: { gt: startDate },
-        googleEventId: null,
-      },
-    })
-    // If a non-Google block exists, skip — but still log it
-    if (conflictingBlock) {
-      logSync('Block', conflictingBlock.id, 'pull_conflict_block_skipped', 'google_to_app', {
-        reason: 'Slot blocked by app block',
-        googleEventId,
-        existingBlockId: conflictingBlock.id,
-        summary: googleEvent.summary,
-      })
-    }
+    // NO conflict check — Google Calendar is the source of truth.
+    // If there's an overlap with an app-created booking, both will
+    // appear in the admin and Geoffrey can resolve manually.
 
     const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')
 
-    // No matching client → create a Block that blocks the slot + shows a warning in admin
     if (!client) {
+      // No matching client → [NO_ACCOUNT] block visible in admin
       const newBlock = await prisma.block.create({
         data: {
           startAt: startDate,
@@ -477,10 +415,10 @@ export async function pullFromGoogle(
         },
       })
       logSync('Block', newBlock.id, 'pull_create_no_client', 'google_to_app', {
-        source: 'google_external_event',
         summary: googleEvent.summary,
         clientName: parsed.clientName,
       })
+      console.log(`[Sync:pull] → [NO_ACCOUNT] block #${newBlock.id} for "${parsed.clientName}"`)
       return { action: 'block_created_no_account', id: newBlock.id, clientName: parsed.clientName }
     }
 
@@ -498,21 +436,19 @@ export async function pullFromGoogle(
         bookedBy: 'google',
       },
     })
-
     logSync('Booking', newBooking.id, 'pull_create', 'google_to_app', {
-      source: 'google_external_event',
       summary: googleEvent.summary,
-      parsedType: parsed.type,
-      parsedClientName: parsed.clientName,
+      clientName: parsed.clientName,
     })
-
+    console.log(`[Sync:pull] → booking #${newBooking.id} for "${parsed.clientName}" (client #${client.id})`)
     return { action: 'booking_created', id: newBooking.id, clientName: parsed.clientName }
   }
 
+  // Non-booking event (personal block, simple block, etc.)
   const newBlock = await prisma.block.create({
     data: {
-      startAt: new Date(eventStartDt),
-      endAt: new Date(eventEndDt),
+      startAt: startDate,
+      endAt: endDate,
       reason: parsed.reason,
       googleEventId,
       syncSource: 'google',
@@ -521,9 +457,7 @@ export async function pullFromGoogle(
       createdAt: new Date(),
     },
   })
-
   logSync('Block', newBlock.id, 'pull_create', 'google_to_app', {
-    source: 'google_external_event',
     summary: googleEvent.summary,
   })
   return { action: 'block_created', id: newBlock.id, type: parsed.type }

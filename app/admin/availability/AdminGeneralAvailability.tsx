@@ -712,116 +712,103 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 )}
               </div>
 
+              {/* Unified list: bookings + NO_ACCOUNT blocks, sorted by start time */}
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">
                   {t("availability.reservations")}
                 </h4>
-                {bookingsForDay.length > 0 ? (
-                  <div className="space-y-2">
-                    {bookingsForDay.map((booking) => (
-                      <div
-                        key={booking.id}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-gray-700 bg-[#0F0F0F] px-3 py-2 text-sm"
-                      >
-                        <div className="flex-1">
-                          <p className="font-semibold text-white">{booking.client.name}</p>
-                          <p className="text-xs text-white/70">
-                            {DateTime.fromJSDate(booking.startDate, { zone: "utc" })
-                              .setZone(BRUSSELS_TZ)
-                              .toFormat("HH:mm")}{" "}
-                            -{" "}
-                            {DateTime.fromJSDate(booking.endDate, { zone: "utc" })
-                              .setZone(BRUSSELS_TZ)
-                              .toFormat("HH:mm")}{" "}
-                            Brussels
-                          </p>
-                          <p className="text-xs text-white/60">
-                            {DateTime.fromJSDate(booking.startDate, { zone: "utc" })
-                              .setZone(MIAMI_TZ)
-                              .toFormat("HH:mm")}{" "}
-                            -{" "}
-                            {DateTime.fromJSDate(booking.endDate, { zone: "utc" })
-                              .setZone(MIAMI_TZ)
-                              .toFormat("HH:mm")}{" "}
-                            Miami
-                          </p>
-                        </div>
-                        <Link
-                          href={`/admin/bookings/${booking.id}`}
-                          className="whitespace-nowrap text-sm font-medium text-primary transition-colors hover:text-primary-light"
-                        >
-                          Voir →
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-white/50">{t("availability.noReservation")}</p>
-                )}
-              </div>
+                {(() => {
+                  // Merge bookings and noAccount blocks into a single sorted list
+                  const allItems: Array<{
+                    type: 'booking' | 'no_account';
+                    id: number;
+                    name: string;
+                    startDate: Date;
+                    endDate: Date;
+                    bookingId?: number;
+                  }> = [
+                    ...bookingsForDay.map((b) => ({
+                      type: 'booking' as const,
+                      id: b.id,
+                      name: b.client.name,
+                      startDate: b.startDate,
+                      endDate: b.endDate,
+                      bookingId: b.id,
+                    })),
+                    ...noAccountForDay.map((b) => ({
+                      type: 'no_account' as const,
+                      id: b.id + 100000,
+                      name: b.clientName,
+                      startDate: b.startDate,
+                      endDate: b.endDate,
+                    })),
+                  ].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
-              {/* NO_ACCOUNT blocks — Google RDV with no matching client */}
-              {noAccountForDay.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-red-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" />
-                      <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                    {locale === "fr" ? "Sans compte client" : "No client account"}
-                  </h4>
-                  <div className="space-y-2">
-                    {noAccountForDay.map((block) => (
-                      <div
-                        key={block.id}
-                        className="rounded-lg border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm"
-                      >
-                        <p className="font-semibold text-red-300">{block.clientName}</p>
-                        <p className="text-xs text-red-300/70">
-                          {DateTime.fromJSDate(block.startDate, { zone: "utc" })
-                            .setZone(BRUSSELS_TZ)
-                            .toFormat("HH:mm")}{" "}
-                          -{" "}
-                          {DateTime.fromJSDate(block.endDate, { zone: "utc" })
-                            .setZone(BRUSSELS_TZ)
-                            .toFormat("HH:mm")}{" "}
-                          Brussels
-                        </p>
-                        <p className="text-xs text-red-300/50">
-                          {DateTime.fromJSDate(block.startDate, { zone: "utc" })
-                            .setZone(MIAMI_TZ)
-                            .toFormat("HH:mm")}{" "}
-                          -{" "}
-                          {DateTime.fromJSDate(block.endDate, { zone: "utc" })
-                            .setZone(MIAMI_TZ)
-                            .toFormat("HH:mm")}{" "}
-                          Miami
-                        </p>
-                        <div className="mt-2 flex items-center gap-3">
-                          <p className="text-xs text-red-400/80">
-                            {locale === "fr"
-                              ? "Pas de compte client."
-                              : "No client account."}
-                          </p>
-                          <Link
-                            href={`/admin/clients?name=${encodeURIComponent(block.clientName)}`}
-                            className="inline-flex items-center gap-1 rounded-md border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-300 hover:bg-red-500/30 transition-colors"
+                  if (allItems.length === 0) {
+                    return <p className="text-sm text-white/50">{t("availability.noReservation")}</p>;
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      {allItems.map((item) => {
+                        const brusselsStart = DateTime.fromJSDate(item.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm");
+                        const brusselsEnd = DateTime.fromJSDate(item.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm");
+                        const miamiStart = DateTime.fromJSDate(item.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("HH:mm");
+                        const miamiEnd = DateTime.fromJSDate(item.endDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("HH:mm");
+
+                        if (item.type === 'no_account') {
+                          return (
+                            <div
+                              key={`na-${item.id}`}
+                              className="rounded-lg border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm"
+                            >
+                              <p className="font-semibold text-red-300">{item.name}</p>
+                              <p className="text-xs text-red-300/70">{brusselsStart} - {brusselsEnd} Brussels</p>
+                              <p className="text-xs text-red-300/50">{miamiStart} - {miamiEnd} Miami</p>
+                              <div className="mt-2 flex items-center gap-3">
+                                <p className="text-xs text-red-400/80">
+                                  {locale === "fr" ? "Pas de compte client." : "No client account."}
+                                </p>
+                                <Link
+                                  href={`/admin/clients?name=${encodeURIComponent(item.name)}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-300 hover:bg-red-500/30 transition-colors"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <line x1="19" y1="8" x2="19" y2="14" />
+                                    <line x1="22" y1="11" x2="16" y2="11" />
+                                  </svg>
+                                  {locale === "fr" ? "Créer le compte" : "Create account"}
+                                </Link>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={`bk-${item.id}`}
+                            className="flex items-start justify-between gap-3 rounded-lg border border-gray-700 bg-[#0F0F0F] px-3 py-2 text-sm"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                              <circle cx="9" cy="7" r="4" />
-                              <line x1="19" y1="8" x2="19" y2="14" />
-                              <line x1="22" y1="11" x2="16" y2="11" />
-                            </svg>
-                            {locale === "fr" ? "Créer le compte" : "Create account"}
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                            <div className="flex-1">
+                              <p className="font-semibold text-white">{item.name}</p>
+                              <p className="text-xs text-white/70">{brusselsStart} - {brusselsEnd} Brussels</p>
+                              <p className="text-xs text-white/60">{miamiStart} - {miamiEnd} Miami</p>
+                            </div>
+                            <Link
+                              href={`/admin/bookings/${item.bookingId}`}
+                              className="whitespace-nowrap text-sm font-medium text-primary transition-colors hover:text-primary-light"
+                            >
+                              Voir →
+                            </Link>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           ) : (
             <div className="flex min-h-[240px] items-center justify-center text-center text-white/50">

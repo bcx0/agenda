@@ -265,6 +265,51 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       });
   }, [bookings, mobileSelectedKey]);
 
+  const mobileNoAccountForDay = useMemo(() => {
+    if (!mobileSelectedKey) return [];
+    return noAccountBlocks
+      .map((block) => ({
+        ...block,
+        startDate: new Date(block.startAt),
+        endDate: new Date(block.endAt),
+        clientName: (block.reason || "").replace("[NO_ACCOUNT] RDV — ", "").replace(" (non trouvé)", ""),
+      }))
+      .filter((block) => {
+        const dayKey =
+          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
+          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("yyyy-LL-dd");
+        return dayKey === mobileSelectedKey;
+      });
+  }, [noAccountBlocks, mobileSelectedKey]);
+
+  const mobileReservations = useMemo(() => {
+    const items: Array<{
+      type: 'booking' | 'no_account';
+      id: number;
+      name: string;
+      startDate: Date;
+      endDate: Date;
+      bookingId?: number;
+    }> = [
+      ...mobileBookingsForDay.map((b) => ({
+        type: 'booking' as const,
+        id: b.id,
+        name: b.client.name,
+        startDate: b.startDate,
+        endDate: b.endDate,
+        bookingId: b.id,
+      })),
+      ...mobileNoAccountForDay.map((b) => ({
+        type: 'no_account' as const,
+        id: b.id + 100000,
+        name: b.clientName,
+        startDate: b.startDate,
+        endDate: b.endDate,
+      })),
+    ];
+    return items.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  }, [mobileBookingsForDay, mobileNoAccountForDay]);
+
   return (
     <>
     {/* ── MOBILE VIEW ── */}
@@ -449,26 +494,59 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         </div>
       )}
 
-      {/* Bookings for day */}
-      {mobileBookingsForDay.length > 0 && (
+      {/* Reservations for day (bookings + no-account blocks) */}
+      {mobileReservations.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-widest text-[#C8A060]">{t("availability.reservations")}</h4>
-          {mobileBookingsForDay.map((booking) => (
-            <Link
-              key={booking.id}
-              href={`/admin/bookings/${booking.id}`}
-              className="block rounded-xl border border-gray-800 bg-[#0F0F0F] px-4 py-3 transition hover:border-[#C8A060]/30"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">{booking.client.name}</span>
-                <span className="text-xs text-[#C8A060]">Voir →</span>
-              </div>
-              <div className="text-xs text-white/60">
-                {DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")} -{" "}
-                {DateTime.fromJSDate(booking.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")} Brussels
-              </div>
-            </Link>
-          ))}
+          {mobileReservations.map((item) => {
+            const brusselsStart = DateTime.fromJSDate(item.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm");
+            const brusselsEnd = DateTime.fromJSDate(item.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm");
+            const miamiStart = DateTime.fromJSDate(item.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("HH:mm");
+            const miamiEnd = DateTime.fromJSDate(item.endDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("HH:mm");
+
+            if (item.type === 'no_account') {
+              return (
+                <div
+                  key={`m-na-${item.id}`}
+                  className="rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3"
+                >
+                  <p className="text-sm font-semibold text-red-300">{item.name}</p>
+                  <p className="mt-0.5 text-xs text-red-300/70">{brusselsStart} - {brusselsEnd} Brussels</p>
+                  <p className="text-xs text-red-300/50">{miamiStart} - {miamiEnd} Miami</p>
+                  <p className="mt-2 text-xs text-red-400/80">
+                    {locale === "fr" ? "Pas de compte client." : "No client account."}
+                  </p>
+                  <Link
+                    href={`/admin/clients?name=${encodeURIComponent(item.name)}`}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200 active:bg-red-500/30 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <line x1="19" y1="8" x2="19" y2="14" />
+                      <line x1="22" y1="11" x2="16" y2="11" />
+                    </svg>
+                    {locale === "fr" ? "Créer le compte" : "Create account"}
+                  </Link>
+                </div>
+              );
+            }
+
+            return (
+              <Link
+                key={`m-bk-${item.id}`}
+                href={`/admin/bookings/${item.bookingId}`}
+                className="block rounded-xl border border-gray-800 bg-[#0F0F0F] px-4 py-3 transition active:border-[#C8A060]/30"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-white">{item.name}</span>
+                  <span className="whitespace-nowrap text-xs text-[#C8A060]">Voir →</span>
+                </div>
+                <p className="mt-0.5 text-xs text-white/70">{brusselsStart} - {brusselsEnd} Brussels</p>
+                <p className="text-xs text-white/50">{miamiStart} - {miamiEnd} Miami</p>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
@@ -822,10 +900,3 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
     </>
   );
 }
-
-
-
-
-
-
-

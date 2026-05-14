@@ -261,9 +261,9 @@ export const translations = {
   "slotButton.confirmBtn": { fr: "Oui, confirmer", en: "Yes, confirm" },
   "slotButton.cancelBtn": { fr: "Annuler", en: "Cancel" },
   "slotButton.quotaReached": { fr: "Quota atteint", en: "Quota reached" },
-  "slotButton.occupied": { fr: "Occupé", en: "Occupied" },
+  "slotButton.occupied": { fr: "Complet", en: "Full" },
   "slotButton.available": { fr: "Disponible", en: "Available" },
-  "slotButton.unavailable": { fr: "Indisponible", en: "Unavailable" },
+  "slotButton.unavailable": { fr: "Complet", en: "Full" },
   "slotButton.reserving": { fr: "Réservation...", en: "Booking..." },
   "slotButton.confirmQ": { fr: "Confirmer ?", en: "Confirm?" },
 

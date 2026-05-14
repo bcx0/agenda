@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import React from "react";
 import { useLanguage } from "../../components/LanguageProvider";
@@ -23,9 +24,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-black pb-16 text-white md:pb-0">
       <header className="border-b border-border bg-background-elevated">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <div className="font-[var(--font-playfair)] text-lg uppercase tracking-wider text-white">
-            {t("nav.adminAgenda")}
-          </div>
+          <Link href="/admin" className="flex items-center gap-3" aria-label="Geoffrey Mahieu — Admin">
+            <Image
+              src="/geoffrey-logo.png"
+              alt="Geoffrey Mahieu"
+              width={40}
+              height={40}
+              priority
+              className="h-10 w-auto"
+            />
+            <span className="font-[var(--font-playfair)] text-lg uppercase tracking-wider text-white">
+              {t("nav.adminAgenda")}
+            </span>
+          </Link>
           <div className="hidden items-center gap-3 md:flex">
             <nav className="flex items-center gap-3 text-sm">
               {links.map((link) => {

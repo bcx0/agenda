@@ -310,18 +310,57 @@ export async function pullFromGoogle(
   if (appSource === APP_SOURCE_TAG && recordId) {
     try {
       if (recordType === 'booking') {
+        const existing = await prisma.booking.findUnique({
+          where: { id: parseInt(recordId) },
+          select: { googleEtag: true },
+        })
+        if (!existing) {
+          throw { code: 'P2025' }
+        }
+        // Same etag = echo of our own push -> skip
+        if (existing.googleEtag === googleEvent.etag) {
+          return { action: 'etag_unchanged', skipped: true }
+        }
+        // Etag differs -> real change in Google (e.g. time edited from GCal) ->
+        // propagate startAt/endAt so the app reflects the new time
         await prisma.booking.update({
           where: { id: parseInt(recordId) },
-          data: { googleEtag: googleEvent.etag },
+          data: {
+            startAt: new Date(eventStartDt),
+            endAt: new Date(eventEndDt),
+            googleEtag: googleEvent.etag,
+            syncSource: 'google',
+            syncStatus: 'synced',
+            lastSyncedAt: new Date(),
+          },
         })
-        return { action: 'etag_updated', skipped: true }
+        logSync('Booking', parseInt(recordId), 'pull_update', 'google_to_app')
+        return { action: 'booking_updated_from_google' }
       }
       if (recordType === 'block') {
+        const existing = await prisma.block.findUnique({
+          where: { id: parseInt(recordId) },
+          select: { googleEtag: true },
+        })
+        if (!existing) {
+          throw { code: 'P2025' }
+        }
+        if (existing.googleEtag === googleEvent.etag) {
+          return { action: 'etag_unchanged', skipped: true }
+        }
         await prisma.block.update({
           where: { id: parseInt(recordId) },
-          data: { googleEtag: googleEvent.etag },
+          data: {
+            startAt: new Date(eventStartDt),
+            endAt: new Date(eventEndDt),
+            googleEtag: googleEvent.etag,
+            syncSource: 'google',
+            syncStatus: 'synced',
+            lastSyncedAt: new Date(),
+          },
         })
-        return { action: 'etag_updated', skipped: true }
+        logSync('Block', parseInt(recordId), 'pull_update', 'google_to_app')
+        return { action: 'block_updated_from_google' }
       }
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2025') {

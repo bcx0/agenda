@@ -594,12 +594,14 @@ export async function bulkImportFromGoogle(
     startAt: Date
     endAt: Date
     googleEventId: string
+    googleEtag: string
   }> = []
   const blocksToCreate: Array<{
     startAt: Date
     endAt: Date
     reason: string
     googleEventId: string
+    googleEtag: string
   }> = []
 
   for (const event of events) {
@@ -627,6 +629,7 @@ export async function bulkImportFromGoogle(
           startAt,
           endAt,
           googleEventId: event.id,
+          googleEtag: event.etag,
         })
         result.details.push({ summary: event.summary ?? '', action: `booking → ${client.name}` })
       } else {
@@ -635,6 +638,7 @@ export async function bulkImportFromGoogle(
           endAt,
           reason: `[NO_ACCOUNT] RDV — ${parsed.clientName || 'Client Google'}`,
           googleEventId: event.id,
+          googleEtag: event.etag,
         })
         result.noAccountBlocks++
         result.details.push({ summary: event.summary ?? '', action: `no_account → ${parsed.clientName}` })
@@ -645,6 +649,7 @@ export async function bulkImportFromGoogle(
         endAt,
         reason: parsed.reason,
         googleEventId: event.id,
+        googleEtag: event.etag,
       })
       result.details.push({ summary: event.summary ?? '', action: `block → ${parsed.reason}` })
     }
@@ -680,6 +685,7 @@ export async function bulkImportFromGoogle(
         status: 'CONFIRMED',
         mode: 'VISIO',
         googleEventId: b.googleEventId,
+        googleEtag: b.googleEtag,
         syncSource: 'google',
         syncStatus: 'synced',
         lastSyncedAt: new Date(),
@@ -697,6 +703,7 @@ export async function bulkImportFromGoogle(
         endAt: b.endAt,
         reason: b.reason,
         googleEventId: b.googleEventId,
+        googleEtag: b.googleEtag,
         syncSource: 'google',
         syncStatus: 'synced',
         lastSyncedAt: new Date(),

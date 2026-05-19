@@ -197,34 +197,44 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── INCREMENTAL PROCESS: for normal sync (not after purge) ──
-    // Uses alreadyImported to skip known events, processes new ones individually.
+    // Bulk pre-fetch existing records with their etag. Skip only events whose
+    // etag matches stored value (perf optim). Events with different/null etag
+    // are passed to pullFromGoogle which handles both create and update paths
+    // (including time changes on already-imported events).
     if (step === "process") {
       const body = await req.json();
       const events = (body.events ?? []) as GoogleCalendarEvent[];
 
-      // Bulk pre-check: skip events already in DB (fast lookup)
       const eventIds = events.map((e) => e.id);
       const [existingBookings, existingBlocks] = await Promise.all([
         prisma.booking.findMany({
           where: { googleEventId: { in: eventIds } },
-          select: { googleEventId: true },
+          select: { googleEventId: true, googleEtag: true },
         }),
         prisma.block.findMany({
           where: { googleEventId: { in: eventIds } },
-          select: { googleEventId: true },
+          select: { googleEventId: true, googleEtag: true },
         }),
       ]);
-      const alreadyImported = new Set([
-        ...existingBookings.map((b: { googleEventId: string | null }) => b.googleEventId),
-        ...existingBlocks.map((b: { googleEventId: string | null }) => b.googleEventId),
-      ]);
+      const etagMap = new Map<string, string | null>();
+      for (const b of existingBookings) {
+        if (b.googleEventId) etagMap.set(b.googleEventId, b.googleEtag);
+      }
+      for (const b of existingBlocks) {
+        if (b.googleEventId) etagMap.set(b.googleEventId, b.googleEtag);
+      }
 
       const results: Array<{ eventId: string; action: string }> = [];
 
       for (const event of events) {
-        if (alreadyImported.has(event.id) && event.status !== "cancelled") {
-          results.push({ eventId: event.id, action: "already_exists" });
-          continue;
+        // Skip if event is already in DB with matching etag (no change since
+        // last sync). Etag-null records always re-process so we backfill etag.
+        if (event.status !== "cancelled" && etagMap.has(event.id)) {
+          const storedEtag = etagMap.get(event.id);
+          if (storedEtag && storedEtag === event.etag) {
+            results.push({ eventId: event.id, action: "etag_unchanged" });
+            continue;
+          }
         }
         try {
           const result = await pullFromGoogle(

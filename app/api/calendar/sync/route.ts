@@ -73,8 +73,21 @@ export async function POST(req: NextRequest) {
       const data = await response.json();
       const events = (data.items ?? []) as GoogleCalendarEvent[];
       const nextPageToken = data.nextPageToken ?? null;
+      const nextSyncToken = data.nextSyncToken ?? null;
 
-      console.log(`[Sync:fetch] Got ${events.length} events, hasMore: ${!!nextPageToken}`);
+      // Persist nextSyncToken when we've reached the last page. Without this,
+      // the webhook fires after a manual reset+sync with syncToken=null and
+      // ends up doing a full-range fetch every time (slow, risks timeout).
+      // With a fresh syncToken, subsequent webhook calls return only the
+      // changed events → sub-second processing → near-realtime propagation.
+      if (!nextPageToken && nextSyncToken) {
+        await prisma.googleToken.update({
+          where: { id: token.id },
+          data: { syncToken: nextSyncToken },
+        });
+      }
+
+      console.log(`[Sync:fetch] Got ${events.length} events, hasMore: ${!!nextPageToken}, syncToken stored: ${!!(!nextPageToken && nextSyncToken)}`);
 
       return NextResponse.json({
         step: "fetch",

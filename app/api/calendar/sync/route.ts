@@ -210,10 +210,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── INCREMENTAL PROCESS: for normal sync (not after purge) ──
-    // Bulk pre-fetch existing records with their etag. Skip only events whose
-    // etag matches stored value (perf optim). Events with different/null etag
-    // are passed to pullFromGoogle which handles both create and update paths
-    // (including time changes on already-imported events).
+    // Bulk pre-fetch existing records' startAt/endAt. Skip events that already
+    // exist with the SAME start/end time. Events with different time (or that
+    // don't exist yet) go through pullFromGoogle which handles create + update.
+    // This avoids depending on etag (which legacy rows don't have) and stays
+    // O(events) in pure JS — no per-event DB query.
     if (step === "process") {
       const body = await req.json();
       const events = (body.events ?? []) as GoogleCalendarEvent[];
@@ -222,31 +223,36 @@ export async function POST(req: NextRequest) {
       const [existingBookings, existingBlocks] = await Promise.all([
         prisma.booking.findMany({
           where: { googleEventId: { in: eventIds } },
-          select: { googleEventId: true, googleEtag: true },
+          select: { googleEventId: true, startAt: true, endAt: true },
         }),
         prisma.block.findMany({
           where: { googleEventId: { in: eventIds } },
-          select: { googleEventId: true, googleEtag: true },
+          select: { googleEventId: true, startAt: true, endAt: true },
         }),
       ]);
-      const etagMap = new Map<string, string | null>();
+      const timeMap = new Map<string, { start: number; end: number }>();
       for (const b of existingBookings) {
-        if (b.googleEventId) etagMap.set(b.googleEventId, b.googleEtag);
+        if (b.googleEventId) timeMap.set(b.googleEventId, { start: b.startAt.getTime(), end: b.endAt.getTime() });
       }
       for (const b of existingBlocks) {
-        if (b.googleEventId) etagMap.set(b.googleEventId, b.googleEtag);
+        if (b.googleEventId) timeMap.set(b.googleEventId, { start: b.startAt.getTime(), end: b.endAt.getTime() });
       }
 
       const results: Array<{ eventId: string; action: string }> = [];
 
       for (const event of events) {
-        // Skip if event is already in DB with matching etag (no change since
-        // last sync). Etag-null records always re-process so we backfill etag.
-        if (event.status !== "cancelled" && etagMap.has(event.id)) {
-          const storedEtag = etagMap.get(event.id);
-          if (storedEtag && storedEtag === event.etag) {
-            results.push({ eventId: event.id, action: "etag_unchanged" });
-            continue;
+        // Skip if event exists in DB with identical startAt/endAt (no change)
+        if (event.status !== "cancelled" && timeMap.has(event.id)) {
+          const stored = timeMap.get(event.id)!;
+          const eventStartDt = event.start?.dateTime;
+          const eventEndDt = event.end?.dateTime;
+          if (eventStartDt && eventEndDt) {
+            const newStart = new Date(eventStartDt).getTime();
+            const newEnd = new Date(eventEndDt).getTime();
+            if (stored.start === newStart && stored.end === newEnd) {
+              results.push({ eventId: event.id, action: "time_unchanged" });
+              continue;
+            }
           }
         }
         try {

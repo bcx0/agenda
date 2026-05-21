@@ -170,6 +170,11 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
               : 0;
             const hasSlots = (group?.slots.length ?? 0) > 0;
             const isPast = key < todayKey;
+            const isBrusselsDay = group
+              ? group.slots.some(
+                  (s) => (s as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM"
+                )
+              : false;
 
             return (
               <button
@@ -192,7 +197,11 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
                 {/* Availability dot */}
                 <div className="mt-0.5 h-1.5 flex items-center gap-0.5">
                   {availableCount > 0 && !isSelected && (
-                    <span className="block h-1.5 w-1.5 rounded-full bg-[#C8A060]" />
+                    <span
+                      className={`block h-1.5 w-1.5 rounded-full ${
+                        isBrusselsDay ? "bg-blue-500" : "bg-[#C8A060]"
+                      }`}
+                    />
                   )}
                   {hasSlots && availableCount === 0 && !isSelected && (
                     <span className="block h-1.5 w-1.5 rounded-full bg-white/25" />
@@ -208,6 +217,10 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-[#C8A060]" />
             <span className="text-[10px] text-white/50">Disponible</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="block h-2 w-2 rounded-full bg-blue-500" />
+            <span className="text-[10px] text-white/50">Belgique</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="block h-2 w-2 rounded-full bg-white/25" />

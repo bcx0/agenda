@@ -108,5 +108,46 @@ console.log("── 7. Cohérence heure précise (échantillon hiver/été) ─�
 assert(displayTime("2026-07-15T10:00:00Z") === "12:00", "Été : 10:00Z => 12:00 (CEST +2)");
 assert(displayTime("2026-01-15T10:00:00Z") === "11:00", "Hiver : 10:00Z => 11:00 (CET +1)");
 
+console.log("── 8. Cas additionnels : récurrents, bascule auto Bruxelles, fins de mois ──");
+// RDV récurrent hebdo : même heure murale chaque semaine, malgré le passage à l'heure d'hiver.
+// 14:00 Bruxelles -> 12:00Z en été (CEST), 13:00Z en hiver (CET). L'affichage doit rester 14:00.
+assert(displayTime("2026-10-22T12:00:00Z") === "14:00", "Récurrent avant bascule (été) : 12:00Z => 14:00");
+assert(displayTime("2026-10-29T13:00:00Z") === "14:00", "Récurrent après bascule (hiver) : 13:00Z => 14:00");
+assert(displayTime("2026-11-05T13:00:00Z") === "14:00", "Récurrent semaine suivante (hiver) : 13:00Z => 14:00");
+assert(displayTime("2026-11-26T13:00:00Z") === "14:00", "26/11 récurrent : 13:00Z => 14:00 (hiver)");
+// Jour de bascule automne (25/10/2026) : un créneau juste avant minuit reste le 25.
+assert(brusselsDayKey("2026-10-25T21:30:00Z") === "2026-10-25", "Jour de bascule : 23:30 Bruxelles reste le 25/10");
+// Fin de mois + minuit : 30/11 23:30 Bruxelles (hiver +1) = 22:30Z -> reste 30/11.
+assert(brusselsDayKey("2026-11-30T22:30:00Z") === "2026-11-30", "Fin nov : 30/11 23:30 reste le 30/11");
+// 01/11 00:30 Bruxelles (hiver) = 23:30Z le 31/10 -> bascule au 01/11 côté Bruxelles.
+assert(brusselsDayKey("2026-10-31T23:30:00Z") === "2026-11-01", "Minuit passé fin oct : bascule au 01/11");
+// Les deux dates signalées : jour ET heure exacts pour un RDV juste après minuit.
+assert(displayTime("2026-10-21T23:30:00Z") === "01:30", "22/10 00:30->01:30 : heure correcte (été +2)");
+assert(displayTime("2026-11-25T23:30:00Z") === "00:30", "26/11 : 23:30Z => 00:30 Bruxelles (hiver +1)");
+assert(displayDate("2026-11-25T23:30:00Z").includes("26"), "26/11 : la date affichée contient bien le 26");
+
+console.log("── 9. Regroupement par jour : les RDV 00h-04h restent sur le bon jour belge ──");
+// REGRESSION (bug \"rdv pas repris\") : le regroupement par jour des cr\u00e9neaux/RDV
+// doit se faire en heure de Bruxelles (lib/time toDayKey / CALENDAR_TZ), pas en Miami.
+// Un RDV t\u00f4t le matin \u00e0 Bruxelles est la veille au soir \u00e0 Miami : group\u00e9 en Miami,
+// il disparaissait de la journ\u00e9e belge ouverte par l'admin.
+// 01:00 Bruxelles le 02/10 (\u00e9t\u00e9, +2) = 23:00Z le 01/10 = 19:00 Miami le 01/10.
+assert(brusselsDayKey("2026-10-01T23:00:00Z") === "2026-10-02",
+  "01:00 Bruxelles 02/10 doit \u00eatre rang\u00e9 sous le 02/10 (Bruxelles)");
+assert(buggyDayKey("2026-10-01T23:00:00Z", "America/New_York") === "2026-10-01",
+  "Bug d\u00e9montr\u00e9 : group\u00e9 en Miami, ce RDV tombait sous le 01/10 (pas repris le 02)");
+// Les deux dates signal\u00e9es, c\u00f4t\u00e9 regroupement :
+assert(brusselsDayKey("2026-10-21T22:30:00Z") === "2026-10-22",
+  "00:30 Bruxelles 22/10 reste sur le 22/10 (regroupement Bruxelles)");
+assert(buggyDayKey("2026-10-21T22:30:00Z", "America/New_York") === "2026-10-21",
+  "Bug Miami : 22/10 00:30 retombait sous le 21/10");
+assert(brusselsDayKey("2026-11-25T23:30:00Z") === "2026-11-26",
+  "00:30 Bruxelles 26/11 reste sur le 26/11 (regroupement Bruxelles)");
+assert(buggyDayKey("2026-11-25T23:30:00Z", "America/New_York") === "2026-11-25",
+  "Bug Miami : 26/11 00:30 retombait sous le 25/11");
+// La cl\u00e9 de mois (quota) reste en Bruxelles, coh\u00e9rente avec le serveur.
+assert(brusselsDayKey("2026-10-31T23:30:00Z").slice(0,7) === "2026-11",
+  "Cl\u00e9 de mois : 01/11 00:30 Bruxelles compte pour novembre");
+
 console.log(`\n${failed === 0 ? "✅" : "⚠️"}  ${passed} assertions OK, ${failed} échec(s).`);
 process.exit(failed === 0 ? 0 : 1);

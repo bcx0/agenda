@@ -149,5 +149,32 @@ assert(buggyDayKey("2026-11-25T23:30:00Z", "America/New_York") === "2026-11-25",
 assert(brusselsDayKey("2026-10-31T23:30:00Z").slice(0,7) === "2026-11",
   "Cl\u00e9 de mois : 01/11 00:30 Bruxelles compte pour novembre");
 
+console.log("── 10. RDV à cheval sur minuit : indexé sur les deux jours belges ──");
+// Reproduit l'indexation corrigée de lib/booking.ts : un booking est rangé sous
+// CHAQUE jour belge qu'il couvre (jour de début .. jour de fin), pour que la
+// partie après minuit bloque aussi les créneaux du lendemain.
+function bxStartOfDayKeys(startIso, endIso) {
+  const keys = [];
+  let d = new Date(brusselsDayKey(startIso) + "T12:00:00Z"); // ancre midi pour éviter les bascules
+  const endKey = brusselsDayKey(endIso);
+  for (let i = 0; i < 370; i++) {
+    const k = d.toISOString().slice(0, 10);
+    keys.push(k);
+    if (k === endKey) break;
+    d = new Date(d.getTime() + 24 * 3600 * 1000);
+  }
+  return keys;
+}
+// RDV 23:30 -> 00:30 Bruxelles (été, +2) = 21:30Z -> 22:30Z, à cheval sur 21 et 22 oct.
+let span = bxStartOfDayKeys("2026-10-21T21:30:00Z", "2026-10-21T22:30:00Z");
+assert(span.includes("2026-10-21") && span.includes("2026-10-22"),
+  "RDV minuit 21->22 oct : indexé sur les DEUX jours (21 et 22)");
+// RDV normal 1h en pleine journée : un seul jour.
+span = bxStartOfDayKeys("2026-10-22T07:00:00Z", "2026-10-22T08:00:00Z");
+assert(span.length === 1 && span[0] === "2026-10-22", "RDV 1h plein jour : un seul jour belge");
+// RDV qui finit pile à minuit (23:00->00:00 Bruxelles hiver) : couvre 25 et 26 nov (fin = 00:00 du 26).
+span = bxStartOfDayKeys("2026-11-25T22:00:00Z", "2026-11-25T23:00:00Z");
+assert(span.includes("2026-11-25"), "RDV finissant à minuit : présent le jour de début");
+
 console.log(`\n${failed === 0 ? "✅" : "⚠️"}  ${passed} assertions OK, ${failed} échec(s).`);
 process.exit(failed === 0 ? 0 : 1);

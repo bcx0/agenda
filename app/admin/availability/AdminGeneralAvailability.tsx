@@ -5,7 +5,7 @@ import { useFormState } from "react-dom";
 import { DateTime } from "luxon";
 import Link from "next/link";
 import type { SlotView } from "../../../lib/booking";
-import { BRUSSELS_TZ, MIAMI_TZ } from "../../../lib/time";
+import { BRUSSELS_TZ, MIAMI_TZ, CALENDAR_TZ } from "../../../lib/time";
 import { CalendarViewToggle, type ViewMode } from "../../../components/CalendarViewToggle";
 import { MonthCalendar } from "../../../components/MonthCalendar";
 import { useLanguage } from "../../../components/LanguageProvider";
@@ -73,7 +73,7 @@ function normalizeSlots(slots: SlotView[]) {
 function groupSlotsByDay(slots: SlotView[], locale: string = "fr"): Map<string, DayGroup> {
   const map = new Map<string, DayGroup>();
   slots.forEach((slot) => {
-    const day = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(MIAMI_TZ);
+    const day = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(CALENDAR_TZ);
     const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
     if (!map.has(key)) {
       map.set(key, {
@@ -102,10 +102,10 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
   const [, startTransition] = useTransition();
   const [view, setView] = useState<ViewMode>("month");
   const [monthFocus, setMonthFocus] = useState<DateTime>(
-    DateTime.now().setZone(MIAMI_TZ).startOf("month")
+    DateTime.now().setZone(CALENDAR_TZ).startOf("month")
   );
   const [weekStart, setWeekStart] = useState<DateTime>(
-    DateTime.now().setZone(MIAMI_TZ).startOf("week").plus({ days: 1 })
+    DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 })
   );
   const [selectedDay, setSelectedDay] = useState<DayGroup | null>(null);
   const [dateRanges, setDateRanges] = useState<Range[]>([]);
@@ -134,7 +134,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
   );
 
   const openDay = (day: DateTime) => {
-    const inMiami = day.setZone(MIAMI_TZ);
+    const inMiami = day.setZone(CALENDAR_TZ);
     const key = inMiami.toISODate() ?? inMiami.toFormat("yyyy-LL-dd");
     const group = dayMap.get(key) ?? {
       key,
@@ -184,9 +184,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       }))
       .filter((booking) => {
         const dayKey =
-          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
+          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(CALENDAR_TZ).toISODate() ??
           DateTime.fromJSDate(booking.startDate, { zone: "utc" })
-            .setZone(MIAMI_TZ)
+            .setZone(CALENDAR_TZ)
             .toFormat("yyyy-LL-dd");
         return dayKey === selectedDay.key;
       });
@@ -204,9 +204,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       }))
       .filter((block) => {
         const dayKey =
-          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
+          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(CALENDAR_TZ).toISODate() ??
           DateTime.fromJSDate(block.startDate, { zone: "utc" })
-            .setZone(MIAMI_TZ)
+            .setZone(CALENDAR_TZ)
             .toFormat("yyyy-LL-dd");
         return dayKey === selectedDay.key;
       });
@@ -214,13 +214,13 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
 
   // Mobile compact calendar (like MobileBookingView)
   const todayKey = useMemo(() => {
-    const now = DateTime.now().setZone(MIAMI_TZ);
+    const now = DateTime.now().setZone(CALENDAR_TZ);
     return now.toISODate() ?? now.toFormat("yyyy-LL-dd");
   }, []);
 
   const [mobileSelectedKey, setMobileSelectedKey] = useState<string>(todayKey);
   const [mobileMonth, setMobileMonth] = useState<DateTime>(
-    DateTime.now().setZone(MIAMI_TZ).startOf("month")
+    DateTime.now().setZone(CALENDAR_TZ).startOf("month")
   );
   const mobileMonthLabel = mobileMonth.setLocale(locale).toFormat("LLLL yyyy");
 
@@ -238,7 +238,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
   const mobileSelectedData = useMemo(() => {
     const group = dayMap.get(mobileSelectedKey);
     if (group) return group;
-    const day = DateTime.fromISO(mobileSelectedKey, { zone: MIAMI_TZ });
+    const day = DateTime.fromISO(mobileSelectedKey, { zone: CALENDAR_TZ });
     return {
       key: mobileSelectedKey,
       label: day.isValid ? day.setLocale(locale).toFormat("EEEE dd MMMM") : "",
@@ -259,8 +259,8 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       }))
       .filter((booking) => {
         const dayKey =
-          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
-          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("yyyy-LL-dd");
+          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(CALENDAR_TZ).toISODate() ??
+          DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(CALENDAR_TZ).toFormat("yyyy-LL-dd");
         return dayKey === mobileSelectedKey;
       });
   }, [bookings, mobileSelectedKey]);
@@ -276,8 +276,8 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
       }))
       .filter((block) => {
         const dayKey =
-          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toISODate() ??
-          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(MIAMI_TZ).toFormat("yyyy-LL-dd");
+          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(CALENDAR_TZ).toISODate() ??
+          DateTime.fromJSDate(block.startDate, { zone: "utc" }).setZone(CALENDAR_TZ).toFormat("yyyy-LL-dd");
         return dayKey === mobileSelectedKey;
       });
   }, [noAccountBlocks, mobileSelectedKey]);
@@ -571,7 +571,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
             selectedDayKey={selectedDay?.key ?? null}
             onSelectDay={(d) => {
               openDay(d);
-              const inMiami = d.setZone(MIAMI_TZ);
+              const inMiami = d.setZone(CALENDAR_TZ);
               setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
             }}
           />
@@ -600,7 +600,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               <button
                 type="button"
                 onClick={() =>
-                  setWeekStart(DateTime.now().setZone(MIAMI_TZ).startOf("week").plus({ days: 1 }))
+                  setWeekStart(DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 }))
                 }
                 className="rounded-full border border-border px-4 py-2 text-sm text-white/70 hover:bg-white/5 transition"
               >
@@ -614,7 +614,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 {Array.from({ length: 7 }, (_, i) => i).map((i) => {
                   const day = weekStart.plus({ days: i });
                   const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
-                  const isToday = key === (DateTime.now().setZone(MIAMI_TZ).toISODate() ?? "");
+                  const isToday = key === (DateTime.now().setZone(CALENDAR_TZ).toISODate() ?? "");
                   const daySlots = dayMap.get(key)?.slots ?? [];
                   const availCount = daySlots.filter((s: SlotView) => s.status === "available").length;
                   const bookedCount = daySlots.filter((s: SlotView) => s.status === "booked").length;

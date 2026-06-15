@@ -3,7 +3,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { DateTime } from "luxon";
 import type { SlotView } from "../lib/booking";
-import { MIAMI_TZ, BRUSSELS_TZ } from "../lib/time";
+import { CALENDAR_TZ, toMonthKey } from "../lib/time";
 import SlotButton from "./SlotButton";
 import { useLanguage } from "./LanguageProvider";
 
@@ -14,11 +14,6 @@ type Props = {
 };
 
 /** Compact mobile calendar + inline day slots — inspired by Doctolib/Calendly */
-function getSlotMonthKey(slotStart: Date): string {
-  const dt = DateTime.fromJSDate(slotStart, { zone: "utc" }).setZone(BRUSSELS_TZ);
-  return `${dt.year}-${String(dt.month).padStart(2, "0")}`;
-}
-
 function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props) {
   const { locale } = useLanguage();
   const normalizedSlots = useMemo(
@@ -35,7 +30,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
   const dayMap = useMemo(() => {
     const map = new Map<string, { key: string; label: string; slots: SlotView[]; date: DateTime }>();
     normalizedSlots.forEach((slot) => {
-      const day = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(MIAMI_TZ);
+      const day = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(CALENDAR_TZ);
       const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
       if (!map.has(key)) {
         map.set(key, {
@@ -52,10 +47,10 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
 
   // Calendar state
   const [month, setMonth] = useState<DateTime>(
-    DateTime.now().setZone(MIAMI_TZ).startOf("month")
+    DateTime.now().setZone(CALENDAR_TZ).startOf("month")
   );
   const todayKey = useMemo(() => {
-    const now = DateTime.now().setZone(MIAMI_TZ);
+    const now = DateTime.now().setZone(CALENDAR_TZ);
     return now.toISODate() ?? now.toFormat("yyyy-LL-dd");
   }, []);
 
@@ -85,7 +80,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
   const selectedData = useMemo(() => {
     const group = dayMap.get(selectedKey);
     if (group) return group;
-    const day = DateTime.fromISO(selectedKey, { zone: MIAMI_TZ });
+    const day = DateTime.fromISO(selectedKey, { zone: CALENDAR_TZ });
     return {
       key: selectedKey,
       label: day.isValid
@@ -259,7 +254,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
               presentielLocation={slot.presentielLocation}
               presentielNote={slot.presentielNote}
               status={slot.status}
-              quotaReached={quotaByMonth ? (quotaByMonth[getSlotMonthKey(slot.start)] ?? false) : quotaReached}
+              quotaReached={quotaByMonth ? (quotaByMonth[toMonthKey(slot.start)] ?? false) : quotaReached}
             />
           ))}
         </div>

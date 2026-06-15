@@ -122,3 +122,30 @@ export function isWithinBrusselsWindow(startUtc: Date, endUtc: Date) {
       end.millisecond === 0);
   return startsInRange && endsBeforeCutoff;
 }
+
+/**
+ * Canonical "business day" timezone for the agenda calendar.
+ *
+ * The whole app (Google Calendar sync, emails, ICS feed, admin booking lists)
+ * treats Europe/Brussels as the reference day. Grouping calendar slots/bookings
+ * by any other zone (historically Miami) made events near midnight Brussels time
+ * land on the wrong calendar day — e.g. a 01:00 Brussels RDV is 19:00 the
+ * previous day in Miami, so it disappeared from the Brussels day being viewed.
+ * Keep ALL day/month grouping keys on this constant.
+ */
+export const CALENDAR_TZ = BRUSSELS_TZ;
+
+/** ISO day key (YYYY-MM-DD) of an instant, in the canonical calendar zone. */
+export function toDayKey(value: Date | DateTime, zone: string = CALENDAR_TZ): string {
+  const dt =
+    value instanceof Date
+      ? DateTime.fromJSDate(value, { zone: "utc" }).setZone(zone)
+      : value.setZone(zone);
+  return dt.toISODate() ?? dt.toFormat("yyyy-LL-dd");
+}
+
+/** Month key (YYYY-MM) of an instant, in the canonical calendar zone. Matches the server quota keys. */
+export function toMonthKey(value: Date, zone: string = CALENDAR_TZ): string {
+  const dt = DateTime.fromJSDate(value, { zone: "utc" }).setZone(zone);
+  return `${dt.year}-${String(dt.month).padStart(2, "0")}`;
+}

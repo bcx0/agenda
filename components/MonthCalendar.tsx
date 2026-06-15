@@ -3,7 +3,7 @@
 import { memo, useMemo } from "react";
 import { DateTime } from "luxon";
 import type { SlotView } from "../lib/booking";
-import { MIAMI_TZ } from "../lib/time";
+import { CALENDAR_TZ } from "../lib/time";
 import { useLanguage } from "./LanguageProvider";
 
 type SlotWithLocation = SlotView & { activeLocation?: "MIAMI" | "BELGIUM" };
@@ -39,7 +39,7 @@ function MonthCalendarComponent({
   }, [month]);
 
   const todayKey = useMemo(() => {
-    const nowMiami = DateTime.now().setZone(MIAMI_TZ);
+    const nowMiami = DateTime.now().setZone(CALENDAR_TZ);
     return nowMiami.toISODate() ?? nowMiami.toFormat("yyyy-LL-dd");
   }, []);
   const monthLabel = month.setLocale(locale === "en" ? "en" : "fr").toFormat("LLLL yyyy");
@@ -66,7 +66,7 @@ function MonthCalendarComponent({
         </button>
         <button
           type="button"
-          onClick={() => onChangeMonth(DateTime.now().setZone(MIAMI_TZ).startOf("month"))}
+          onClick={() => onChangeMonth(DateTime.now().setZone(CALENDAR_TZ).startOf("month"))}
           className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5 whitespace-nowrap"
         >
           {t("calendar.today")}

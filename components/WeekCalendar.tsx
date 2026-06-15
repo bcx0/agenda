@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import { DateTime } from "luxon";
 import SlotButton from "./SlotButton";
 import type { SlotView } from "../lib/booking";
-import { MIAMI_TZ, BRUSSELS_TZ } from "../lib/time";
+import { CALENDAR_TZ, toMonthKey } from "../lib/time";
 import { useLanguage } from "./LanguageProvider";
 
 type Props = {
@@ -14,11 +14,6 @@ type Props = {
   quotaByMonth?: Record<string, boolean>;
   onChangeWeek: (next: DateTime) => void;
 };
-
-function getSlotMonthKey(slotStart: Date): string {
-  const dt = DateTime.fromJSDate(slotStart, { zone: "utc" }).setZone(BRUSSELS_TZ);
-  return `${dt.year}-${String(dt.month).padStart(2, "0")}`;
-}
 
 const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
@@ -58,7 +53,7 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
         <button
           type="button"
           onClick={() =>
-            onChangeWeek(DateTime.now().setZone(MIAMI_TZ).startOf("week").plus({ days: 1 }))
+            onChangeWeek(DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 }))
           }
           className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
         >
@@ -97,7 +92,7 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
                         presentielLocation={slot.presentielLocation}
                         presentielNote={slot.presentielNote}
                         status={slot.status}
-                        quotaReached={quotaByMonth ? (quotaByMonth[getSlotMonthKey(slot.start)] ?? false) : quotaReached}
+                        quotaReached={quotaByMonth ? (quotaByMonth[toMonthKey(slot.start)] ?? false) : quotaReached}
                       />
                     );
                   })}

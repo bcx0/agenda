@@ -5,7 +5,7 @@ import { DateTime } from "luxon";
 import { useSearchParams } from "next/navigation";
 import { useLanguage } from "./LanguageProvider";
 import type { SlotView } from "../lib/booking";
-import { MIAMI_TZ, BRUSSELS_TZ } from "../lib/time";
+import { CALENDAR_TZ, toMonthKey } from "../lib/time";
 import { CalendarViewToggle, type ViewMode } from "./CalendarViewToggle";
 import { DaySlotsPanel } from "./DaySlotsPanel";
 import { MobileBookingView } from "./MobileBookingView";
@@ -26,11 +26,6 @@ type DayGroup = {
   date: DateTime;
 };
 
-function getSlotMonthKey(slotStart: Date): string {
-  const dt = DateTime.fromJSDate(slotStart, { zone: "utc" }).setZone(BRUSSELS_TZ);
-  return `${dt.year}-${String(dt.month).padStart(2, "0")}`;
-}
-
 export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
   const { locale } = useLanguage();
   const normalizedSlots = useMemo(
@@ -47,10 +42,10 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
   const [view, setView] = useState<ViewMode>("month");
   const [, startTransition] = useTransition();
   const [monthFocus, setMonthFocus] = useState<DateTime>(
-    DateTime.now().setZone(MIAMI_TZ).startOf("month")
+    DateTime.now().setZone(CALENDAR_TZ).startOf("month")
   );
   const [weekStart, setWeekStart] = useState<DateTime>(
-    DateTime.now().setZone(MIAMI_TZ).startOf("week").plus({ days: 1 })
+    DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 })
   );
   const [selectedDay, setSelectedDay] = useState<DayGroup | null>(null);
   const searchParams = useSearchParams();
@@ -76,7 +71,7 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
   );
 
   const handleSelectDay = useCallback((day: DateTime) => {
-    const key = day.setZone(MIAMI_TZ).toISODate() ?? day.toFormat("yyyy-LL-dd");
+    const key = day.setZone(CALENDAR_TZ).toISODate() ?? day.toFormat("yyyy-LL-dd");
     const group = dayMap.get(key);
     setSelectedDay(
       group ?? {
@@ -112,7 +107,7 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
             daySlots={daySlotsMap}
             onChangeMonth={setMonthFocus}
             onSelectDay={(d) => {
-              const inMiami = d.setZone(MIAMI_TZ);
+              const inMiami = d.setZone(CALENDAR_TZ);
               startTransition(() => {
                 handleSelectDay(inMiami);
                 setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
@@ -130,7 +125,7 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
             onChangeWeek={(next) => {
               startTransition(() => {
                 setWeekStart(next);
-                setMonthFocus(next.setZone(MIAMI_TZ).startOf("month"));
+                setMonthFocus(next.setZone(CALENDAR_TZ).startOf("month"));
               });
             }}
           />
@@ -162,7 +157,7 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
                         presentielLocation={slot.presentielLocation}
                         presentielNote={slot.presentielNote}
                         status={slot.status}
-                        quotaReached={quotaByMonth ? (quotaByMonth[getSlotMonthKey(slot.start)] ?? false) : quotaReached}
+                        quotaReached={quotaByMonth ? (quotaByMonth[toMonthKey(slot.start)] ?? false) : quotaReached}
                       />
                     );
                   })}
@@ -191,7 +186,7 @@ function groupSlotsByDay(slots: SlotView[], locale: string): Map<string, DayGrou
   const map = new Map<string, DayGroup>();
 
   slots.forEach((slot) => {
-    const day = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(MIAMI_TZ);
+    const day = DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(CALENDAR_TZ);
     const key = day.toISODate() ?? day.toFormat("yyyy-LL-dd");
     if (!map.has(key)) {
       map.set(key, {

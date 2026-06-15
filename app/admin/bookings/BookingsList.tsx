@@ -72,12 +72,14 @@ export default function BookingsList({ bookings, errorMessage }: Props) {
                   {new Date(booking.startAt).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", {
                     weekday: "short",
                     day: "numeric",
-                    month: "short"
+                    month: "short",
+                    timeZone: "Europe/Brussels"
                   })}
                   {" à "}
                   {new Date(booking.startAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
                     hour: "2-digit",
-                    minute: "2-digit"
+                    minute: "2-digit",
+                    timeZone: "Europe/Brussels"
                   })}
                 </p>
               </div>
@@ -148,12 +150,14 @@ export default function BookingsList({ bookings, errorMessage }: Props) {
                   weekday: "long",
                   day: "2-digit",
                   month: "long",
-                  year: "numeric"
+                  year: "numeric",
+                  timeZone: "Europe/Brussels"
                 })}{" "}
                 à{" "}
                 {new Date(booking.startAt).toLocaleTimeString(locale === "en" ? "en-US" : "fr-FR", {
                   hour: "2-digit",
-                  minute: "2-digit"
+                  minute: "2-digit",
+                  timeZone: "Europe/Brussels"
                 })}{" "}
                 Belgique
               </p>

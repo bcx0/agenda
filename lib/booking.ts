@@ -330,11 +330,21 @@ export async function getAvailability() {
     else recurringBlocksByDay.set(block.dayOfWeek, [block]);
   }
 
-  // Pre-index bookings by Brussels date for O(1) lookup
+  // Pre-index bookings by Brussels date for O(1) lookup.
+  // Index under EVERY Brussels day the booking spans (start day .. end day), so a
+  // booking that crosses midnight still blocks slots on the following day(s).
   const bookingsByDate = new Map<string, { startAt: Date; endAt: Date }[]>();
   for (const booking of bookings) {
-    const key = DateTime.fromJSDate(booking.startAt, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
-    if (key) {
+    const startDay = DateTime.fromJSDate(booking.startAt, { zone: "utc" })
+      .setZone(BRUSSELS_TZ)
+      .startOf("day");
+    const endDay = DateTime.fromJSDate(booking.endAt, { zone: "utc" })
+      .setZone(BRUSSELS_TZ)
+      .startOf("day");
+    // Guard against malformed ranges; cap the span to a sane number of days.
+    for (let d = startDay, i = 0; d <= endDay && i < 370; d = d.plus({ days: 1 }), i++) {
+      const key = d.toISODate();
+      if (!key) continue;
       const arr = bookingsByDate.get(key);
       if (arr) arr.push(booking);
       else bookingsByDate.set(key, [booking]);

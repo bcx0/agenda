@@ -21,7 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { t } = useLanguage();
 
   return (
-    <div className="min-h-screen bg-black pb-16 text-white md:pb-0">
+    <div className="theme-dark min-h-screen bg-black pb-16 text-white md:pb-0">
       <header className="border-b border-border bg-background-elevated">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
           <div className="font-[var(--font-playfair)] text-lg uppercase tracking-wider text-white">

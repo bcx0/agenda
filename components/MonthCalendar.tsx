@@ -50,7 +50,7 @@ function MonthCalendarComponent({
         <button
           type="button"
           onClick={() => onChangeMonth(month.minus({ months: 1 }))}
-          className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="cal-nav-btn"
         >
           {"<"}
         </button>
@@ -60,20 +60,20 @@ function MonthCalendarComponent({
         <button
           type="button"
           onClick={() => onChangeMonth(month.plus({ months: 1 }))}
-          className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="cal-nav-btn"
         >
           {">"}
         </button>
         <button
           type="button"
           onClick={() => onChangeMonth(DateTime.now().setZone(CALENDAR_TZ).startOf("month"))}
-          className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5 whitespace-nowrap"
+          className="cal-nav-btn whitespace-nowrap"
         >
           {t("calendar.today")}
         </button>
       </div>
 
-      <div className="grid grid-cols-7 text-xs uppercase tracking-widest text-white/50">
+      <div className="cal-head grid grid-cols-7 text-xs uppercase tracking-widest">
         {dayNames.map((name) => (
           <div key={name} className="px-2 py-1 text-center">
             {name}
@@ -120,17 +120,17 @@ function MonthCalendarComponent({
               className={`min-h-[100px] rounded-xl px-3 py-3 text-left transition ${
                 isSelectable
                   ? isBrusselsDay
-                    ? "bg-[#0A0F1A] border-4 border-blue-500 text-white font-semibold hover:border-blue-400 hover:bg-[#0F1520]"
-                    : "bg-[#0F0F0F] border-4 border-[#C8A060] text-white font-semibold hover:border-[#E8D7BE] hover:bg-[#1A1A1A]"
-                  : "bg-[#0F0F0F] border-4 border-gray-700 text-white/30 opacity-40 cursor-not-allowed"
-              } ${isToday || isSelected ? "ring-2 ring-white" : ""}`}
+                    ? "cal-cell-brussels"
+                    : "cal-cell-open"
+                  : "cal-cell-off"
+              } ${isToday || isSelected ? "cal-cell-focus" : ""}`}
               aria-label={`Selectionner le ${day.setLocale(locale === "en" ? "en" : "fr").toFormat("dd LLLL")}`}
               disabled={!isSelectable}
             >
               <div className="flex items-center justify-between text-sm font-semibold">
                 <span>{day.day}</span>
                 {isToday && (
-                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] text-white/70">
+                  <span className="cal-today-badge">
                     {t("calendar.today")}
                   </span>
                 )}
@@ -140,9 +140,9 @@ function MonthCalendarComponent({
                   className={`inline-flex rounded-full px-2 py-1 text-[11px] ${
                     availableCount > 0
                       ? isBrusselsDay
-                        ? "bg-blue-500 text-white"
-                        : "bg-[#C8A060] text-black"
-                      : "bg-white/10 text-white/60"
+                        ? "cal-badge-brussels"
+                        : "cal-badge-avail"
+                      : "cal-badge-none"
                   }`}
                 >
                   {statusLabel}
@@ -154,17 +154,17 @@ function MonthCalendarComponent({
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center justify-center gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-2">
-        <span className="flex items-center gap-2 text-xs text-white/60">
-          <span className="inline-block h-3 w-6 rounded border-2 border-[#C8A060]" />
+      <div className="cal-legend flex flex-wrap items-center justify-center gap-4 rounded-lg border px-4 py-2">
+        <span className="cal-legend-item flex items-center gap-2 text-xs">
+          <span className="cal-legend-miami inline-block h-3 w-6 rounded border-2" />
           {t("legend.miami")}
         </span>
-        <span className="flex items-center gap-2 text-xs text-white/60">
-          <span className="inline-block h-3 w-6 rounded border-2 border-blue-500" />
+        <span className="cal-legend-item flex items-center gap-2 text-xs">
+          <span className="cal-legend-brussels inline-block h-3 w-6 rounded border-2" />
           {t("legend.belgium")}
         </span>
-        <span className="flex items-center gap-2 text-xs text-white/60">
-          <span className="inline-block h-3 w-6 rounded border-2 border-gray-700" />
+        <span className="cal-legend-item flex items-center gap-2 text-xs">
+          <span className="cal-legend-off inline-block h-3 w-6 rounded border-2" />
           {t("legend.unavailable")}
         </span>
       </div>
@@ -173,4 +173,3 @@ function MonthCalendarComponent({
 }
 
 export const MonthCalendar = memo(MonthCalendarComponent);
-

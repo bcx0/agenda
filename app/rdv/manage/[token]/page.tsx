@@ -30,7 +30,7 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
           {t("rdvManage.expired", locale)}
         </h1>
-        <p className="text-sm text-white/70">
+        <p className="text-sm text-[#5A6B76]">
           {t("rdvManage.expiredDesc", locale)}
         </p>
       </section>
@@ -58,7 +58,7 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
           {t("rdvManage.title", locale)}
         </h1>
-        <p className="text-sm text-white/70">
+        <p className="text-sm text-[#5A6B76]">
           {t("rdvManage.refFor", locale)} {booking.client.name} · {bookingDate}
         </p>
       </div>
@@ -81,23 +81,23 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
       ) : null}
 
       <div className="card space-y-2 p-6">
-        <div className="text-sm text-white/60">{t("rdvManage.currentSlot", locale)}</div>
+        <div className="text-sm text-[#5A6B76]">{t("rdvManage.currentSlot", locale)}</div>
         <div className="text-lg font-semibold">
           {bookingDate} · {bookingBrussels} Brussels / {bookingMiami} Miami
         </div>
-        <div className="text-xs uppercase tracking-widest text-white/60">
+        <div className="text-xs uppercase tracking-widest text-[#5A6B76]">
           {t("rdvManage.status", locale)} {booking.status} · {t("bookingDetail.mode", locale)} {booking.mode}
         </div>
         {booking.cancelReason ? (
           <div className="text-sm text-red-700">{t("rdvManage.cancelReason", locale)} {booking.cancelReason}</div>
         ) : null}
         {booking.rescheduleReason ? (
-          <div className="text-sm text-primary">{t("rdvManage.rescheduleReason", locale)} {booking.rescheduleReason}</div>
+          <div className="text-sm text-[#1C4A63]">{t("rdvManage.rescheduleReason", locale)} {booking.rescheduleReason}</div>
         ) : null}
       </div>
 
       {booking.status === "CANCELLED" ? (
-        <div className="rounded-md border border-border bg-white/5 px-4 py-3 text-sm text-white/70">
+        <div className="rounded-md border border-[#D4DCE1] bg-white px-4 py-3 text-sm text-[#5A6B76]">
           {t("rdvManage.alreadyCancelled", locale)}
         </div>
       ) : (
@@ -106,7 +106,7 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
               {t("rdvManage.cancel", locale)}
             </h2>
-            <p className="text-sm text-white/70">
+            <p className="text-sm text-[#5A6B76]">
               {t("rdvManage.cancelDesc", locale)}
             </p>
             <input type="hidden" name="token" value={token} />
@@ -119,16 +119,16 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
             <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
               {t("rdvManage.modify", locale)}
             </h2>
-            <p className="text-sm text-white/70">
+            <p className="text-sm text-[#5A6B76]">
               {t("rdvManage.modifyDesc", locale)}
             </p>
             <input type="hidden" name="token" value={token} />
             <label className="space-y-2 text-sm">
-              <span className="block text-white/60">{t("rdvManage.newSlot", locale)}</span>
+              <span className="block text-[#5A6B76]">{t("rdvManage.newSlot", locale)}</span>
               <select
                 name="start"
                 required
-                className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                className="w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-2 text-sm"
               >
                 <option value="">{t("rdvManage.selectSlot", locale)}</option>
                 {availableSlots.map((slot) => {
@@ -142,9 +142,9 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
               </select>
             </label>
             {availableSlots.length === 0 ? (
-              <p className="text-sm text-white/60">{t("rdvManage.noSlotAvailable", locale)}</p>
+              <p className="text-sm text-[#5A6B76]">{t("rdvManage.noSlotAvailable", locale)}</p>
             ) : null}
-            <button className="rounded-md border border-border px-4 py-2 text-sm hover:bg-black hover:text-white">
+            <button className="rounded-md border border-[#D4DCE1] px-4 py-2 text-sm hover:bg-[#143648] hover:text-white">
               {t("rdvManage.confirmModify", locale)}
             </button>
           </form>

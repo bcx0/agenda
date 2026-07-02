@@ -13,6 +13,21 @@ const config: Config = {
         sand: "#f7f3ec",
         ink: "#111111",
         accent: "#b28b52",
+        /* Palette A — Clair Premium (logo GM Mental Coach) */
+        brand: {
+          blue: "#1C4A63",
+          "blue-light": "#2A5F7D",
+          "blue-dark": "#143648",
+          night: "#0B1F2B",
+          coral: "#E8452A",
+          "coral-dark": "#C93A22",
+          surface: "#F4F7F9",
+          "surface-alt": "#EFF2F4",
+          border: "#D4DCE1",
+          text: "#10222E",
+          "text-soft": "#5A6B76",
+          "text-muted": "#8A98A1"
+        },
         background: {
           DEFAULT: "#000000",
           elevated: "#0F0F0F",

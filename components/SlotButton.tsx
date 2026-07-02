@@ -69,14 +69,14 @@ function SlotButtonComponent({
     : t("slotButton.available");
 
   const badgeClass = isSubmitting
-    ? "bg-[#C8A060]/60 text-black animate-pulse"
+    ? "bg-[#1C4A63]/60 text-white animate-pulse"
     : confirming
       ? "bg-green-500 text-white animate-pulse"
       : status === "available" && !disabled
-        ? "bg-[#C8A060] text-black"
+        ? "bg-[#1C4A63] text-white"
         : status === "booked"
-        ? "bg-amber-100 text-amber-800"
-        : "bg-white/10 text-white/60";
+        ? "bg-[#E1E7EA] text-[#5A6B76]"
+        : "bg-[#EFF2F4] text-[#8A98A1]";
 
   return (
     <form
@@ -103,14 +103,14 @@ function SlotButtonComponent({
         disabled={disabled}
         className={clsx(
           "w-full rounded-xl border px-4 py-4 text-left transition-all duration-200 focus:outline-none focus:ring-2",
-          isBrussels && "border-l-4 border-l-blue-500",
+          isBrussels && "border-l-4 border-l-[#E8452A]",
           disabled
-            ? "cursor-not-allowed border-gray-800 bg-[#0F0F0F] text-white/30 opacity-50"
+            ? "cursor-not-allowed border-[#E4E9EC] bg-[#F0F3F5] text-[#8A98A1] opacity-70"
             : confirming
-            ? "border-green-500 bg-green-500/10 text-white ring-1 ring-green-500/30 scale-[1.02]"
+            ? "border-green-500 bg-green-50 text-[#10222E] ring-1 ring-green-500/30 scale-[1.02]"
             : isBrussels
-            ? "border-blue-500/30 bg-blue-500/5 text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-500/20 hover:border-blue-500 hover:bg-blue-500/10 focus:ring-blue-500/30"
-            : "border-gray-800 bg-[#0F0F0F] text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#C8A060]/20 hover:border-[#C8A060] hover:bg-[#C8A060]/10 focus:ring-[#C8A060]/30"
+            ? "border-[#E8452A]/40 bg-[#E8452A]/5 text-[#10222E] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#E8452A]/20 hover:border-[#E8452A] hover:bg-[#E8452A]/10 focus:ring-[#E8452A]/30"
+            : "border-[#D4DCE1] bg-white text-[#10222E] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#1C4A63]/20 hover:border-[#1C4A63] hover:bg-[#1C4A63]/5 focus:ring-[#1C4A63]/30"
         )}
       >
         {confirming && !isSubmitting ? (
@@ -119,7 +119,7 @@ function SlotButtonComponent({
               <span className="text-sm font-semibold">
                 {isBrussels ? `${brussels} Brussels` : `${miami} Miami`}
               </span>
-              <span className="block text-xs text-white/70">
+              <span className="block text-xs text-[#5A6B76]">
                 {isBrussels ? `${miami} Miami` : `${brussels} Brussels`}
               </span>
             </div>
@@ -133,7 +133,7 @@ function SlotButtonComponent({
               <span className="text-sm font-semibold">
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
-                    <svg className="h-4 w-4 animate-spin text-[#C8A060]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4 animate-spin text-[#1C4A63]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -149,9 +149,9 @@ function SlotButtonComponent({
                 {stateLabel}
               </span>
             </div>
-            <div className="flex items-center justify-between text-xs text-white/70">
+            <div className="flex items-center justify-between text-xs text-[#5A6B76]">
               <span>{isBrussels ? `${miami} Miami` : `${brussels} Brussels`}</span>
-              <span className="rounded-full bg-white/5 px-2 py-1 text-[11px]">
+              <span className="rounded-full bg-[#10222E]/5 px-2 py-1 text-[11px]">
                 {mode === "PRESENTIEL"
                   ? `${t("slotButton.presentiel")}${presentielLocation ? " - " + presentielLocation : ""}`
                   : t("slotButton.visio")}
@@ -159,12 +159,12 @@ function SlotButtonComponent({
             </div>
             {isBrussels && (
               <div className="mt-1 flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                <span className="text-[11px] font-medium text-blue-400">{t("slotButton.belgium")}</span>
+                <span className="inline-block h-2 w-2 rounded-full bg-[#E8452A]" />
+                <span className="text-[11px] font-medium text-[#C93A22]">{t("slotButton.belgium")}</span>
               </div>
             )}
             {mode === "PRESENTIEL" && presentielNote ? (
-              <div className="mt-1 text-[11px] text-white/60">{presentielNote}</div>
+              <div className="mt-1 text-[11px] text-[#5A6B76]">{presentielNote}</div>
             ) : null}
           </>
         )}

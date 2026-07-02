@@ -15,7 +15,7 @@ const options: { label: string; value: ViewMode }[] = [
 
 export function CalendarViewToggle({ value, onChange }: Props) {
   return (
-    <div className="inline-flex rounded-full border border-border bg-background-elevated shadow-sm">
+    <div className="view-toggle inline-flex rounded-full shadow-sm">
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -24,9 +24,7 @@ export function CalendarViewToggle({ value, onChange }: Props) {
             type="button"
             onClick={() => onChange(opt.value)}
             className={`px-4 py-2 text-sm font-semibold transition ${
-              active
-                ? "bg-black text-white"
-                : "text-white hover:bg-background-elevated/5"
+              active ? "view-toggle-btn-active" : "view-toggle-btn"
             } first:rounded-l-full last:rounded-r-full`}
           >
             {opt.label}
@@ -38,4 +36,3 @@ export function CalendarViewToggle({ value, onChange }: Props) {
 }
 
 export type { ViewMode };
-

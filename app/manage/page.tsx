@@ -52,7 +52,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
       ) : null}
 
       {bookings.length === 0 ? (
-        <div className="card p-6 text-sm text-white/60">{t("manage.noBookings2", locale)}</div>
+        <div className="card p-6 text-sm text-[#5A6B76]">{t("manage.noBookings2", locale)}</div>
       ) : (
         <div className="space-y-4">
           {bookings.map((booking: any) => {
@@ -66,7 +66,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-lg font-semibold">{dateLabel}</div>
-                    <div className="text-sm text-white/70">
+                    <div className="text-sm text-[#5A6B76]">
                       {brussels} Brussels / {miami} Miami
                     </div>
                   </div>
@@ -101,7 +101,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
                   </form>
 
                   {!canManage ? (
-                    <span className="text-xs text-white/60">
+                    <span className="text-xs text-[#5A6B76]">
                       {t("manage.noModify", locale)}
                     </span>
                   ) : null}
@@ -114,4 +114,3 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
     </section>
   );
 }
-

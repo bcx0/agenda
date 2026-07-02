@@ -78,7 +78,7 @@ export function ManageForms({
         <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
           Annuler
         </h2>
-        <p className="text-sm text-white/70">
+        <p className="text-sm text-[#5A6B76]">
           Merci d'indiquer le motif de l'annulation.
         </p>
         <input type="hidden" name="token" value={token} />
@@ -87,7 +87,7 @@ export function ManageForms({
           required
           rows={4}
           placeholder="Motif d'annulation"
-          className="w-full rounded-md border border-border px-3 py-2 text-sm"
+          className="w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-2 text-sm"
         />
         <SubmitButton
           label="Confirmer l'annulation"
@@ -100,16 +100,16 @@ export function ManageForms({
         <h2 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
           Modifier
         </h2>
-        <p className="text-sm text-white/70">
+        <p className="text-sm text-[#5A6B76]">
           Choisissez un nouveau créneau disponible.
         </p>
         <input type="hidden" name="token" value={token} />
         <label className="space-y-2 text-sm">
-          <span className="block text-white/60">Nouveau créneau</span>
+          <span className="block text-[#5A6B76]">Nouveau créneau</span>
           <select
             name="start"
             required
-            className="w-full rounded-md border border-border px-3 py-2 text-sm"
+            className="w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-2 text-sm"
           >
             <option value="">Sélectionner un créneau</option>
             {availableSlots.map((slot) => (
@@ -120,19 +120,19 @@ export function ManageForms({
           </select>
         </label>
         {availableSlots.length === 0 ? (
-          <p className="text-sm text-white/60">Aucun créneau disponible pour le moment.</p>
+          <p className="text-sm text-[#5A6B76]">Aucun créneau disponible pour le moment.</p>
         ) : null}
         <textarea
           name="reason"
           required
           rows={4}
           placeholder="Motif de la modification"
-          className="w-full rounded-md border border-border px-3 py-2 text-sm"
+          className="w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-2 text-sm"
         />
         <SubmitButton
           label="Confirmer la modification"
           loadingLabel="Modification..."
-          className="rounded-md border border-border px-4 py-2 text-sm hover:bg-black hover:text-white"
+          className="rounded-md border border-[#D4DCE1] px-4 py-2 text-sm hover:bg-[#143648] hover:text-white"
         />
       </form>
     </div>

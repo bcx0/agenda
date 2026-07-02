@@ -38,7 +38,7 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
         <button
           type="button"
           onClick={() => onChangeWeek(weekStart.minus({ weeks: 1 }))}
-          className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="rounded-full border border-[#D4DCE1] px-3 py-2 text-sm hover:bg-[#10222E]/5"
         >
           {"<"}
         </button>
@@ -46,7 +46,7 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
         <button
           type="button"
           onClick={() => onChangeWeek(weekStart.plus({ weeks: 1 }))}
-          className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="rounded-full border border-[#D4DCE1] px-3 py-2 text-sm hover:bg-[#10222E]/5"
         >
           {">"}
         </button>
@@ -55,7 +55,7 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
           onClick={() =>
             onChangeWeek(DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 }))
           }
-          className="rounded-full border border-border px-3 py-2 text-sm hover:bg-background-elevated/5"
+          className="rounded-full border border-[#D4DCE1] px-3 py-2 text-sm hover:bg-[#10222E]/5"
         >
           Aujourd&apos;hui
         </button>
@@ -69,15 +69,15 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
           );
           const label = `${dayNames[idx]} ${day.setLocale(locale).toFormat("dd MMM")}`;
           return (
-            <div key={key} className="space-y-2 rounded-xl border border-border bg-background-elevated p-3">
-              <div className="flex items-center justify-between text-sm font-semibold text-white">
+            <div key={key} className="space-y-2 rounded-xl border border-[#D4DCE1] bg-white p-3">
+              <div className="flex items-center justify-between text-sm font-semibold text-[#10222E]">
                 <span>{label}</span>
-                <span className="text-[10px] uppercase tracking-widest text-white/40">
+                <span className="text-[10px] uppercase tracking-widest text-[#8A98A1]">
                   Brussels / Miami
                 </span>
               </div>
               {slots.length === 0 ? (
-                <div className="text-xs text-white/50">Aucun creneau</div>
+                <div className="text-xs text-[#7C8A93]">Aucun creneau</div>
               ) : (
                 <div className="space-y-2">
                   {slots.map((slot) => {

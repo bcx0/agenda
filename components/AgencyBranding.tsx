@@ -5,14 +5,14 @@ export async function AgencyBranding() {
 
   return (
     <div className="card flex flex-col items-center justify-center gap-3 p-5 md:p-6">
-      <span className="text-xs uppercase tracking-widest text-white/40">
+      <span className="text-xs uppercase tracking-widest text-[#8A98A1]">
         {t("footer.madeBy", locale)}
       </span>
       <a
         href="https://lagencepartners.com"
         target="_blank"
         rel="noopener noreferrer"
-        className="block hover:opacity-80 transition-opacity"
+        className="block rounded-lg bg-[#143648] px-4 py-2 hover:opacity-90 transition-opacity"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -25,7 +25,7 @@ export async function AgencyBranding() {
       </a>
       <a
         href="mailto:lagence.groupe.partner@gmail.com"
-        className="text-xs text-white/40 hover:text-white/60 transition-colors"
+        className="text-xs text-[#8A98A1] hover:text-[#5A6B76] transition-colors"
       >
         lagence.groupe.partner@gmail.com
       </a>

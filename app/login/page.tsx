@@ -12,13 +12,13 @@ export default async function LoginPage() {
       <div className="flex flex-col gap-10 md:grid md:grid-cols-[1.1fr_0.9fr] md:items-center">
         <div className="space-y-6">
           <p className="pill">{t("login.secureLogin", locale)}</p>
-          <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider text-white md:text-4xl">
+          <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider text-[#143648] md:text-4xl">
             {t("login.title", locale)}
           </h1>
-          <p className="hidden italic text-lg text-white/70 md:block">
+          <p className="hidden italic text-lg text-[#5A6B76] md:block">
             « {t("login.quote", locale)} »
           </p>
-          <ul className="hidden space-y-3 text-white/70 md:block">
+          <ul className="hidden space-y-3 text-[#5A6B76] md:block">
             <li>— {t("login.verify", locale)}</li>
             <li>— {t("login.quota", locale)}</li>
             <li>— {t("login.realtime", locale)}</li>
@@ -30,7 +30,7 @@ export default async function LoginPage() {
       <div className="mt-8 flex justify-center">
         <Link
           href="/admin"
-          className="text-xs uppercase tracking-widest text-white/40 hover:text-[#C8A060] transition-colors"
+          className="text-xs uppercase tracking-widest text-[#8A98A1] hover:text-[#1C4A63] transition-colors"
         >
           {t("common.admin", locale)}
         </Link>
@@ -38,6 +38,3 @@ export default async function LoginPage() {
     </section>
   );
 }
-
-
-

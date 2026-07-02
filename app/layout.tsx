@@ -32,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body className={`${playfair.variable} ${inter.variable} bg-black text-white`}>
+      <body className={`${playfair.variable} ${inter.variable} bg-[#F4F7F9] text-[#10222E]`}>
         <LanguageProvider>
           <Suspense fallback={null}>
             <ToastProvider />

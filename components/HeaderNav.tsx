@@ -13,14 +13,14 @@ export function HeaderNav({ showManage }: Props) {
 
   return (
     <nav className="flex items-center gap-4 text-xs font-semibold tracking-widest">
-      <Link href="/" className="hover:text-primary">
+      <Link href="/" className="text-white/90 transition-colors hover:text-[#FF9B85]">
         {t("nav.home").toUpperCase()}
       </Link>
-      <Link href="/book" className="hover:text-primary">
+      <Link href="/book" className="text-white/90 transition-colors hover:text-[#FF9B85]">
         {t("nav.book").toUpperCase()}
       </Link>
       {showManage ? (
-        <Link href="/manage" className="hover:text-primary">
+        <Link href="/manage" className="text-white/90 transition-colors hover:text-[#FF9B85]">
           {t("nav.myBookings").toUpperCase()}
         </Link>
       ) : null}

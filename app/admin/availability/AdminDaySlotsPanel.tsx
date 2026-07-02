@@ -11,7 +11,7 @@ type Props = {
 };
 
 function statusLabel(status: SlotView["status"]) {
-  if (status === "booked") return "Occupe";
+  if (status === "booked") return "Réservé";
   if (status === "blocked") return "Indisponible";
   return "Disponible";
 }

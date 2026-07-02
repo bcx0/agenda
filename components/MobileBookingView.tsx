@@ -15,7 +15,7 @@ type Props = {
 
 /** Compact mobile calendar + inline day slots — inspired by Doctolib/Calendly */
 function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props) {
-  const { locale } = useLanguage();
+  const { t, locale } = useLanguage();
   const normalizedSlots = useMemo(
     () =>
       slots.map((slot) => ({
@@ -112,13 +112,13 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
   return (
     <div className="space-y-5">
       {/* ── Compact Month Calendar ── */}
-      <div className="rounded-2xl border border-border bg-[#0F0F0F] p-4">
+      <div className="rounded-2xl border border-[#D4DCE1] bg-white p-4">
         {/* Month navigation */}
         <div className="flex items-center justify-between mb-4">
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/10 active:bg-white/20 transition"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[#5A6B76] hover:bg-[#10222E]/5 active:bg-[#10222E]/10 transition"
             aria-label="Mois précédent"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -131,7 +131,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
           <button
             type="button"
             onClick={handleNextMonth}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/10 active:bg-white/20 transition"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[#5A6B76] hover:bg-[#10222E]/5 active:bg-[#10222E]/10 transition"
             aria-label="Mois suivant"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -145,7 +145,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
           {dayNames.map((name, i) => (
             <div
               key={`${name}-${i}`}
-              className="text-center text-[11px] font-medium text-white/40 py-1"
+              className="text-center text-[11px] font-medium text-[#8A98A1] py-1"
             >
               {name}
             </div>
@@ -180,9 +180,9 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
                   relative flex flex-col items-center justify-center py-2 rounded-xl transition
                   ${!isCurrentMonth ? "opacity-20" : ""}
                   ${isPast && isCurrentMonth ? "opacity-40" : ""}
-                  ${isSelected ? "bg-[#C8A060] text-black" : "text-white"}
-                  ${!isSelected && isToday ? "ring-1 ring-white/50" : ""}
-                  ${!isSelected && isCurrentMonth && !isPast ? "active:bg-white/10" : ""}
+                  ${isSelected ? "bg-[#1C4A63] text-white" : "text-[#10222E]"}
+                  ${!isSelected && isToday ? "ring-1 ring-[#1C4A63]/50" : ""}
+                  ${!isSelected && isCurrentMonth && !isPast ? "active:bg-[#10222E]/5" : ""}
                 `}
                 aria-label={day.setLocale(locale).toFormat("dd MMMM")}
               >
@@ -194,12 +194,12 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
                   {availableCount > 0 && !isSelected && (
                     <span
                       className={`block h-1.5 w-1.5 rounded-full ${
-                        isBrusselsDay ? "bg-blue-500" : "bg-[#C8A060]"
+                        isBrusselsDay ? "bg-[#E8452A]" : "bg-[#1C4A63]"
                       }`}
                     />
                   )}
                   {hasSlots && availableCount === 0 && !isSelected && (
-                    <span className="block h-1.5 w-1.5 rounded-full bg-white/25" />
+                    <span className="block h-1.5 w-1.5 rounded-full bg-[#C3CDD3]" />
                   )}
                 </div>
               </button>
@@ -208,18 +208,18 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-border">
+        <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-[#E4E9EC]">
           <div className="flex items-center gap-1.5">
-            <span className="block h-2 w-2 rounded-full bg-[#C8A060]" />
-            <span className="text-[10px] text-white/50">Disponible</span>
+            <span className="block h-2 w-2 rounded-full bg-[#1C4A63]" />
+            <span className="text-[10px] text-[#7C8A93]">{t("legend.available")}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="block h-2 w-2 rounded-full bg-blue-500" />
-            <span className="text-[10px] text-white/50">Belgique</span>
+            <span className="block h-2 w-2 rounded-full bg-[#E8452A]" />
+            <span className="text-[10px] text-[#7C8A93]">{t("slotButton.belgium")}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="block h-2 w-2 rounded-full bg-white/25" />
-            <span className="text-[10px] text-white/50">Complet</span>
+            <span className="block h-2 w-2 rounded-full bg-[#C3CDD3]" />
+            <span className="text-[10px] text-[#7C8A93]">{t("calendar.full")}</span>
           </div>
         </div>
       </div>
@@ -229,14 +229,14 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
         <h3 className="font-[var(--font-playfair)] text-lg uppercase tracking-wider">
           {selectedData.label}
         </h3>
-        <p className="text-xs text-white/50">
-          {selectedData.slots.length === 0
-            ? "Aucun créneau disponible"
-            : `${selectedData.slots.filter((s) => s.status === "available").length} créneau${
-                selectedData.slots.filter((s) => s.status === "available").length > 1 ? "x" : ""
-              } disponible${
-                selectedData.slots.filter((s) => s.status === "available").length > 1 ? "s" : ""
-              }`}
+        <p className="text-xs text-[#7C8A93]">
+          {(() => {
+            const availableCount = selectedData.slots.filter((s) => s.status === "available").length;
+            if (selectedData.slots.length === 0) return t("mobileCal.noSlotAvailable");
+            if (availableCount === 0) return t("calendar.full");
+            if (availableCount === 1) return t("mobileCal.available1");
+            return `${availableCount} ${t("mobileCal.availableN")}`;
+          })()}
         </p>
       </div>
 
@@ -259,10 +259,10 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-[#0F0F0F] px-4 py-6 text-center text-sm text-white/40">
-          Aucun créneau pour cette date.
+        <div className="rounded-xl border border-[#D4DCE1] bg-white px-4 py-6 text-center text-sm text-[#8A98A1]">
+          {t("mobileCal.noSlotForDate")}
           <br />
-          <span className="text-[11px]">Sélectionnez un jour avec un point doré.</span>
+          <span className="text-[11px]">{t("mobileCal.selectGoldDay")}</span>
         </div>
       )}
     </div>

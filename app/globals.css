@@ -2,14 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════
+   Palette A — Clair Premium (logo GM Mental Coach)
+   Bleu pétrole #1C4A63 · Corail #E8452A · Neutres clairs
+   Le back-office admin conserve le thème sombre via .theme-dark
+   ═══════════════════════════════════════════════════════════════ */
+
 :root {
-  color-scheme: dark;
-  background: #000000;
+  color-scheme: light;
+  background: #F4F7F9;
 }
 
 body {
-  background: #000000;
-  color: #ffffff;
+  background: #F4F7F9;
+  color: #10222E;
   min-height: 100vh;
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
 }
@@ -41,37 +47,37 @@ a {
 
 @layer components {
   .title-gm {
-    @apply font-playfair text-3xl uppercase tracking-wider text-white font-medium;
+    @apply font-playfair text-3xl uppercase tracking-wider text-[#143648] font-medium;
   }
 
   .title-gm-lg {
-    @apply font-playfair text-4xl uppercase tracking-wider text-white font-semibold;
+    @apply font-playfair text-4xl uppercase tracking-wider text-[#143648] font-semibold;
   }
 
   .subtitle-gm {
-    @apply text-sm text-white/70 font-normal;
+    @apply text-sm text-[#5A6B76] font-normal;
   }
 
   .pill {
     @apply inline-block px-3 py-1.5 text-xs font-medium rounded-full uppercase tracking-wide;
-    background: rgba(200, 160, 96, 0.15);
-    color: #c8a060;
+    background: rgba(28, 74, 99, 0.1);
+    color: #1c4a63;
   }
 
   .status-confirmed {
-    @apply bg-green-900/30 text-green-400 pill border border-green-800;
+    @apply bg-green-50 text-green-700 pill border border-green-200;
   }
 
   .status-cancelled {
-    @apply bg-red-900/30 text-red-400 pill border border-red-800;
+    @apply bg-red-50 text-red-700 pill border border-red-200;
   }
 
   .status-noshow {
-    @apply bg-orange-900/30 text-orange-400 pill border border-orange-800;
+    @apply bg-orange-50 text-orange-700 pill border border-orange-200;
   }
 
   .status-done {
-    @apply bg-[#C8A060]/20 text-[#C8A060] pill border border-[#C8A060]/50;
+    @apply bg-[#1C4A63]/10 text-[#1C4A63] pill border border-[#1C4A63]/30;
   }
 
   .btn {
@@ -79,41 +85,40 @@ a {
   }
 
   .btn-primary {
-    @apply bg-[#C8A060] text-black px-6 py-3 rounded-md font-medium hover:bg-[#E8D7BE] transition-all duration-200 uppercase tracking-wider text-sm shadow-lg shadow-[#C8A060]/20 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-[#E8452A] text-white px-6 py-3 rounded-md font-medium hover:bg-[#C93A22] transition-all duration-200 uppercase tracking-wider text-sm shadow-lg shadow-[#E8452A]/20 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
-    @apply border-2 border-[#C8A060] text-[#C8A060] px-5 py-2.5 rounded-md font-medium hover:bg-[#C8A060] hover:text-black transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply border-2 border-[#1C4A63] text-[#1C4A63] px-5 py-2.5 rounded-md font-medium hover:bg-[#1C4A63] hover:text-white transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-danger {
-    @apply border-2 border-red-500 text-red-400 px-5 py-2.5 rounded-md font-medium hover:bg-red-500 hover:text-white transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply border-2 border-red-500 text-red-600 px-5 py-2.5 rounded-md font-medium hover:bg-red-500 hover:text-white transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-ghost {
-    @apply text-white/70 px-4 py-2 rounded-md hover:bg-white/5 transition-all duration-200 text-sm;
+    @apply text-[#5A6B76] px-4 py-2 rounded-md hover:bg-[#10222E]/5 transition-all duration-200 text-sm;
   }
 
   .input {
-    @apply w-full px-4 py-3 border border-gray-800 rounded-md focus:border-[#C8A060] focus:ring-2 focus:ring-[#C8A060]/20 transition-all text-sm bg-[#0F0F0F] text-white placeholder:text-white/40 disabled:bg-black disabled:cursor-not-allowed disabled:text-white/30;
+    @apply w-full px-4 py-3 border border-[#D4DCE1] rounded-md focus:border-[#1C4A63] focus:ring-2 focus:ring-[#1C4A63]/20 transition-all text-sm bg-white text-[#10222E] placeholder:text-[#8A98A1] disabled:bg-[#EFF2F4] disabled:cursor-not-allowed disabled:text-[#A5B1B8];
   }
 
-  /* Fix select option text visibility in dark theme */
   select.input option {
-    background-color: #1a1a1a;
-    color: #ffffff;
+    background-color: #ffffff;
+    color: #10222e;
   }
 
   .card {
-    @apply border border-gray-800 rounded-lg p-6 space-y-4 bg-[#0F0F0F] hover:border-[#C8A060]/30 transition-all duration-200;
+    @apply border border-[#D4DCE1] rounded-lg p-6 space-y-4 bg-white hover:border-[#1C4A63]/40 transition-all duration-200;
   }
 
   .card-gm {
-    @apply border border-gray-800 rounded-lg p-6 space-y-4 bg-[#0F0F0F] hover:border-[#C8A060]/30 transition-all duration-200;
+    @apply border border-[#D4DCE1] rounded-lg p-6 space-y-4 bg-white hover:border-[#1C4A63]/40 transition-all duration-200;
   }
 
   .card-gm-compact {
-    @apply border border-gray-800 rounded-md p-4 space-y-3 bg-[#0F0F0F];
+    @apply border border-[#D4DCE1] rounded-md p-4 space-y-3 bg-white;
   }
 
   .section-gm {
@@ -121,42 +126,298 @@ a {
   }
 
   .calendar-day {
-    @apply aspect-square flex flex-col items-center justify-center rounded-md p-2 bg-[#C8A060] text-black font-semibold hover:bg-[#E8D7BE] transition-all cursor-pointer;
+    @apply aspect-square flex flex-col items-center justify-center rounded-md p-2 bg-[#1C4A63] text-white font-semibold hover:bg-[#2A5F7D] transition-all cursor-pointer;
   }
 
   .calendar-day-disabled {
-    @apply opacity-40 cursor-not-allowed bg-gray-800 text-white/50 rounded-md p-2 aspect-square flex flex-col items-center justify-center;
+    @apply opacity-60 cursor-not-allowed bg-[#E4E9EC] text-[#8A98A1] rounded-md p-2 aspect-square flex flex-col items-center justify-center;
   }
 
   .calendar-day-selected {
-    @apply bg-[#A68850] text-white font-bold shadow-lg rounded-md p-2 aspect-square flex flex-col items-center justify-center;
+    @apply bg-[#143648] text-white font-bold shadow-lg rounded-md p-2 aspect-square flex flex-col items-center justify-center;
   }
 
   .calendar-day-today {
-    @apply ring-2 ring-white bg-[#C8A060] text-black rounded-md p-2 aspect-square flex flex-col items-center justify-center font-semibold;
+    @apply ring-2 ring-[#E8452A] bg-[#1C4A63] text-white rounded-md p-2 aspect-square flex flex-col items-center justify-center font-semibold;
   }
 
   .nav-link {
-    @apply px-4 py-2 rounded-md text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white transition-all duration-200;
+    @apply px-4 py-2 rounded-md text-sm font-medium text-[#5A6B76] hover:bg-[#10222E]/5 hover:text-[#10222E] transition-all duration-200;
   }
 
   .nav-link-active {
-    @apply bg-[#C8A060]/20 text-[#C8A060] font-semibold border border-[#C8A060]/30;
+    @apply bg-[#1C4A63]/10 text-[#1C4A63] font-semibold border border-[#1C4A63]/30;
   }
 
   .alert-success {
-    @apply bg-green-900/30 border border-green-800 text-green-400 px-4 py-3 rounded-md text-sm;
+    @apply bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md text-sm;
   }
 
   .alert-error {
-    @apply bg-red-900/30 border border-red-800 text-red-400 px-4 py-3 rounded-md text-sm;
+    @apply bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm;
   }
 
   .alert-warning {
-    @apply bg-orange-900/30 border border-orange-800 text-orange-400 px-4 py-3 rounded-md text-sm;
+    @apply bg-orange-50 border border-orange-200 text-orange-700 px-4 py-3 rounded-md text-sm;
   }
 
   .alert-info {
-    @apply bg-[#C8A060]/20 border border-[#C8A060]/50 text-[#C8A060] px-4 py-3 rounded-md text-sm;
+    @apply bg-[#1C4A63]/10 border border-[#1C4A63]/30 text-[#1C4A63] px-4 py-3 rounded-md text-sm;
+  }
+
+  /* ── Calendrier partagé (public clair / admin sombre) ── */
+  .cal-nav-btn {
+    @apply shrink-0 rounded-full border border-[#D4DCE1] px-3 py-2 text-sm hover:bg-[#10222E]/5;
+  }
+
+  .cal-head {
+    @apply text-[#7C8A93];
+  }
+
+  .cal-cell-open {
+    @apply bg-white border-4 border-[#1C4A63] text-[#10222E] font-semibold hover:border-[#2A5F7D] hover:bg-[#F4F7F9];
+  }
+
+  .cal-cell-brussels {
+    @apply bg-white border-4 border-[#E8452A] text-[#10222E] font-semibold hover:border-[#C93A22] hover:bg-[#FFF4F1];
+  }
+
+  .cal-cell-off {
+    @apply bg-[#EFF2F4] border-4 border-[#E4E9EC] text-[#B0BAC1] opacity-70 cursor-not-allowed;
+  }
+
+  .cal-cell-focus {
+    @apply ring-2 ring-[#1C4A63];
+  }
+
+  .cal-today-badge {
+    @apply rounded-full bg-[#10222E]/10 px-2 py-0.5 text-[10px] text-[#33454F];
+  }
+
+  .cal-badge-avail {
+    @apply bg-[#1C4A63] text-white;
+  }
+
+  .cal-badge-brussels {
+    @apply bg-[#E8452A] text-white;
+  }
+
+  .cal-badge-none {
+    @apply bg-[#10222E]/10 text-[#5A6B76];
+  }
+
+  .cal-legend {
+    @apply border-[#10222E]/10 bg-white;
+  }
+
+  .cal-legend-item {
+    @apply text-[#5A6B76];
+  }
+
+  .cal-legend-miami {
+    @apply border-[#1C4A63];
+  }
+
+  .cal-legend-brussels {
+    @apply border-[#E8452A];
+  }
+
+  .cal-legend-off {
+    @apply border-[#C9D2D7];
+  }
+
+  .view-toggle {
+    @apply border border-[#D4DCE1] bg-white;
+  }
+
+  .view-toggle-btn {
+    @apply text-[#33454F] hover:bg-[#10222E]/5;
+  }
+
+  .view-toggle-btn-active {
+    @apply bg-[#143648] text-white;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     .theme-dark — Back-office admin : thème sombre conservé
+     ═══════════════════════════════════════════════════════════ */
+
+  .theme-dark .title-gm {
+    @apply text-white;
+  }
+
+  .theme-dark .title-gm-lg {
+    @apply text-white;
+  }
+
+  .theme-dark .subtitle-gm {
+    @apply text-white/70;
+  }
+
+  .theme-dark .pill {
+    background: rgba(200, 160, 96, 0.15);
+    color: #c8a060;
+  }
+
+  .theme-dark .status-confirmed {
+    @apply bg-green-900/30 text-green-400 border-green-800;
+  }
+
+  .theme-dark .status-cancelled {
+    @apply bg-red-900/30 text-red-400 border-red-800;
+  }
+
+  .theme-dark .status-noshow {
+    @apply bg-orange-900/30 text-orange-400 border-orange-800;
+  }
+
+  .theme-dark .status-done {
+    @apply bg-[#C8A060]/20 text-[#C8A060] border-[#C8A060]/50;
+  }
+
+  .theme-dark .btn-primary {
+    @apply bg-[#C8A060] text-black hover:bg-[#E8D7BE] shadow-[#C8A060]/20;
+  }
+
+  .theme-dark .btn-secondary {
+    @apply border-[#C8A060] text-[#C8A060] hover:bg-[#C8A060] hover:text-black;
+  }
+
+  .theme-dark .btn-danger {
+    @apply border-red-500 text-red-400 hover:bg-red-500 hover:text-white;
+  }
+
+  .theme-dark .btn-ghost {
+    @apply text-white/70 hover:bg-white/5;
+  }
+
+  .theme-dark .input {
+    @apply border-gray-800 bg-[#0F0F0F] text-white placeholder:text-white/40 focus:border-[#C8A060] focus:ring-[#C8A060]/20 disabled:bg-black disabled:text-white/30;
+  }
+
+  .theme-dark select.input option {
+    background-color: #1a1a1a;
+    color: #ffffff;
+  }
+
+  .theme-dark .card,
+  .theme-dark .card-gm {
+    @apply border-gray-800 bg-[#0F0F0F] hover:border-[#C8A060]/30;
+  }
+
+  .theme-dark .card-gm-compact {
+    @apply border-gray-800 bg-[#0F0F0F];
+  }
+
+  .theme-dark .calendar-day {
+    @apply bg-[#C8A060] text-black hover:bg-[#E8D7BE];
+  }
+
+  .theme-dark .calendar-day-disabled {
+    @apply opacity-40 bg-gray-800 text-white/50;
+  }
+
+  .theme-dark .calendar-day-selected {
+    @apply bg-[#A68850] text-white;
+  }
+
+  .theme-dark .calendar-day-today {
+    @apply ring-white bg-[#C8A060] text-black;
+  }
+
+  .theme-dark .nav-link {
+    @apply text-white/70 hover:bg-white/5 hover:text-white;
+  }
+
+  .theme-dark .nav-link-active {
+    @apply bg-[#C8A060]/20 text-[#C8A060] border-[#C8A060]/30;
+  }
+
+  .theme-dark .alert-success {
+    @apply bg-green-900/30 border-green-800 text-green-400;
+  }
+
+  .theme-dark .alert-error {
+    @apply bg-red-900/30 border-red-800 text-red-400;
+  }
+
+  .theme-dark .alert-warning {
+    @apply bg-orange-900/30 border-orange-800 text-orange-400;
+  }
+
+  .theme-dark .alert-info {
+    @apply bg-[#C8A060]/20 border-[#C8A060]/50 text-[#C8A060];
+  }
+
+  .theme-dark .cal-nav-btn {
+    @apply border-[#2A2A2A] hover:bg-white/5;
+  }
+
+  .theme-dark .cal-head {
+    @apply text-white/50;
+  }
+
+  .theme-dark .cal-cell-open {
+    @apply bg-[#0F0F0F] border-[#C8A060] text-white hover:border-[#E8D7BE] hover:bg-[#1A1A1A];
+  }
+
+  .theme-dark .cal-cell-brussels {
+    @apply bg-[#0A0F1A] border-blue-500 text-white hover:border-blue-400 hover:bg-[#0F1520];
+  }
+
+  .theme-dark .cal-cell-off {
+    @apply bg-[#0F0F0F] border-gray-700 text-white/30 opacity-40;
+  }
+
+  .theme-dark .cal-cell-focus {
+    @apply ring-white;
+  }
+
+  .theme-dark .cal-today-badge {
+    @apply bg-white/20 text-white/70;
+  }
+
+  .theme-dark .cal-badge-avail {
+    @apply bg-[#C8A060] text-black;
+  }
+
+  .theme-dark .cal-badge-brussels {
+    @apply bg-blue-500 text-white;
+  }
+
+  .theme-dark .cal-badge-none {
+    @apply bg-white/10 text-white/60;
+  }
+
+  .theme-dark .cal-legend {
+    @apply border-white/10 bg-white/5;
+  }
+
+  .theme-dark .cal-legend-item {
+    @apply text-white/60;
+  }
+
+  .theme-dark .cal-legend-miami {
+    @apply border-[#C8A060];
+  }
+
+  .theme-dark .cal-legend-brussels {
+    @apply border-blue-500;
+  }
+
+  .theme-dark .cal-legend-off {
+    @apply border-gray-700;
+  }
+
+  .theme-dark .view-toggle {
+    @apply border-[#2A2A2A] bg-[#0F0F0F];
+  }
+
+  .theme-dark .view-toggle-btn {
+    @apply text-white hover:bg-white/5;
+  }
+
+  .theme-dark .view-toggle-btn-active {
+    @apply bg-black text-white;
   }
 }

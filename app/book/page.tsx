@@ -151,7 +151,7 @@ export default async function BookPage({
           <h1 className="font-[var(--font-playfair)] text-4xl uppercase tracking-wider md:text-5xl">
             {t("book.title", locale)}
           </h1>
-          <p className="text-sm text-white/60">
+          <p className="text-sm text-[#5A6B76]">
             {t("book.subtitle", locale)}
           </p>
         </div>
@@ -159,19 +159,19 @@ export default async function BookPage({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="card space-y-3 p-5 md:p-6">
             <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-widest text-white/60">
+              <div className="text-xs uppercase tracking-widest text-[#5A6B76]">
                 {t("book.yourCredits", locale)}
               </div>
               <form action={logoutAction} className="self-start">
                 <button
                   type="submit"
-                  className="text-xs uppercase tracking-widest text-white/60 underline underline-offset-4 hover:text-white"
+                  className="text-xs uppercase tracking-widest text-[#5A6B76] underline underline-offset-4 hover:text-[#10222E]"
                 >
                   {t("book.disconnect", locale)}
                 </button>
               </form>
             </div>
-            <div className="space-y-1.5 text-sm text-white/80">
+            <div className="space-y-1.5 text-sm text-[#33454F]">
               {monthlyCredits.map((mc) => {
                 const monthName = t(`month.${mc.month}` as TranslationKey, locale);
                 const creditsLabel = mc.remaining <= 0
@@ -180,20 +180,20 @@ export default async function BookPage({
                     ? `${mc.remaining} ${t("book.creditRemaining", locale)}`
                     : `${mc.remaining} ${t("book.creditsRemaining", locale)}`;
                 return (
-                  <div key={`${mc.year}-${mc.month}`} className={mc.remaining <= 0 ? "text-white/40" : ""}>
-                    {t("book.inMonth", locale)} <span className="font-semibold capitalize">{monthName}</span>{locale === "fr" ? " il vous reste " : ": "}<span className={mc.remaining <= 0 ? "text-red-400" : "text-[#C8A060]"}>{creditsLabel}</span>
+                  <div key={`${mc.year}-${mc.month}`} className={mc.remaining <= 0 ? "text-[#8A98A1]" : ""}>
+                    {t("book.inMonth", locale)} <span className="font-semibold capitalize">{monthName}</span>{locale === "fr" ? " il vous reste " : ": "}<span className={mc.remaining <= 0 ? "text-red-600" : "font-semibold text-[#1C4A63]"}>{creditsLabel}</span>
                   </div>
                 );
               })}
             </div>
             <div className="flex items-center gap-4 pt-1">
-              <p className="text-xs text-white/40">
+              <p className="text-xs text-[#8A98A1]">
                 {t("book.blocked", locale)}
               </p>
             </div>
             <Link
               href="/manage"
-              className="inline-flex text-xs uppercase tracking-widest text-white/60 underline underline-offset-4 hover:text-white"
+              className="inline-flex text-xs uppercase tracking-widest text-[#5A6B76] underline underline-offset-4 hover:text-[#10222E]"
             >
               {t("book.myRdv", locale)}
             </Link>
@@ -205,7 +205,7 @@ export default async function BookPage({
       {success ? <div className="alert-success">{t("book.confirmed", locale)}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
       {bookingLocked ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-5 py-4 text-sm text-red-300">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           {t("book.locked", locale)}
         </div>
       ) : (

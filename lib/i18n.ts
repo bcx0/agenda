@@ -229,7 +229,7 @@ export const translations = {
 
   // Book (client)
   "book.pill": { fr: "Espace client", en: "Client area" },
-  "book.subtitle": { fr: "Les créneaux occupés restent anonymes. Aucun rappel automatique ne sera envoyé.", en: "Occupied slots remain anonymous. No automatic reminders will be sent." },
+  "book.subtitle": { fr: "Les créneaux déjà réservés restent anonymes. Aucun rappel automatique ne sera envoyé.", en: "Already booked slots remain anonymous. No automatic reminders will be sent." },
   "book.myRdv": { fr: "Mes RDV", en: "My bookings" },
 
   // Manage (client)
@@ -262,7 +262,7 @@ export const translations = {
   "slotButton.confirmBtn": { fr: "Oui, confirmer", en: "Yes, confirm" },
   "slotButton.cancelBtn": { fr: "Annuler", en: "Cancel" },
   "slotButton.quotaReached": { fr: "Quota atteint", en: "Quota reached" },
-  "slotButton.occupied": { fr: "Occupé", en: "Occupied" },
+  "slotButton.occupied": { fr: "Complet", en: "Full" },
   "slotButton.available": { fr: "Disponible", en: "Available" },
   "slotButton.unavailable": { fr: "Indisponible", en: "Unavailable" },
   "slotButton.reserving": { fr: "Réservation...", en: "Booking..." },
@@ -364,8 +364,15 @@ export const translations = {
   "calendar.available1": { fr: "1 disponibilité", en: "1 available" },
   "calendar.availableN": { fr: "disponibilités", en: "available" },
   "calendar.full": { fr: "Complet", en: "Full" },
-  "calendar.busy": { fr: "Occupé", en: "Busy" },
+  "calendar.busy": { fr: "Complet", en: "Full" },
   "calendar.noSlot": { fr: "Aucun créneau", en: "No slot" },
+
+  // Mobile booking view
+  "mobileCal.noSlotAvailable": { fr: "Aucun créneau disponible", en: "No slots available" },
+  "mobileCal.available1": { fr: "1 créneau disponible", en: "1 slot available" },
+  "mobileCal.availableN": { fr: "créneaux disponibles", en: "slots available" },
+  "mobileCal.noSlotForDate": { fr: "Aucun créneau pour cette date.", en: "No slots for this date." },
+  "mobileCal.selectGoldDay": { fr: "Sélectionnez un jour avec un point bleu.", en: "Select a day with a blue dot." },
   "calendar.selectDay": { fr: "Sélectionner le", en: "Select" },
 
   // Settings day names
@@ -434,6 +441,7 @@ export function translateMode(mode: string, locale: Locale): string {
 }
 
 export const COOKIE_NAME = "lang";
+
 export const DEFAULT_LOCALE: Locale = "fr";
 
 /** Server-side helper — call from server components / route handlers */

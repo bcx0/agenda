@@ -139,7 +139,7 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
                   <h3 className="font-[var(--font-playfair)] text-xl uppercase tracking-wider">
                     {group.label}
                   </h3>
-                  <span className="text-xs uppercase tracking-widest text-white/50">
+                  <span className="text-xs uppercase tracking-widest text-[#7C8A93]">
                     (Brussels / Miami)
                   </span>
                 </div>

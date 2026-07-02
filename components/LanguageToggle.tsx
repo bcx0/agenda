@@ -41,7 +41,7 @@ export function LanguageToggle() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1.5 text-xs font-medium text-white/70 hover:bg-white/5 hover:text-white transition-colors"
+        className="flex items-center gap-1.5 rounded-full border border-white/25 px-2.5 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors"
       >
         <current.Flag className="h-4 w-5 rounded-sm" />
         <span className="hidden sm:inline">{current.code.toUpperCase()}</span>

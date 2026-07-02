@@ -20,7 +20,7 @@ export default function LoginForm() {
           type="email"
           name="email"
           required
-          className="w-full rounded-md border border-border bg-background-elevated px-3 py-3 text-sm focus:border-border focus:outline-none"
+          className="w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-3 text-sm focus:border-[#1C4A63] focus:outline-none"
           placeholder="votre@email.com"
         />
       </div>
@@ -42,11 +42,10 @@ export default function LoginForm() {
       <button type="submit" className="btn btn-primary w-full">
         SE CONNECTER
       </button>
-      <p className="text-xs text-white/60">
+      <p className="text-xs text-[#5A6B76]">
         Accès réservé aux clients sous contrat. Besoin d&apos;aide ? Contactez
         Geoffrey directement.
       </p>
     </form>
   );
 }
-

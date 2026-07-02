@@ -4,7 +4,7 @@ export default async function Footer() {
   const locale = await getServerLocale();
 
   return (
-    <footer className="border-t border-border bg-background-elevated">
+    <footer className="border-t border-[#0F2A3A] bg-[#143648] text-white">
       <div className="mx-auto max-w-6xl px-5 py-6">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           {/* Left — Legal */}

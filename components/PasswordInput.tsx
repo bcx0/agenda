@@ -13,7 +13,7 @@ export default function PasswordInput({
   name,
   placeholder,
   required,
-  className = "w-full rounded-md border border-border bg-background-elevated px-3 py-3 text-sm focus:border-border focus:outline-none",
+  className = "w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-3 text-sm focus:border-[#1C4A63] focus:outline-none",
 }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
 
@@ -29,7 +29,7 @@ export default function PasswordInput({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A98A1] hover:text-[#5A6B76] transition-colors"
         tabIndex={-1}
         aria-label={visible ? "Hide password" : "Show password"}
       >

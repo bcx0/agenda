@@ -10,6 +10,7 @@ export const translations = {
   "nav.clients": { fr: "Clients", en: "Clients" },
   "nav.bookings": { fr: "Rendez-vous", en: "Bookings" },
   "nav.settings": { fr: "Paramètres", en: "Settings" },
+  "nav.prospects": { fr: "Prospects", en: "Prospects" },
   "nav.clientArea": { fr: "Espace Client", en: "Client Area" },
   "nav.adminAgenda": { fr: "Admin Agenda", en: "Admin Agenda" },
 

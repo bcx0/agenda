@@ -7,7 +7,7 @@ import {
   GoogleCalendarEvent,
 } from './google-calendar'
 import { parseGoogleEventSummary } from './parse-google-event'
-import { fuzzyMatchName } from './fuzzy-match'
+import { matchClientNameIndex } from './fuzzy-match'
 
 const APP_SOURCE_TAG = 'your-saas-app'
 const DEFAULT_TIMEZONE = 'Europe/Paris'
@@ -40,59 +40,53 @@ function invalidateClientCache() {
 
 async function findOrCreateGoogleClient(clientName: string) {
   const normalizedName = clientName.trim().replace(/\s+/g, ' ')
-  const normalizedLower = normalizedName.toLowerCase()
 
   const allClients = await getClientCache()
   const realClients = allClients.filter(
     (c) => c.isActive && !c.email.endsWith('@import.local')
   )
 
-  // 1. Exact match (case-insensitive) on real clients
-  const exactRealMatch = realClients.find(
-    (c) => c.name.toLowerCase() === normalizedLower
-  )
-  if (exactRealMatch) return exactRealMatch
+  // 1. Confident match on real clients (exact -> unique token-subset -> strict fuzzy)
+  const realIdx = matchClientNameIndex(normalizedName, realClients.map((c) => c.name))
+  if (realIdx !== null) return realClients[realIdx]
 
-  // 2. Partial/substring match on real clients
-  const partialMatch = realClients.find((c) => {
-    const cLower = c.name.toLowerCase()
-    return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
-  })
-  if (partialMatch) return partialMatch
+  // 2. Confident match across ALL clients (including imported placeholders)
+  const allIdx = matchClientNameIndex(normalizedName, allClients.map((c) => c.name))
+  if (allIdx !== null) return allClients[allIdx]
 
-  // 3. Fuzzy match on real clients
-  if (realClients.length > 0) {
-    const candidateNames = realClients.map((c) => c.name)
-    const fuzzyResult = fuzzyMatchName(normalizedName, candidateNames, 0.5)
-    if (fuzzyResult) {
-      console.log(
-        `[FuzzyMatch] "${normalizedName}" → "${candidateNames[fuzzyResult.index]}" (score: ${fuzzyResult.score.toFixed(2)})`
-      )
-      return realClients[fuzzyResult.index]
-    }
-  }
-
-  // 4. Exact match across ALL clients (including imported)
-  const exactAnyMatch = allClients.find(
-    (c) => c.name.toLowerCase() === normalizedLower
-  )
-  if (exactAnyMatch) return exactAnyMatch
-
-  // 5. Fuzzy match on all clients
-  if (allClients.length > 0) {
-    const allNames = allClients.map((c) => c.name)
-    const fuzzyAll = fuzzyMatchName(normalizedName, allNames, 0.5)
-    if (fuzzyAll) {
-      console.log(
-        `[FuzzyMatch-All] "${normalizedName}" → "${allNames[fuzzyAll.index]}" (score: ${fuzzyAll.score.toFixed(2)})`
-      )
-      return allClients[fuzzyAll.index]
-    }
-  }
-
-  // 6. No match found — return null (will create Block instead)
-  console.log(`[Sync] No matching client for "${normalizedName}" — will create Block`)
+  // 3. No confident match — return null (a visible [NO_ACCOUNT] Block is created)
+  console.log(`[Sync] No confident client match for "${normalizedName}" — will create Block`)
   return null
+}
+
+/**
+ * When a Google event title changes, decide whether the linked booking should
+ * point at a *different* existing client. Returns a new clientId only on a
+ * confident match to a real (non-imported, active) client that differs from the
+ * one currently linked. Returns null otherwise (no re-link, no guessing).
+ *
+ * This fixes the "Geoffrey renames the RDV on Google but the app keeps the old
+ * client" bug: previously the update path only propagated start/end times and
+ * froze the client chosen at creation.
+ */
+async function resolveRelinkClientId(
+  summary: string | null | undefined,
+  currentClientId: number
+): Promise<number | null> {
+  const parsed = parseGoogleEventSummary(summary)
+  if (parsed.type !== 'booking' || !parsed.clientName) return null
+
+  const allClients = await getClientCache()
+  const realClients = allClients.filter(
+    (c) => c.isActive && !c.email.endsWith('@import.local')
+  )
+  if (realClients.length === 0) return null
+
+  const idx = matchClientNameIndex(parsed.clientName, realClients.map((c) => c.name))
+  if (idx === null) return null
+
+  const matched = realClients[idx]
+  return matched.id !== currentClientId ? matched.id : null
 }
 
 export async function pushBookingToGoogle(
@@ -312,7 +306,7 @@ export async function pullFromGoogle(
       if (recordType === 'booking') {
         const existing = await prisma.booking.findUnique({
           where: { id: parseInt(recordId) },
-          select: { googleEtag: true },
+          select: { googleEtag: true, clientId: true },
         })
         if (!existing) {
           throw { code: 'P2025' }
@@ -321,8 +315,10 @@ export async function pullFromGoogle(
         if (existing.googleEtag === googleEvent.etag) {
           return { action: 'etag_unchanged', skipped: true }
         }
-        // Etag differs -> real change in Google (e.g. time edited from GCal) ->
-        // propagate startAt/endAt so the app reflects the new time
+        // Etag differs -> real change in Google (e.g. time OR client name edited
+        // from GCal) -> propagate the new time and, if the title now confidently
+        // matches a different client, re-link the booking to that client.
+        const relinkId = await resolveRelinkClientId(googleEvent.summary, existing.clientId)
         await prisma.booking.update({
           where: { id: parseInt(recordId) },
           data: {
@@ -332,10 +328,11 @@ export async function pullFromGoogle(
             syncSource: 'google',
             syncStatus: 'synced',
             lastSyncedAt: new Date(),
+            ...(relinkId ? { clientId: relinkId } : {}),
           },
         })
-        logSync('Booking', parseInt(recordId), 'pull_update', 'google_to_app')
-        return { action: 'booking_updated_from_google' }
+        logSync('Booking', parseInt(recordId), relinkId ? 'pull_update_relink' : 'pull_update', 'google_to_app', relinkId ? { fromClientId: existing.clientId, toClientId: relinkId } : undefined)
+        return { action: relinkId ? 'booking_relinked_from_google' : 'booking_updated_from_google' }
       }
       if (recordType === 'block') {
         const existing = await prisma.block.findUnique({
@@ -380,6 +377,7 @@ export async function pullFromGoogle(
 
   if (existingBooking) {
     try {
+      const relinkId = await resolveRelinkClientId(googleEvent.summary, existingBooking.clientId)
       await prisma.booking.update({
         where: { id: existingBooking.id },
         data: {
@@ -389,9 +387,16 @@ export async function pullFromGoogle(
           syncSource: 'google',
           syncStatus: 'synced',
           lastSyncedAt: new Date(),
+          ...(relinkId ? { clientId: relinkId } : {}),
         },
       })
-      return { action: 'booking_updated' }
+      if (relinkId) {
+        logSync('Booking', existingBooking.id, 'pull_update_relink', 'google_to_app', {
+          fromClientId: existingBooking.clientId,
+          toClientId: relinkId,
+        })
+      }
+      return { action: relinkId ? 'booking_relinked' : 'booking_updated' }
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2025') {
         return { action: 'record_deleted_skipped', skipped: true }
@@ -551,39 +556,16 @@ export async function bulkImportFromGoogle(
     (c) => c.isActive && !c.email.endsWith('@import.local')
   )
 
-  // Helper: match client name in-memory (same logic as findOrCreateGoogleClient)
+  // Helper: match client name in-memory (same safe logic as findOrCreateGoogleClient)
   function matchClient(clientName: string): { id: number; name: string } | null {
     const normalizedName = clientName.trim().replace(/\s+/g, ' ')
-    const normalizedLower = normalizedName.toLowerCase()
 
-    // Exact match on real clients
-    const exact = realClients.find((c) => c.name.toLowerCase() === normalizedLower)
-    if (exact) return exact
+    // Confident match on real clients first, then across all clients
+    const realIdx = matchClientNameIndex(normalizedName, realClients.map((c) => c.name))
+    if (realIdx !== null) return realClients[realIdx]
 
-    // Partial/substring match
-    const partial = realClients.find((c) => {
-      const cLower = c.name.toLowerCase()
-      return cLower.includes(normalizedLower) || normalizedLower.includes(cLower)
-    })
-    if (partial) return partial
-
-    // Fuzzy match on real clients
-    if (realClients.length > 0) {
-      const names = realClients.map((c) => c.name)
-      const fuzzy = fuzzyMatchName(normalizedName, names, 0.5)
-      if (fuzzy) return realClients[fuzzy.index]
-    }
-
-    // Exact on all clients
-    const exactAll = allClients.find((c) => c.name.toLowerCase() === normalizedLower)
-    if (exactAll) return exactAll
-
-    // Fuzzy on all clients
-    if (allClients.length > 0) {
-      const allNames = allClients.map((c) => c.name)
-      const fuzzyAll = fuzzyMatchName(normalizedName, allNames, 0.5)
-      if (fuzzyAll) return allClients[fuzzyAll.index]
-    }
+    const allIdx = matchClientNameIndex(normalizedName, allClients.map((c) => c.name))
+    if (allIdx !== null) return allClients[allIdx]
 
     return null
   }

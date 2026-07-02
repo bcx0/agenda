@@ -12,6 +12,7 @@ const links: { href: string; labelKey: TranslationKey }[] = [
   { href: "/admin/availability", labelKey: "nav.agenda" },
   { href: "/admin/clients", labelKey: "nav.clients" },
   { href: "/admin/bookings", labelKey: "nav.bookings" },
+  { href: "/admin/prospects", labelKey: "nav.prospects" },
   { href: "/admin/settings", labelKey: "nav.settings" },
 ];
 

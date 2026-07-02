@@ -177,3 +177,23 @@ model SyncLog {
 
   @@index([table, action, createdAt])
 }
+
+/// Prospect: personne qui souhaite rencontrer Geoffrey mais SANS compte client
+/// ni contrat. Volontairement découplé de Client (pas d'email unique, pas de
+/// mot de passe) pour ne rien casser au flux client confirmé + crédits, et pour
+/// que l'email du coach puisse servir à plusieurs prospects. L'identité affichée
+/// vient de `name`, jamais de l'email.
+model Prospect {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String?
+  phone     String?
+  desiredAt DateTime?
+  note      String?
+  status    String    @default("NEW") // NEW | CONTACTED | CONVERTED | ARCHIVED
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}

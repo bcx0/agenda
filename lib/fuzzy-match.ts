@@ -140,3 +140,67 @@ export function fuzzyMatchName(
 
   return null
 }
+
+
+/**
+ * Confidence threshold for auto-linking a Google Calendar event title to an
+ * existing client. Deliberately strict: an event title only links to a client
+ * when we are *confident* it is the same person. Below this, the sync creates a
+ * visible [NO_ACCOUNT] block that Geoffrey can reconcile - much safer than
+ * silently attaching the RDV to the wrong client.
+ *
+ * Regression origin (bug juin 2026): the previous threshold of 0.5 linked
+ * "Audrey Napoli" (score 0.538) to the existing client "Andrea Maron", so a
+ * brand-new client was booked under the wrong name.
+ */
+export const CLIENT_MATCH_THRESHOLD = 0.85
+
+/**
+ * True when every token of the shorter name is a whole token of the longer name.
+ * "Andrea" is a subset of "Andrea Maron" -> true. "Marie" is NOT a subset of
+ * "Marie-Claire Dupont" -> false (avoids arbitrary substring collisions that
+ * plain includes() produced).
+ */
+export function isTokenSubsetMatch(a: string, b: string): boolean {
+  const at = nameTokens(a)
+  const bt = nameTokens(b)
+  if (at.length === 0 || bt.length === 0) return false
+  const [small, big] = at.length <= bt.length ? [at, bt] : [bt, at]
+  const bigSet = new Set(big)
+  return small.every((t) => bigSet.has(t))
+}
+
+/**
+ * Resolve a client-name query to the index of the best SAFE match among
+ * `candidates`. Order of precedence:
+ *   1. Exact match after normalization.
+ *   2. Unique token-subset match (handles "Andrea" <-> "Andrea Maron").
+ *      Ambiguous subset matches (0 or >1) are rejected on purpose.
+ *   3. Fuzzy match at CLIENT_MATCH_THRESHOLD (typo tolerance only).
+ *
+ * Returns null when there is no confident match - the caller must NOT guess a
+ * client in that case.
+ */
+export function matchClientNameIndex(
+  query: string,
+  candidates: string[],
+  threshold = CLIENT_MATCH_THRESHOLD
+): number | null {
+  const qNorm = normalizeName(query)
+
+  // 1. Exact normalized match
+  for (let i = 0; i < candidates.length; i++) {
+    if (normalizeName(candidates[i]) === qNorm) return i
+  }
+
+  // 2. Unique token-subset match
+  const subsetMatches: number[] = []
+  for (let i = 0; i < candidates.length; i++) {
+    if (isTokenSubsetMatch(query, candidates[i])) subsetMatches.push(i)
+  }
+  if (subsetMatches.length === 1) return subsetMatches[0]
+
+  // 3. Fuzzy typo tolerance
+  const fuzzy = fuzzyMatchName(query, candidates, threshold)
+  return fuzzy ? fuzzy.index : null
+}

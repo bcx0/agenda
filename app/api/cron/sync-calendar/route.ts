@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '../../../../lib/prisma'
-import { pullFromGoogle } from '../../../../lib/sync-engine'
+import { pullFromGoogle, repushUnsyncedBookings } from '../../../../lib/sync-engine'
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
 
@@ -62,8 +62,17 @@ export async function GET(req: NextRequest) {
     ).length
     const errors = results.filter((r) => r.action.startsWith('error')).length
 
+    // Auto-guérison : repousse vers Google les RDV créés dans l'app qui
+    // n'ont jamais été synchronisés (ex. pendant une panne d'auth).
+    let repushed = { pushed: 0, failed: 0 }
+    try {
+      repushed = await repushUnsyncedBookings()
+    } catch (err) {
+      console.error('[Cron sync] Repush failed:', err instanceof Error ? err.message : err)
+    }
+
     console.log(
-      `[Cron sync] Done: ${events.length} events, ${imported} imported, ${errors} errors`
+      `[Cron sync] Done: ${events.length} events, ${imported} imported, ${errors} errors, ${repushed.pushed} repushed`
     )
 
     return NextResponse.json({
@@ -71,6 +80,8 @@ export async function GET(req: NextRequest) {
       processed: events.length,
       imported,
       errors,
+      repushed: repushed.pushed,
+      repushFailed: repushed.failed,
     })
   } catch (error: unknown) {
     // Reauth requise (token révoqué/expiré côté Google) → on skip proprement.

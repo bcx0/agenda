@@ -12,6 +12,22 @@ import { matchClientNameIndex } from './fuzzy-match'
 const APP_SOURCE_TAG = 'your-saas-app'
 const DEFAULT_TIMEZONE = 'Europe/Paris'
 
+// Événements Google importés au-delà de cet horizon = ignorés.
+// Évite qu'une récurrence infinie inonde la base (bug "RDV en 2031") :
+// l'agenda public ne montre de toute façon que 365 jours.
+const MAX_IMPORT_HORIZON_DAYS = 400
+const NO_ACCOUNT_PREFIX = '[NO_ACCOUNT] RDV — '
+
+function isBeyondImportHorizon(start: Date): boolean {
+  return start.getTime() > Date.now() + MAX_IMPORT_HORIZON_DAYS * 24 * 60 * 60 * 1000
+}
+
+/** Nom client stocké dans la raison d'un bloc [NO_ACCOUNT]. */
+function noAccountBlockName(reason: string | null): string | null {
+  if (!reason || !reason.startsWith(NO_ACCOUNT_PREFIX)) return null
+  return reason.slice(NO_ACCOUNT_PREFIX.length).replace(' (non trouvé)', '').trim() || null
+}
+
 // ─── Client cache for batch sync (avoids repeated DB queries) ────
 type CachedClient = {
   id: number; name: string; email: string;
@@ -112,7 +128,7 @@ export async function pushBookingToGoogle(
   }
 
   const payload = {
-    summary: `RDV \u2014 ${booking.client.name}`,
+    summary: `RDV — ${booking.client.name}`,
     description: `Mode : ${booking.mode}\nClient : ${booking.client.email}`,
     start: {
       dateTime: booking.startAt.toISOString(),
@@ -195,7 +211,7 @@ export async function pushBlockToGoogle(
   }
 
   const payload = {
-    summary: block.reason ? `Indisponible \u2014 ${block.reason}` : 'Indisponible',
+    summary: block.reason ? `Indisponible — ${block.reason}` : 'Indisponible',
     start: {
       dateTime: block.startAt.toISOString(),
       timeZone: DEFAULT_TIMEZONE,
@@ -409,6 +425,47 @@ export async function pullFromGoogle(
     // Preserve [NO_ACCOUNT] prefix if block was tagged
     const existingReason = existingBlock.reason ?? ''
     const isNoAccount = existingReason.startsWith('[NO_ACCOUNT]')
+
+    // Réconciliation tardive : le compte client a peut-être été créé APRÈS
+    // l'import de ce bloc [NO_ACCOUNT]. Si un match confiant existe
+    // maintenant, on promeut le bloc en vraie réservation.
+    if (isNoAccount) {
+      const pendingName = noAccountBlockName(existingReason)
+      if (pendingName) {
+        const client = await findOrCreateGoogleClient(pendingName)
+        if (client) {
+          const startDate = new Date(eventStartDt)
+          const endDate = new Date(eventEndDt)
+          const dupe = await prisma.booking.findFirst({
+            where: { clientId: client.id, startAt: startDate, status: 'CONFIRMED' },
+          })
+          if (!dupe) {
+            const promoted = await prisma.booking.create({
+              data: {
+                clientId: client.id,
+                startAt: startDate,
+                endAt: endDate,
+                status: 'CONFIRMED',
+                mode: 'VISIO',
+                googleEventId,
+                googleEtag: googleEvent.etag,
+                syncSource: 'google',
+                syncStatus: 'synced',
+                lastSyncedAt: new Date(),
+                bookedBy: 'google',
+              },
+            })
+            await prisma.block.delete({ where: { id: existingBlock.id } }).catch(() => {})
+            logSync('Booking', promoted.id, 'pull_promote_no_account', 'google_to_app', {
+              fromBlockId: existingBlock.id,
+              clientId: client.id,
+            })
+            return { action: 'block_promoted_to_booking', id: promoted.id, clientId: client.id }
+          }
+        }
+      }
+    }
+
     const newReason = isNoAccount ? existingReason : (googleEvent.summary || existingReason)
     try {
       await prisma.block.update({
@@ -436,6 +493,11 @@ export async function pullFromGoogle(
   const parsed = parseGoogleEventSummary(googleEvent.summary)
   const startDate = new Date(eventStartDt)
   const endDate = new Date(eventEndDt)
+
+  // Récurrences infinies : on n'importe pas au-delà de l'horizon utile
+  if (isBeyondImportHorizon(startDate)) {
+    return { action: 'skipped_beyond_horizon' }
+  }
 
   if (parsed.type === 'booking') {
     const client = await findOrCreateGoogleClient(parsed.clientName || 'Client Google')
@@ -492,6 +554,7 @@ export async function pullFromGoogle(
         status: 'CONFIRMED',
         mode: 'VISIO',
         googleEventId,
+        googleEtag: googleEvent.etag,
         syncSource: 'google',
         syncStatus: 'synced',
         lastSyncedAt: new Date(),
@@ -531,6 +594,7 @@ export type BulkImportResult = {
   noAccountBlocks: number
   skippedAllDay: number
   skippedCancelled: number
+  skippedHorizon: number
   errors: number
   details: Array<{ summary: string; action: string }>
 }
@@ -544,6 +608,7 @@ export async function bulkImportFromGoogle(
     noAccountBlocks: 0,
     skippedAllDay: 0,
     skippedCancelled: 0,
+    skippedHorizon: 0,
     errors: 0,
     details: [],
   }
@@ -602,6 +667,11 @@ export async function bulkImportFromGoogle(
     const parsed = parseGoogleEventSummary(event.summary)
     const startAt = new Date(startDt)
     const endAt = new Date(endDt)
+
+    if (isBeyondImportHorizon(startAt)) {
+      result.skippedHorizon++
+      continue
+    }
 
     if (parsed.type === 'booking') {
       const client = matchClient(parsed.clientName || 'Client Google')
@@ -699,6 +769,118 @@ export async function bulkImportFromGoogle(
   console.log(`[Sync:bulk] ${result.bookingsCreated} bookings, ${result.blocksCreated} blocks (${result.noAccountBlocks} no-account), ${result.skippedAllDay} all-day skipped`)
 
   return result
+}
+
+// ─── RÉCONCILIATION [NO_ACCOUNT] → Booking ───────────────────────
+// Appelée quand un compte client vient d'être créé : tous les blocs
+// [NO_ACCOUNT] dont le nom matche ce client de façon confiante sont
+// convertis en vraies réservations (l'historique et les RDV futurs
+// apparaissent enfin sur la fiche du client).
+export async function reconcileNoAccountBlocksForClient(
+  clientId: number
+): Promise<{ converted: number; skippedDupes: number }> {
+  invalidateClientCache()
+
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, name: true },
+  })
+  if (!client) return { converted: 0, skippedDupes: 0 }
+
+  const blocks = await prisma.block.findMany({
+    where: { reason: { startsWith: NO_ACCOUNT_PREFIX } },
+    select: { id: true, startAt: true, endAt: true, reason: true, googleEventId: true, googleEtag: true },
+  })
+
+  let converted = 0
+  let skippedDupes = 0
+
+  for (const block of blocks) {
+    const pendingName = noAccountBlockName(block.reason)
+    if (!pendingName) continue
+    // Match confiant uniquement (exact / sous-ensemble de tokens / typo stricte)
+    if (matchClientNameIndex(pendingName, [client.name]) === null) continue
+
+    const dupe = await prisma.booking.findFirst({
+      where: { clientId: client.id, startAt: block.startAt, status: 'CONFIRMED' },
+      select: { id: true },
+    })
+    if (dupe) {
+      // La réservation existe déjà (créée à la main) — on retire juste le bloc
+      await prisma.block.delete({ where: { id: block.id } }).catch(() => {})
+      skippedDupes++
+      continue
+    }
+
+    const booking = await prisma.booking.create({
+      data: {
+        clientId: client.id,
+        startAt: block.startAt,
+        endAt: block.endAt,
+        status: 'CONFIRMED',
+        mode: 'VISIO',
+        googleEventId: block.googleEventId,
+        googleEtag: block.googleEtag,
+        syncSource: 'google',
+        syncStatus: 'synced',
+        lastSyncedAt: new Date(),
+        bookedBy: 'google',
+      },
+    })
+    await prisma.block.delete({ where: { id: block.id } }).catch(() => {})
+    logSync('Booking', booking.id, 'reconcile_no_account', 'google_to_app', {
+      fromBlockId: block.id,
+      clientId: client.id,
+      pendingName,
+    })
+    converted++
+  }
+
+  if (converted > 0 || skippedDupes > 0) {
+    console.log(
+      `[Sync:reconcile] Client #${client.id} "${client.name}": ${converted} bloc(s) convertis, ${skippedDupes} doublon(s) nettoyés`
+    )
+  }
+  return { converted, skippedDupes }
+}
+
+// ─── RE-PUSH des réservations jamais synchronisées ───────────────
+// Après une panne d'auth Google, les RDV créés dans l'app n'ont pas de
+// googleEventId et ne sont jamais retentés. Cette fonction les repousse
+// (appelée à chaque cron de sync — auto-guérison).
+export async function repushUnsyncedBookings(
+  limit = 50
+): Promise<{ pushed: number; failed: number }> {
+  const unsynced = await prisma.booking.findMany({
+    where: {
+      status: 'CONFIRMED',
+      googleEventId: null,
+      startAt: { gte: new Date() },
+      syncSource: { not: 'google' },
+    },
+    select: { id: true },
+    orderBy: { startAt: 'asc' },
+    take: limit,
+  })
+
+  let pushed = 0
+  let failed = 0
+  for (const b of unsynced) {
+    try {
+      await pushBookingToGoogle(b.id, 'create')
+      pushed++
+    } catch (err) {
+      failed++
+      console.error(`[Sync:repush] Booking #${b.id} failed:`, err instanceof Error ? err.message : err)
+      // Auth morte → inutile d'insister sur les suivants
+      if (failed >= 3) break
+    }
+  }
+
+  if (unsynced.length > 0) {
+    console.log(`[Sync:repush] ${pushed}/${unsynced.length} réservations repoussées vers Google (${failed} échecs)`)
+  }
+  return { pushed, failed }
 }
 
 function logSync(

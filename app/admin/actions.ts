@@ -28,7 +28,7 @@ import { BRUSSELS_TZ, MIAMI_WORK_START, monthBoundsUtc } from "../../lib/time";
 import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
-import { pushBookingToGoogle, pushBlockToGoogle } from "@/lib/sync-engine";
+import { pushBookingToGoogle, pushBlockToGoogle, reconcileNoAccountBlocksForClient } from "@/lib/sync-engine";
 import { cancelBooking } from "../../lib/booking";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
@@ -181,13 +181,22 @@ export async function addClientAction(formData: FormData) {
   }
 
   const hashed = await bcrypt.hash(password, 10);
+  let reconciledCount = 0;
   try {
-    await createClient({
+    const created = await createClient({
       email,
       name,
       passwordHash: hashed,
       creditsPerMonth
     });
+    // Rattache automatiquement les RDV Google en attente ([NO_ACCOUNT])
+    // dont le nom correspond au client qui vient d'être créé.
+    try {
+      const { converted } = await reconcileNoAccountBlocksForClient(created.id);
+      reconciledCount = converted;
+    } catch (reconcileErr) {
+      console.error("[addClient] Réconciliation NO_ACCOUNT échouée:", reconcileErr);
+    }
   } catch (err) {
     if (err instanceof PrismaClientKnownRequestError && err.code === "P2002") {
       redirect(
@@ -211,7 +220,11 @@ export async function addClientAction(formData: FormData) {
   }
 
   revalidatePath("/admin/clients");
-  redirect("/admin/clients?success=Client%20cree%20avec%20succes");
+  revalidatePath("/admin/availability");
+  const successMsg = reconciledCount > 0
+    ? `Client cree avec succes — ${reconciledCount} RDV Google rattache${reconciledCount > 1 ? "s" : ""}`
+    : "Client cree avec succes";
+  redirect(`/admin/clients?success=${encodeURIComponent(successMsg)}`);
 }
 
 export async function updateCreditsAction(formData: FormData) {

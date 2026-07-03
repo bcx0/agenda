@@ -30,21 +30,29 @@ export default async function AdminSettingsPage() {
 
   const locale = await getServerLocale();
 
-  const [settings, sessionModes, googleToken, availabilityRules, locationPeriods, recentAuthError] =
+  const [settings, sessionModes, googleToken, availabilityRules, locationPeriods, recentAuthError, lastSyncOk] =
     await Promise.all([
       getSettings(),
       prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } }),
       prisma.googleToken.findFirst(),
       prisma.availabilityRule.findMany({ orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] }),
       prisma.locationPeriod.findMany({ orderBy: { startDate: "asc" } }),
-      // Dernière entrée d'erreur auth sur GoogleToken.
-      // On l'affiche comme "reauth requise" UNIQUEMENT si elle est plus
-      // récente que la dernière mise à jour du token (sinon l'utilisateur
-      // a déjà reconnecté).
+      // Dernière erreur d'authentification Google.
       prisma.syncLog.findFirst({
         where: {
           table: "GoogleToken",
           action: "auth_error",
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      // Dernière opération de sync réussie (pull ou push).
+      // C'est la vraie référence : le refresh OAuth peut "réussir" alors que
+      // l'API Calendar rejette le token (panne du 03/07), donc comparer à
+      // token.updatedAt ne suffit pas.
+      prisma.syncLog.findFirst({
+        where: {
+          action: { notIn: ["auth_error", "error"] },
+          direction: { in: ["google_to_app", "app_to_google"] },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -53,7 +61,7 @@ export default async function AdminSettingsPage() {
   const googleNeedsReauth = Boolean(
     googleToken &&
       recentAuthError &&
-      recentAuthError.createdAt > googleToken.updatedAt
+      (!lastSyncOk || recentAuthError.createdAt > lastSyncOk.createdAt)
   );
 
   const miamiRules = availabilityRules.filter((r: { location: string }) => r.location === "MIAMI");

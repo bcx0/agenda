@@ -1,4 +1,5 @@
 import crypto from "crypto";
+
 import { cookies } from "next/headers";
 
 const CLIENT_COOKIE = "gm_client_session";
@@ -9,10 +10,14 @@ type ClientPayload = {
   clientId: number;
   email: string;
   name: string;
+  /** Signed expiry (ms epoch) — enforced server-side, not only via cookie maxAge. */
+  exp?: number;
 };
 
 type AdminPayload = {
   type: "admin";
+  /** Signed expiry (ms epoch) — enforced server-side, not only via cookie maxAge. */
+  exp?: number;
 };
 
 type Payload = ClientPayload | AdminPayload;
@@ -40,9 +45,16 @@ const encode = (payload: Payload) => {
 const decode = (value: string): Payload | null => {
   const [data, signature] = value.split(".");
   if (!data || !signature) return null;
-  if (sign(data) !== signature) return null;
+  // Constant-time comparison (like the middleware) to avoid timing attacks
+  const expected = Buffer.from(sign(data));
+  const provided = Buffer.from(signature);
+  if (expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
+    return null;
+  }
   try {
-    return JSON.parse(Buffer.from(data, "base64url").toString()) as Payload;
+    const payload = JSON.parse(Buffer.from(data, "base64url").toString()) as Payload;
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
   } catch {
     return null;
   }
@@ -57,7 +69,7 @@ export function getClientSession(): ClientPayload | null {
 }
 
 export function setClientSession(payload: ClientPayload) {
-  const value = encode(payload);
+  const value = encode({ ...payload, exp: Date.now() + 60 * 60 * 24 * 30 * 1000 });
   cookies().set(CLIENT_COOKIE, value, {
     httpOnly: true,
     sameSite: "lax",
@@ -86,7 +98,7 @@ export function getAdminSession(): AdminPayload | null {
 }
 
 export function setAdminSession() {
-  const value = encode({ type: "admin" });
+  const value = encode({ type: "admin", exp: Date.now() + 60 * 60 * 4 * 1000 });
   cookies().set(ADMIN_COOKIE, value, {
     httpOnly: true,
     sameSite: "lax",

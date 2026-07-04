@@ -27,7 +27,7 @@ type DayGroup = {
 };
 
 export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
-  const { locale } = useLanguage();
+  const { t, locale } = useLanguage();
   const normalizedSlots = useMemo(
     () =>
       slots.map((slot) => ({
@@ -44,8 +44,10 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
   const [monthFocus, setMonthFocus] = useState<DateTime>(
     DateTime.now().setZone(CALENDAR_TZ).startOf("month")
   );
+  // Luxon startOf("week") is already Monday (ISO) — the old "+1 day" shifted
+  // the whole week view: columns started on Tuesday but were labelled "Lundi".
   const [weekStart, setWeekStart] = useState<DateTime>(
-    DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 })
+    DateTime.now().setZone(CALENDAR_TZ).startOf("week")
   );
   const [selectedDay, setSelectedDay] = useState<DayGroup | null>(null);
   const searchParams = useSearchParams();
@@ -81,12 +83,7 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
         date: day
       }
     );
-  }, [dayMap]);
-
-  // Check if any slot is in Brussels to show legend
-  const hasBrusselsSlots = normalizedSlots.some(
-    (s) => (s as SlotView & { activeLocation?: string }).activeLocation === "BELGIUM"
-  );
+  }, [dayMap, locale]);
 
   return (
     <>
@@ -110,7 +107,7 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
               const inMiami = d.setZone(CALENDAR_TZ);
               startTransition(() => {
                 handleSelectDay(inMiami);
-                setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
+                setWeekStart(inMiami.startOf("week"));
               });
             }}
           />
@@ -133,6 +130,11 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
 
         {view === "list" && (
           <div className="space-y-6">
+            {orderedDayGroups.length === 0 && (
+              <p className="rounded-xl border border-[#D4DCE1] bg-white px-4 py-6 text-center text-sm text-[#8A98A1]">
+                {t("mobileCal.noSlotAvailable")}
+              </p>
+            )}
             {orderedDayGroups.map((group) => (
               <div key={group.key} className="space-y-3">
                 <div className="flex items-baseline justify-between">
@@ -151,9 +153,9 @@ export function BookingViews({ slots, quotaReached, quotaByMonth }: Props) {
                         startIso={slot.start.toISOString()}
                         brussels={slot.brussels}
                         miami={slot.miami}
-                        mode={slot.mode as any}
-                        location={slot.location as any}
-                        activeLocation={(slot as SlotView & { activeLocation?: "MIAMI" | "BELGIUM" }).activeLocation}
+                        mode={slot.mode}
+                        location={slot.location}
+                        activeLocation={slot.activeLocation}
                         presentielLocation={slot.presentielLocation}
                         presentielNote={slot.presentielNote}
                         status={slot.status}

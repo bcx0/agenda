@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-
-const TO_EMAIL = 'battiste.crevieaux@icloud.com';
+import { getAdminSession } from '@/lib/session';
 
 export async function GET() {
+  // Route de diagnostic : réservée à l'admin connecté (sinon n'importe qui
+  // pouvait vider le quota Resend).
+  if (!getAdminSession()) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   const emailFrom = process.env.EMAIL_FROM;
   const appUrl = process.env.APP_URL;
+  const toEmail = process.env.EMAIL_TEST_TO ?? emailFrom;
 
-  if (!apiKey || !emailFrom || !appUrl) {
+  if (!apiKey || !emailFrom || !appUrl || !toEmail) {
     return NextResponse.json(
       { ok: false, error: 'Missing RESEND_API_KEY, EMAIL_FROM, or APP_URL.' },
       { status: 500 }
@@ -20,7 +26,7 @@ export async function GET() {
 
     const { data, error } = await resend.emails.send({
       from: emailFrom,
-      to: TO_EMAIL,
+      to: toEmail,
       subject: '✅ Test email Agenda (Resend)',
       html: `
         <h1>Test OK</h1>

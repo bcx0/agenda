@@ -3,6 +3,10 @@ import { GoogleReauthRequiredError } from './google-errors'
 
 const DEFAULT_TIMEZONE = 'Europe/Paris'
 
+// Timeout des appels Google : évite qu'un webhook/cron reste bloqué jusqu'au
+// timeout Vercel si l'API Google est lente (perte de syncToken, resync en boucle).
+const GOOGLE_FETCH_TIMEOUT_MS = 8000
+
 // Log an auth error in SyncLog so admin UI / monitoring can surface it.
 // Fire-and-forget — never block or rethrow on logging failure.
 async function logAuthError(message: string, reason: string): Promise<void> {
@@ -86,6 +90,7 @@ export async function getValidAccessToken(
       refresh_token: token.refreshToken,
       grant_type: 'refresh_token',
     }),
+    signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
   })
 
   const refreshed = await res.json()
@@ -145,6 +150,7 @@ async function googleApiFetch(
       ...((options.headers as Record<string, string>) || {}),
       Authorization: `Bearer ${accessToken}`,
     },
+    signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
   })
 
   // Si 401 → force refresh et retry une fois
@@ -160,6 +166,7 @@ async function googleApiFetch(
         ...((options.headers as Record<string, string>) || {}),
         Authorization: `Bearer ${accessToken}`,
       },
+      signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
     })
 
     // Si toujours 401 après refresh forcé → le refresh a "réussi" côté

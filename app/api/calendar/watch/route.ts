@@ -1,9 +1,19 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getValidAccessToken } from '@/lib/google-calendar'
+import { getAdminSession } from '@/lib/session'
 import { v4 as uuidv4 } from 'uuid'
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+    // Réservé au cron (Bearer CRON_SECRET) ou à l'admin connecté :
+    // sinon n'importe qui pouvait ré-enregistrer le webhook Google.
+    const authHeader = request.headers.get('authorization')
+    const isCron =
+      !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`
+    if (!isCron && !getAdminSession()) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     try {
           const accessToken = await getValidAccessToken()
 

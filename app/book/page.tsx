@@ -13,6 +13,7 @@ import { prisma } from "../../lib/prisma";
 import { getSettings } from "../../lib/settings";
 import { getServerLocale, t, type TranslationKey } from "../../lib/i18n";
 import { AgencyBranding } from "../../components/AgencyBranding";
+import { CleanUrlAfterAction } from "../../components/CleanUrlAfterAction";
 
 export const dynamic = "force-dynamic";
 
@@ -136,15 +137,17 @@ export default async function BookPage({
   });
 
   const currentMonthReached = currentMonthQuota.creditsUsedThisMonth >= currentMonthQuota.creditsPerMonth;
+  // Next.js already decodes searchParams — no second decodeURIComponent
   const rawError = Array.isArray(searchParams?.error)
     ? searchParams?.error[0]
     : searchParams?.error;
-  const error = rawError ? decodeURIComponent(rawError) : null;
+  const error = rawError ?? null;
   const success = Array.isArray(searchParams?.success)
     ? searchParams?.success[0]
     : searchParams?.success;
   return (
     <section className="mx-auto max-w-6xl space-y-10 px-5 py-14 md:py-20">
+      <CleanUrlAfterAction />
       <div className="space-y-6">
         <div className="space-y-3">
           <p className="pill w-fit">{t("book.pill", locale)}</p>

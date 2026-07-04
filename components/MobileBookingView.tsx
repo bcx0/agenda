@@ -26,7 +26,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
     [slots]
   );
 
-  // Group slots by day (Miami timezone)
+  // Group slots by day (CALENDAR_TZ = Europe/Brussels)
   const dayMap = useMemo(() => {
     const map = new Map<string, { key: string; label: string; slots: SlotView[]; date: DateTime }>();
     normalizedSlots.forEach((slot) => {
@@ -43,7 +43,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
       map.get(key)?.slots.push(slot);
     });
     return map;
-  }, [normalizedSlots]);
+  }, [normalizedSlots, locale]);
 
   // Calendar state
   const [month, setMonth] = useState<DateTime>(
@@ -89,7 +89,7 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
       slots: [] as SlotView[],
       date: day,
     };
-  }, [selectedKey, dayMap]);
+  }, [selectedKey, dayMap, locale]);
 
   const handleSelectDay = useCallback(
     (day: DateTime) => {
@@ -249,8 +249,9 @@ function MobileBookingViewComponent({ slots, quotaReached, quotaByMonth }: Props
               startIso={slot.start.toISOString()}
               brussels={slot.brussels}
               miami={slot.miami}
-              mode={slot.mode as any}
-              location={slot.location as any}
+              mode={slot.mode}
+              location={slot.location}
+              activeLocation={slot.activeLocation}
               presentielLocation={slot.presentielLocation}
               presentielNote={slot.presentielNote}
               status={slot.status}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getValidAccessToken, type GoogleCalendarEvent } from "../../../../lib/google-calendar";
 import { pullFromGoogle, bulkImportFromGoogle } from "../../../../lib/sync-engine";
+import { getAdminSession } from "../../../../lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,15 @@ export const revalidate = 0;
  *   → Returns results
  */
 export async function POST(req: NextRequest) {
+  // Steps destructeurs (purge) et données sensibles (debug) : réservé à
+  // l'admin connecté (UI /admin/settings) ou au cron (Bearer CRON_SECRET).
+  const authHeader = req.headers.get("authorization");
+  const isCron =
+    !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  if (!isCron && !getAdminSession()) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const token = await prisma.googleToken.findFirst();
     if (!token) {

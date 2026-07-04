@@ -29,12 +29,17 @@ import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle, reconcileNoAccountBlocksForClient } from "@/lib/sync-engine";
-import { cancelBooking } from "../../lib/booking";
+import { cancelBooking, computeModeForSlotSync, getModeContext } from "../../lib/booking";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 function assertAdmin() {
   const session = getAdminSession();
   if (!session) redirect("/admin?error=unauthorized");
+}
+
+/** ISO weekday valide : 1 (lundi) à 7 (dimanche). */
+function isValidDayOfWeek(value: number): boolean {
+  return Number.isInteger(value) && value >= 1 && value <= 7;
 }
 
 function parseTimeToMinutes(value: string) {
@@ -211,12 +216,24 @@ export async function addClientAction(formData: FormData) {
       redirect(buildClientsErrorUrl("Champs invalides", { name, email: emailRaw, creditsPerMonth: creditsRaw }));
     }
     if (err && typeof err === "object" && "code" in err && "message" in err) {
-      const code = String(err.code);
-      const message = String(err.message);
-      redirect(buildClientsErrorUrl(`Prisma ${code}: ${message}`, { name, email: emailRaw, creditsPerMonth: creditsRaw }));
+      // Ne pas exposer le code/message Prisma brut à l'utilisateur
+      console.error("[addClient] Prisma error:", err);
+      redirect(
+        buildClientsErrorUrl("Création du client impossible. Réessayez ou contactez le support.", {
+          name,
+          email: emailRaw,
+          creditsPerMonth: creditsRaw
+        })
+      );
     }
-    const message = err instanceof Error ? err.message : "Creation client impossible";
-    redirect(buildClientsErrorUrl(message, { name, email: emailRaw, creditsPerMonth: creditsRaw }));
+    console.error("[addClient] Unexpected error:", err);
+    redirect(
+      buildClientsErrorUrl("Création du client impossible. Réessayez ou contactez le support.", {
+        name,
+        email: emailRaw,
+        creditsPerMonth: creditsRaw
+      })
+    );
   }
 
   revalidatePath("/admin/clients");
@@ -231,7 +248,10 @@ export async function updateCreditsAction(formData: FormData) {
   assertAdmin();
   const clientId = Number(formData.get("clientId"));
   const credits = Number(formData.get("creditsPerMonth"));
-  if (!clientId || !credits) redirect("/admin/clients?error=Valeurs%20invalides");
+  // NB : credits === 0 est une valeur légitime (suspendre les réservations d'un client)
+  if (!clientId || !Number.isInteger(credits) || credits < 0) {
+    redirect("/admin/clients?error=Valeurs%20invalides");
+  }
   await updateCredits(clientId, credits);
   revalidatePath("/admin/clients");
   redirect("/admin/clients?success=Credits%20mis%20a%20jour");
@@ -427,8 +447,8 @@ export async function setGeneralRecurringForDayAction(
   assertAdmin();
   const dayOfWeek = Number(formData.get("dayOfWeek"));
   const rangesRaw = formData.get("ranges")?.toString() ?? "[]";
-  if (!dayOfWeek) {
-    return { error: "Jour manquant" } as const;
+  if (!isValidDayOfWeek(dayOfWeek)) {
+    return { error: "Jour invalide" } as const;
   }
   const parsed = parseRangesSafe(rangesRaw);
   if ("error" in parsed) {
@@ -480,8 +500,8 @@ export async function deleteGeneralRecurringForDayAction(
 ) {
   assertAdmin();
   const dayOfWeek = Number(formData.get("dayOfWeek"));
-  if (!dayOfWeek) {
-    return { error: "Jour manquant" } as const;
+  if (!isValidDayOfWeek(dayOfWeek)) {
+    return { error: "Jour invalide" } as const;
   }
   await prisma.availabilityRule.deleteMany({ where: { dayOfWeek } });
   revalidatePath("/admin/availability");
@@ -495,8 +515,11 @@ export async function createAvailabilityRuleAction(formData: FormData) {
   const startTime = formData.get("startTime")?.toString() ?? "";
   const endTime = formData.get("endTime")?.toString() ?? "";
   const location = formData.get("location")?.toString() ?? "MIAMI";
-  if (!dayOfWeek || !startTime || !endTime) {
+  if (!isValidDayOfWeek(dayOfWeek) || !startTime || !endTime) {
     redirect("/admin/settings?error=Champs%20invalides");
+  }
+  if (location !== "MIAMI" && location !== "BELGIUM") {
+    redirect("/admin/settings?error=Lieu%20invalide");
   }
   assertValidTimeRange(startTime, endTime, "/admin/settings");
   await createAvailabilityRule(dayOfWeek, startTime, endTime, location);
@@ -558,7 +581,7 @@ export async function createRecurringBlockAction(formData: FormData) {
   const timeZone = formData.get("timeZone")?.toString() ?? "Europe/Brussels";
   const clientIdRaw = formData.get("clientId")?.toString();
   const note = formData.get("note")?.toString().trim() ?? "";
-  if (!dayOfWeek || !startTime || !endTime) {
+  if (!isValidDayOfWeek(dayOfWeek) || !startTime || !endTime) {
     redirect("/admin/availability?error=Champs%20invalides");
   }
   if (timeZone !== "America/New_York" && timeZone !== "Europe/Brussels") {
@@ -677,8 +700,12 @@ export async function createRecurringBlockAction(formData: FormData) {
     rescheduleReason: string;
   }[] = [];
 
+  // Même logique de mode que le parcours client (périodes Belgique, SessionMode,
+  // défaut Settings) — l'ancien "VISIO" en dur divergeait de l'affichage /book.
+  const modeContext = await getModeContext();
+
   for (const candidate of candidates) {
-    const conflict = existingConflicts.some((existing: any) =>
+    const conflict = existingConflicts.some((existing: { startAt: Date; endAt: Date }) =>
       overlaps(existing.startAt, existing.endAt, candidate.startAt, candidate.endAt)
     );
     if (conflict) continue;
@@ -696,7 +723,7 @@ export async function createRecurringBlockAction(formData: FormData) {
       startAt: candidate.startAt,
       endAt: candidate.endAt,
       status: "CONFIRMED",
-      mode: "VISIO",
+      mode: computeModeForSlotSync(candidate.startAt, modeContext),
       timeZone,
       rescheduleReason: note
         ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
@@ -884,7 +911,8 @@ export async function blockDateForClientAction(formData: FormData) {
   if (!client) {
     redirect("/admin/availability?tab=single-block&error=Client%20introuvable");
   }
-  const { startUtc, endUtc } = monthBoundsUtc();
+  // Quota compté sur le MOIS DU RDV (pas le mois courant)
+  const { startUtc, endUtc } = monthBoundsUtc(startAt);
   const usedThisMonth = await prisma.booking.count({
     where: {
       clientId,
@@ -909,13 +937,17 @@ export async function blockDateForClientAction(formData: FormData) {
     redirect("/admin/availability?tab=single-block&error=Conflit%20avec%20un%20rendez-vous%20existant");
   }
 
+  // Même logique de mode que le parcours client (l'ancien "VISIO" en dur
+  // divergeait des périodes Belgique / SessionMode affichées sur /book)
+  const singleMode = computeModeForSlotSync(startAt, await getModeContext());
+
   const createdBooking = await prisma.booking.create({
     data: {
       clientId,
       startAt,
       endAt,
       status: "CONFIRMED",
-      mode: "VISIO",
+      mode: singleMode,
       rescheduleReason: note
         ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
         : ADMIN_BLOCK_NOTE_PREFIX,

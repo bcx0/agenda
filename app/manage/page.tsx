@@ -9,6 +9,7 @@ import {
   manageClientBookingAction
 } from "../../lib/actions/bookingActions";
 import { getServerLocale, t } from "../../lib/i18n";
+import { CleanUrlAfterAction } from "../../components/CleanUrlAfterAction";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +32,15 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
     orderBy: { startAt: "asc" }
   });
 
+  // Next.js already decodes searchParams — no second decodeURIComponent
   const rawError = Array.isArray(searchParams?.error)
     ? searchParams?.error[0]
     : searchParams?.error;
-  const errorMessage = rawError ? decodeURIComponent(rawError) : null;
+  const errorMessage = rawError ?? null;
 
   return (
     <section className="mx-auto max-w-4xl space-y-8 px-5 py-14 md:py-20">
+      <CleanUrlAfterAction />
       <div className="space-y-2">
         <p className="pill w-fit">{t("manage.pill", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
@@ -55,7 +58,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
         <div className="card p-6 text-sm text-[#5A6B76]">{t("manage.noBookings2", locale)}</div>
       ) : (
         <div className="space-y-4">
-          {bookings.map((booking: any) => {
+          {bookings.map((booking: { id: number; startAt: Date; status: string }) => {
             const canManage = booking.startAt.getTime() - Date.now() > MANAGE_WINDOW_MS;
             const dateLabel = formatInZone(booking.startAt, "EEEE dd LLL yyyy", BRUSSELS_TZ);
             const brussels = formatInZone(booking.startAt, "HH:mm", BRUSSELS_TZ);

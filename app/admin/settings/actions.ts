@@ -36,4 +36,6 @@ export async function saveSettingsAction(formData: FormData) {
     presentielNote: parsed.data.presentielNote || null
   });
   revalidatePath("/admin/settings");
+  revalidatePath("/book");
+  redirect("/admin/settings?success=Param%C3%A8tres%20enregistr%C3%A9s");
 }

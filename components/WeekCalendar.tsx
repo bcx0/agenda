@@ -15,10 +15,8 @@ type Props = {
   onChangeWeek: (next: DateTime) => void;
 };
 
-const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-
 function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth, onChangeWeek }: Props) {
-  const { locale } = useLanguage();
+  const { t, locale } = useLanguage();
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i })),
     [weekStart]
@@ -53,11 +51,12 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
         <button
           type="button"
           onClick={() =>
-            onChangeWeek(DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 }))
+            // Luxon startOf("week") is Monday (ISO) — no "+1 day" needed
+            onChangeWeek(DateTime.now().setZone(CALENDAR_TZ).startOf("week"))
           }
           className="rounded-full border border-[#D4DCE1] px-3 py-2 text-sm hover:bg-[#10222E]/5"
         >
-          Aujourd&apos;hui
+          {t("calendar.today")}
         </button>
       </div>
 
@@ -67,7 +66,12 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
           const slots = [...(daySlots.get(key) ?? [])].sort(
             (a, b) => a.start.getTime() - b.start.getTime()
           );
-          const label = `${dayNames[idx]} ${day.setLocale(locale).toFormat("dd MMM")}`;
+          // Derive the weekday name from the actual date (the old hardcoded
+          // dayNames[idx] could label a Tuesday column "Lundi")
+          const weekdayName = day.setLocale(locale).toFormat("EEEE");
+          const label = `${weekdayName.charAt(0).toUpperCase()}${weekdayName.slice(1)} ${day
+            .setLocale(locale)
+            .toFormat("dd MMM")}`;
           return (
             <div key={key} className="space-y-2 rounded-xl border border-[#D4DCE1] bg-white p-3">
               <div className="flex items-center justify-between text-sm font-semibold text-[#10222E]">
@@ -77,7 +81,7 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
                 </span>
               </div>
               {slots.length === 0 ? (
-                <div className="text-xs text-[#7C8A93]">Aucun creneau</div>
+                <div className="text-xs text-[#7C8A93]">{t("mobileCal.noSlotForDate")}</div>
               ) : (
                 <div className="space-y-2">
                   {slots.map((slot) => {
@@ -87,8 +91,9 @@ function WeekCalendarComponent({ weekStart, daySlots, quotaReached, quotaByMonth
                         startIso={slot.start.toISOString()}
                         brussels={slot.brussels}
                         miami={slot.miami}
-                        mode={slot.mode as any}
-                        location={slot.location as any}
+                        mode={slot.mode}
+                        location={slot.location}
+                        activeLocation={slot.activeLocation}
                         presentielLocation={slot.presentielLocation}
                         presentielNote={slot.presentielNote}
                         status={slot.status}

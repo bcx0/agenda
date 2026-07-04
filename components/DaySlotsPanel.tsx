@@ -35,7 +35,7 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, quotaByM
       <div className="w-full max-h-[90vh] max-w-xl overflow-hidden rounded-t-3xl bg-white shadow-xl sm:rounded-2xl md:h-[calc(100vh-3rem)] md:max-h-none md:rounded-2xl md:border md:border-[#D4DCE1] md:shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-[#D4DCE1] bg-white px-6 py-4">
           <div>
-            <div className="text-xs uppercase tracking-widest text-[#7C8A93]">{t("legend.belgium")} / Miami</div>
+            <div className="text-xs uppercase tracking-widest text-[#7C8A93]">Brussels / Miami</div>
             <div className="text-lg font-semibold leading-snug">{dateLabel}</div>
           </div>
           <button
@@ -58,9 +58,9 @@ function DaySlotsPanelComponent({ open, dateLabel, slots, quotaReached, quotaByM
                 startIso={slot.start.toISOString()}
                 brussels={slot.brussels}
                 miami={slot.miami}
-                mode={slot.mode as any}
-                location={slot.location as any}
-                activeLocation={(slot as SlotView & { activeLocation?: "MIAMI" | "BELGIUM" }).activeLocation}
+                mode={slot.mode}
+                location={slot.location}
+                activeLocation={slot.activeLocation}
                 presentielLocation={slot.presentielLocation}
                 presentielNote={slot.presentielNote}
                 status={slot.status}

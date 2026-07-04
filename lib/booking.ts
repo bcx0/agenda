@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import { addDays } from "date-fns";
 import { DateTime } from "luxon";
@@ -10,8 +11,6 @@ import {
   MIAMI_WORK_END,
   formatInZone,
   formatSlotBothTZ,
-  isWithinBrusselsWindow,
-  isWithinMiamiWindow,
   monthBoundsUtc
 } from "./time";
 import { getSettings } from "./settings";
@@ -439,7 +438,6 @@ export async function checkSlotAvailability(
   const dayRules = locationRules.filter((rule: AvailabilityRuleRow) => rule.dayOfWeek === minutes.day.weekday);
   const openOverrides = overrides.filter((override: AvailabilityOverrideRow) => override.type === "OPEN");
   const hasOpenOverrides = openOverrides.length > 0;
-  const useFallback = !(hasRules || hasOpenOverrides);
   const effectiveRules = hasRules
     ? dayRules
     : buildFallbackRules(activeLocation).filter((rule: AvailabilityRuleRow) => rule.dayOfWeek === minutes.day.weekday);
@@ -467,16 +465,69 @@ export async function checkSlotAvailability(
     return { ok: false as const, error: "Ce créneau vient d'être pris." };
   }
 
-  const withinWindow =
-    activeLocation === "MIAMI"
-      ? isWithinMiamiWindow(startUtc, endUtc)
-      : isWithinBrusselsWindow(startUtc, endUtc);
-
-  if (!hasRules && !withinWindow && useFallback && !inOpenOverride) {
-    return { ok: false as const, error: "Créneau hors plage autorisée." };
-  }
+  // NOTE: the fallback rules used above are generated on the Brussels clock,
+  // exactly like the slots displayed by getAvailability(). Re-checking the
+  // Miami/Brussels wall-clock window here rejected slots that the UI offered
+  // (e.g. 07:00 Brussels = 01:00 Miami), so the display and booking paths
+  // now share the single slotWithinRule check.
 
   return { ok: true as const };
+}
+
+/**
+ * Preloaded context to compute session modes without one DB roundtrip per slot
+ * (used for bulk admin creation).
+ */
+export type ModeContext = {
+  locationPeriods: LocationPeriodRow[];
+  sessionModes: { startDate: Date; endDate: Date; mode: string }[];
+  defaultMode: string;
+};
+
+export async function getModeContext(): Promise<ModeContext> {
+  const [locationPeriods, sessionModes, settings] = await Promise.all([
+    prisma.locationPeriod.findMany(),
+    prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } }),
+    getSettings()
+  ]);
+  return { locationPeriods, sessionModes, defaultMode: settings.defaultMode };
+}
+
+/**
+ * Session mode for a slot: Brussels period ⇒ PRESENTIEL, otherwise explicit
+ * SessionMode range, otherwise the default from Settings.
+ * Shared by client booking, reschedule AND admin creation so the stored mode
+ * never diverges from what the UI displays.
+ */
+export function computeModeForSlotSync(
+  startUtc: Date,
+  ctx: ModeContext
+): "VISIO" | "PRESENTIEL" {
+  const slotDay = DateTime.fromJSDate(startUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
+  if (isDateInBrusselsPeriod(slotDay, ctx.locationPeriods)) return "PRESENTIEL";
+
+  const match = [...ctx.sessionModes]
+    .reverse()
+    .find((sm) => sm.startDate <= startUtc && sm.endDate >= startUtc);
+  if (match?.mode === "PRESENTIEL") return "PRESENTIEL";
+  if (match?.mode === "VISIO") return "VISIO";
+
+  return ctx.defaultMode === "PRESENTIEL" ? "PRESENTIEL" : "VISIO";
+}
+
+export async function computeModeForSlot(startUtc: Date): Promise<"VISIO" | "PRESENTIEL"> {
+  const ctx = await getModeContext();
+  return computeModeForSlotSync(startUtc, ctx);
+}
+
+/**
+ * Manage-token expiry: valid at least 7 days, and always until 24h after the
+ * session itself — a booking made 3 weeks in advance keeps a working link.
+ */
+export function manageTokenExpiry(endUtc: Date): Date {
+  const weekFromNow = addDays(new Date(), 7);
+  const dayAfterBooking = addDays(endUtc, 1);
+  return dayAfterBooking > weekFromNow ? dayAfterBooking : weekFromNow;
 }
 
 export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
@@ -488,7 +539,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
 
   const client = await prisma.client.findUnique({ where: { id: clientId } });
   if (!client || !client.isActive) {
-    return { error: "Acces reserve aux clients sous contrat." };
+    return { error: "Accès réservé aux clients sous contrat." };
   }
 
   // Monthly quota is enforced below via getQuotaStatus — no weekly cap needed
@@ -501,76 +552,79 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     };
   }
 
-  const settings = await getSettings();
   const availability = await checkSlotAvailability(startUtc, endUtc);
   if (!availability.ok) {
     return { error: availability.error };
   }
 
-  // Determine active location for this slot's date
-  const slotDay = DateTime.fromJSDate(startUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
-  const locationPeriods = await prisma.locationPeriod.findMany();
-  const isBrusselsSlot = isDateInBrusselsPeriod(slotDay, locationPeriods);
+  const QUOTA_ERROR =
+    "Quota mensuel atteint. Contactez Geoffrey si vous avez besoin d'un créneau supplémentaire.";
 
-  // Check quota for the MONTH OF THE BOOKING, not the current month
+  // Fast pre-check on the MONTH OF THE BOOKING (recounted inside the transaction below)
   const { creditsPerMonth, creditsUsedThisMonth } = await getQuotaStatus(clientId, startUtc);
   if (creditsUsedThisMonth >= creditsPerMonth) {
-    return {
-      error:
-        "Quota mensuel atteint. Contactez Geoffrey si vous avez besoin d'un creneau supplementaire."
-    };
+    return { error: QUOTA_ERROR };
   }
 
-  const sessionMode = await prisma.sessionMode.findFirst({
-    where: {
-      startDate: { lte: startUtc },
-      endDate: { gte: startUtc }
-    },
-    orderBy: { startDate: "desc" }
-  });
+  const bookingMode = await computeModeForSlot(startUtc);
 
-  const bookingMode = isBrusselsSlot
-    ? "PRESENTIEL"
-    : sessionMode?.mode === "PRESENTIEL"
-      ? "PRESENTIEL"
-      : sessionMode?.mode === "VISIO"
-      ? "VISIO"
-      : settings.defaultMode;
+  // Transaction + partial unique index (booking_confirmed_client_slot_unique)
+  // prevent the double-booking race; quota is recounted inside so two parallel
+  // requests cannot both pass the pre-check.
+  const booking = await prisma
+    .$transaction(async (tx: Prisma.TransactionClient) => {
+      const conflict = await tx.booking.findFirst({
+        where: {
+          status: "CONFIRMED",
+          startAt: { lt: endUtc },
+          endAt: { gt: startUtc }
+        }
+      });
+      if (conflict) {
+        throw new Error("SLOT_TAKEN");
+      }
 
-  // Use transaction to prevent race condition (double-booking same slot)
-    const booking = await prisma.$transaction(async (tx: any) => {
-          // Re-check for conflicts inside the transaction (serializable check)
-          const conflict = await tx.booking.findFirst({
-                  where: {
-                            status: "CONFIRMED",
-                            startAt: { lt: endUtc },
-                            endAt: { gt: startUtc }
-                  }
-          });
-          if (conflict) {
-                  throw new Error("SLOT_TAKEN");
-          }
+      const { startUtc: monthStart, endUtc: monthEnd } = monthBoundsUtc(startUtc);
+      const usedInMonth = await tx.booking.count({
+        where: {
+          clientId,
+          status: { not: "CANCELLED" },
+          startAt: { gte: monthStart, lt: monthEnd }
+        }
+      });
+      if (usedInMonth >= creditsPerMonth) {
+        throw new Error("QUOTA_REACHED");
+      }
 
-          return tx.booking.create({
-                  data: {
-                            clientId,
-                            startAt: startUtc,
-                            endAt: endUtc,
-                            status: "CONFIRMED",
-                            mode: bookingMode,
-                            manageToken: crypto.randomBytes(32).toString("hex"),
-                            manageTokenExpiresAt: addDays(new Date(), 7),
-                            bookedBy: "client"
-                  }
-          });
-    }).catch((err: unknown) => {
-          if (err instanceof Error && err.message === "SLOT_TAKEN") return null;
-          throw err;
+      return tx.booking.create({
+        data: {
+          clientId,
+          startAt: startUtc,
+          endAt: endUtc,
+          status: "CONFIRMED",
+          mode: bookingMode,
+          manageToken: crypto.randomBytes(32).toString("hex"),
+          manageTokenExpiresAt: manageTokenExpiry(endUtc),
+          bookedBy: "client"
+        }
+      });
+    })
+    .catch((err: unknown) => {
+      if (err instanceof Error && err.message === "SLOT_TAKEN") return "SLOT_TAKEN" as const;
+      if (err instanceof Error && err.message === "QUOTA_REACHED") return "QUOTA_REACHED" as const;
+      // Unique index violation (two truly simultaneous requests)
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        return "SLOT_TAKEN" as const;
+      }
+      throw err;
     });
 
-    if (!booking) {
-          return { error: "Ce créneau vient d'être pris." };
-    }
+  if (booking === "SLOT_TAKEN") {
+    return { error: "Ce créneau vient d'être pris." };
+  }
+  if (booking === "QUOTA_REACHED") {
+    return { error: QUOTA_ERROR };
+  }
   pushBookingToGoogle(booking.id, "create").catch((err: unknown) =>
     console.error("[GoogleSync] Booking create failed:", err)
   );
@@ -607,7 +661,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
   return { booking };
 }
 export async function cancelBooking(bookingId: number, reason?: string) {
-  const result = await prisma.$transaction(async (tx: any) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
       include: { client: true }
@@ -684,7 +738,7 @@ export async function ensureManageTokenForBooking(bookingId: number) {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = addDays(now, 7);
+  const expiresAt = manageTokenExpiry(booking.endAt);
 
   const updated = await prisma.booking.update({
     where: { id: bookingId },

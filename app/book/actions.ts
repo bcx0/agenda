@@ -16,6 +16,9 @@ export async function bookSlotAction(formData: FormData) {
   }
 
   const startUtc = new Date(start);
+  if (Number.isNaN(startUtc.getTime())) {
+    return redirect("/book?error=Créneau%20invalide");
+  }
   const endUtc = addHours(startUtc, 1);
 
   const result = await bookSlot(session.clientId, startUtc, endUtc);

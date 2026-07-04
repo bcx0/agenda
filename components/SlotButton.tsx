@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { clsx } from "clsx";
 import { bookSlotAction } from "../app/book/actions";
 import { useLanguage } from "./LanguageProvider";
@@ -38,11 +39,14 @@ function SlotButtonComponent({
   const [confirming, setConfirming] = useState(false);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Reset loading state when slot status changes (after server revalidation)
+  // Reset loading state after server response. On success the slot status
+  // changes; on error (quota, slot taken…) the status stays "available", so we
+  // also reset when the URL search params change (?error= / ?success=).
+  const searchParams = useSearchParams();
   useEffect(() => {
     setIsSubmitting(false);
     setConfirming(false);
-  }, [status]);
+  }, [status, searchParams]);
 
   const disabled = status !== "available" || quotaReached || isSubmitting;
 

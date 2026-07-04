@@ -48,15 +48,33 @@ function buildAppLink(path: string) {
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
-async function alreadySent(bookingId: number, type: BookingEmailType, to: string) {
+/** Escapes HTML special chars before interpolating user-provided text (client name). */
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function alreadySent(
+  bookingId: number,
+  type: BookingEmailType,
+  to: string,
+  startAt?: Date
+) {
   const bookingIdToken = `"bookingId":${bookingId}`;
+  // For update emails, dedupe per target slot: a booking rescheduled twice
+  // must notify the client twice (once per new startAt).
+  const startToken = startAt ? `"startAt":"${startAt.toISOString()}"` : null;
   return prisma.emailLog.findFirst({
     where: {
       to,
       AND: [
         { body: { contains: `"type":"${type}"` } },
         { body: { contains: bookingIdToken } },
-        { body: { contains: `"status":"sent"` } }
+        { body: { contains: `"status":"sent"` } },
+        ...(startToken ? [{ body: { contains: startToken } }] : [])
       ]
     }
   });
@@ -177,13 +195,14 @@ export async function sendBookingConfirmationEmail(booking: BookingEmailParams) 
 
   const timeZone = booking.timeZone ?? DEFAULT_TZ;
   const slotLine = buildSlotLine(booking.startAt, booking.endAt, timeZone);
-  const link = buildAppLink("/client");
+  // "/client" n'existe pas — l'espace client est /manage
+  const link = buildAppLink("/manage");
   const manageLink = booking.manageUrl ?? null;
 
   const subject = "Confirmation de rendez-vous";
   const html = `
     <h1>Réservation confirmée</h1>
-    <p>Bonjour ${booking.clientName},</p>
+    <p>Bonjour ${escapeHtml(booking.clientName)},</p>
     <p>Votre rendez-vous est confirmé.</p>
     <p><strong>${slotLine}</strong></p>
     ${link ? `<p><a href="${link}">Ouvrir l'agenda</a></p>` : ""}
@@ -199,7 +218,13 @@ export async function sendBookingConfirmationEmail(booking: BookingEmailParams) 
 }
 
 export async function sendBookingUpdatedEmail(booking: BookingEmailParams) {
-  const already = await alreadySent(booking.bookingId, "booking_updated", booking.clientEmail);
+  // Dedupe per (booking, new slot): a second reschedule must send a new email.
+  const already = await alreadySent(
+    booking.bookingId,
+    "booking_updated",
+    booking.clientEmail,
+    booking.startAt
+  );
   if (already) return { ok: true, skipped: true };
 
   const timeZone = booking.timeZone ?? DEFAULT_TZ;
@@ -208,12 +233,13 @@ export async function sendBookingUpdatedEmail(booking: BookingEmailParams) {
     booking.oldStartAt && booking.oldEndAt
       ? buildSlotLine(booking.oldStartAt, booking.oldEndAt, timeZone)
       : null;
-  const link = buildAppLink("/client");
+  // "/client" n'existe pas — l'espace client est /manage
+  const link = buildAppLink("/manage");
 
   const subject = "Modification de rendez-vous";
   const html = `
     <h1>Rendez-vous modifié</h1>
-    <p>Bonjour ${booking.clientName},</p>
+    <p>Bonjour ${escapeHtml(booking.clientName)},</p>
     <p>Votre rendez-vous a été mis à jour.</p>
     ${oldSlotLine ? `<p>Ancien créneau : <strong>${oldSlotLine}</strong></p>` : ""}
     <p>Nouveau créneau : <strong>${slotLine}</strong></p>
@@ -240,7 +266,7 @@ export async function sendBookingCancelledEmail(booking: BookingEmailParams) {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
       <h1 style="font-size: 22px; color: #111;">Rendez-vous annulé</h1>
-      <p>Bonjour ${booking.clientName},</p>
+      <p>Bonjour ${escapeHtml(booking.clientName)},</p>
       <p>Votre rendez-vous prévu le :</p>
       <p style="background: #f8f5f0; border-left: 4px solid #C8A060; padding: 12px 16px; font-weight: 600;">
         ${slotLine}

@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 
 import { cancelAppointmentAction, rescheduleAppointmentAction } from "./actions";
+import { SubmitButton } from "../../../../components/SubmitButton";
+import { CleanUrlAfterAction } from "../../../../components/CleanUrlAfterAction";
 import { prisma } from "../../../../lib/prisma";
 import { getAvailability } from "../../../../lib/booking";
 import { BRUSSELS_TZ, MIAMI_TZ, formatInZone } from "../../../../lib/time";
@@ -37,13 +39,17 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
     );
   }
 
-  const errorMessage = searchParams?.error ? decodeURIComponent(searchParams.error) : null;
+  // Next.js already decodes searchParams — a second decodeURIComponent threw on literal "%"
+  const errorMessage = searchParams?.error ?? null;
   const successMessage = searchParams?.success ?? null;
 
+  // Only offer slots that respect the 48h advance rule (same as /book)
+  const minStartTime = Date.now() + 48 * 60 * 60 * 1000;
   const slots = await getAvailability();
   const availableSlots = slots.filter(
     (slot) =>
       slot.status === "available" &&
+      slot.start.getTime() >= minStartTime &&
       slot.start.getTime() !== booking.startAt.getTime()
   );
 
@@ -53,6 +59,7 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
 
   return (
     <section className="mx-auto max-w-3xl space-y-8 py-12">
+      <CleanUrlAfterAction />
       <div className="space-y-2">
         <p className="pill w-fit">{t("manage.pill", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
@@ -110,9 +117,9 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
               {t("rdvManage.cancelDesc", locale)}
             </p>
             <input type="hidden" name="token" value={token} />
-            <button className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 hover:bg-red-100">
+            <SubmitButton className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 hover:bg-red-100">
               {t("rdvManage.confirmCancel", locale)}
-            </button>
+            </SubmitButton>
           </form>
 
           <form action={rescheduleAppointmentAction} className="card space-y-4 p-6">
@@ -144,9 +151,9 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
             {availableSlots.length === 0 ? (
               <p className="text-sm text-[#5A6B76]">{t("rdvManage.noSlotAvailable", locale)}</p>
             ) : null}
-            <button className="rounded-md border border-[#D4DCE1] px-4 py-2 text-sm hover:bg-[#143648] hover:text-white">
+            <SubmitButton className="rounded-md border border-[#D4DCE1] px-4 py-2 text-sm hover:bg-[#143648] hover:text-white">
               {t("rdvManage.confirmModify", locale)}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       )}

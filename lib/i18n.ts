@@ -106,8 +106,9 @@ export const translations = {
   "book.usedThisMonth": { fr: "utilisés ce mois-ci", en: "used this month" },
   "book.blocked": { fr: "Les RDV sont bloqués après le quota mensuel. Pour un besoin exceptionnel, contactez Geoffrey.", en: "Bookings are blocked after the monthly quota. For exceptional needs, contact Geoffrey." },
   "book.disconnect": { fr: "Déconnexion", en: "Log out" },
-  "book.creditsRemaining": { fr: "crédits restants", en: "credits remaining" },
-  "book.creditRemaining": { fr: "crédit restant", en: "credit remaining" },
+  // FR : précédé de "il vous reste" sur /book — pas de "restants" redondant
+  "book.creditsRemaining": { fr: "crédits", en: "credits remaining" },
+  "book.creditRemaining": { fr: "crédit", en: "credit remaining" },
   "book.noCredits": { fr: "aucun crédit", en: "no credits" },
   "book.yourCredits": { fr: "Vos crédits", en: "Your credits" },
   "book.inMonth": { fr: "En", en: "In" },

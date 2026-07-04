@@ -22,13 +22,6 @@ export async function POST(req: NextRequest) {
         try {
           const { items, nextSyncToken } = await fetchChangedEvents(token.syncToken);
 
-          if (nextSyncToken) {
-            await prisma.googleToken.update({
-              where: { id: token.id },
-              data: { syncToken: nextSyncToken },
-            });
-          }
-
           const results: Array<{ eventId: string; action: string }> = [];
           for (const event of items) {
             try {
@@ -37,12 +30,23 @@ export async function POST(req: NextRequest) {
                 event.id
               );
               results.push({ eventId: event.id, action: result.action });
-            } catch (err: any) {
-              results.push({ eventId: event.id, action: `error: ${err.message}` });
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : String(err);
+              results.push({ eventId: event.id, action: `error: ${message}` });
             }
           }
+
+          // Persist the syncToken only AFTER processing: if the function dies
+          // mid-loop (timeout), the old token stays and the next notification
+          // re-fetches the missed events (pullFromGoogle is idempotent).
+          if (nextSyncToken) {
+            await prisma.googleToken.update({
+              where: { id: token.id },
+              data: { syncToken: nextSyncToken },
+            });
+          }
           console.log(`[Webhook:sync] Processed ${items.length} events:`, JSON.stringify(results));
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("[Webhook:sync] Error during initial sync:", err);
         }
       }
@@ -69,14 +73,6 @@ export async function POST(req: NextRequest) {
       finalSyncToken = fullSync.nextSyncToken;
     }
 
-    // Store the new syncToken for next incremental sync
-    if (finalSyncToken) {
-      await prisma.googleToken.update({
-        where: { id: token.id },
-        data: { syncToken: finalSyncToken },
-      });
-    }
-
     // Process each changed event
     const results: Array<{ eventId: string; action: string }> = [];
 
@@ -87,10 +83,20 @@ export async function POST(req: NextRequest) {
           event.id
         );
         results.push({ eventId: event.id, action: result.action });
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         console.error(`[Webhook] Error processing event ${event.id}:`, err);
-        results.push({ eventId: event.id, action: `error: ${err.message}` });
+        results.push({ eventId: event.id, action: `error: ${message}` });
       }
+    }
+
+    // Persist the syncToken only AFTER processing (see comment above): a crash
+    // mid-loop keeps the old token so missed events are re-fetched next time.
+    if (finalSyncToken) {
+      await prisma.googleToken.update({
+        where: { id: token.id },
+        data: { syncToken: finalSyncToken },
+      });
     }
 
     console.log(
@@ -99,10 +105,10 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({ ok: true, processed: events.length, results });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Webhook] Error:", error);
     return NextResponse.json(
-      { error: error.message || "Erreur webhook" },
+      { error: error instanceof Error ? error.message : "Erreur webhook" },
       { status: 500 }
     );
   }

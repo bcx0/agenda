@@ -8,6 +8,7 @@ import { adminLoginAction, adminLogoutAction, toggleBookingLockAction } from "./
 import { listUpcomingBookingsThisMonth } from "../../lib/admin";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
 import { prisma } from "../../lib/prisma";
+import { getGoogleSyncHealth } from "../../lib/google-health";
 import PasswordInput from "../../components/PasswordInput";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
   const now = new Date();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  const [activeClientCount, bookings, thisMonthUpcomingBookings, recurringBlocks, settings] =
+  const [activeClientCount, bookings, thisMonthUpcomingBookings, recurringBlocks, settings, googleHealth] =
     await Promise.all([
       prisma.client.count({ where: { isActive: true } }),
       listUpcomingBookingsThisMonth(),
@@ -70,7 +71,8 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
         }
       }),
       prisma.recurringBlock.findMany(),
-      prisma.settings.findUnique({ where: { id: 1 } })
+      prisma.settings.findUnique({ where: { id: 1 } }),
+      getGoogleSyncHealth()
     ]);
 
   const bookingLocked = settings?.bookingLocked ?? false;
@@ -92,6 +94,19 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
 
   return (
     <section className="space-y-8">
+      {googleHealth.needsReauth ? (
+        <div className="rounded-lg border border-red-400 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <p className="font-semibold">⚠️ Synchronisation Google Calendar interrompue</p>
+          <p className="mt-1 text-red-200/80">
+            La connexion Google a été révoquée : les rendez-vous ne se synchronisent plus
+            (ni de l&apos;agenda vers Google, ni de Google vers l&apos;agenda).{" "}
+            <Link href="/admin/settings" className="underline underline-offset-2 font-semibold">
+              Reconnecter Google Calendar dans les réglages
+            </Link>{" "}
+            — la synchronisation rattrapera automatiquement les rendez-vous manqués.
+          </p>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="pill w-fit">{t("nav.dashboard", locale)}</p>

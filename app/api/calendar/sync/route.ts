@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getValidAccessToken, type GoogleCalendarEvent } from "../../../../lib/google-calendar";
-import { pullFromGoogle, bulkImportFromGoogle } from "../../../../lib/sync-engine";
+import { pullFromGoogle, bulkImportFromGoogle, repushUnsyncedBookings } from "../../../../lib/sync-engine";
 import { getAdminSession } from "../../../../lib/session";
 
 export const runtime = "nodejs";
@@ -103,6 +103,27 @@ export async function POST(req: NextRequest) {
         step: "fetch",
         events,
         nextPageToken,
+      });
+    }
+
+    // ─── PUSH MISSING: agenda → Google ─────────────────────────────
+    // Pousse vers Google les RDV futurs confirmés jamais synchronisés
+    // (ex. séries récurrentes créées pendant une panne d'auth).
+    if (step === "push-missing") {
+      const result = await repushUnsyncedBookings(50);
+      const remaining = await prisma.booking.count({
+        where: {
+          status: "CONFIRMED",
+          googleEventId: null,
+          startAt: { gte: new Date() },
+          syncSource: { not: "google" }
+        }
+      });
+      return NextResponse.json({
+        step: "push-missing",
+        pushed: result.pushed,
+        failed: result.failed,
+        remaining
       });
     }
 

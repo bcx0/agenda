@@ -698,6 +698,7 @@ export async function createRecurringBlockAction(formData: FormData) {
     mode: string;
     timeZone: string;
     rescheduleReason: string;
+    bookedBy: string;
   }[] = [];
 
   // Même logique de mode que le parcours client (périodes Belgique, SessionMode,
@@ -727,7 +728,8 @@ export async function createRecurringBlockAction(formData: FormData) {
       timeZone,
       rescheduleReason: note
         ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
-        : ADMIN_BLOCK_NOTE_PREFIX
+        : ADMIN_BLOCK_NOTE_PREFIX,
+      bookedBy: "admin"
     });
     monthlyUsage.set(candidate.monthKey, currentUsage + 1);
   }
@@ -736,7 +738,48 @@ export async function createRecurringBlockAction(formData: FormData) {
     redirect("/admin/availability?error=Aucun%20booking%20cree%20(conflits%20ou%20quota)");
   }
 
+  // Trace de la série : sans cette ligne RecurringBlock, la série était
+  // invisible dans "RDV réguliers" et impossible à supprimer en bloc
+  // (bug signalé le 04/07 — série Jeanine Dirosa).
+  await prisma.recurringBlock.create({
+    data: {
+      dayOfWeek,
+      startTime,
+      endTime,
+      timeZone,
+      clientId,
+      note: note || `RDV hebdo — ${client.name}`
+    }
+  });
+
   await prisma.booking.createMany({ data: toCreate });
+
+  // Push vers Google Calendar : jamais fait auparavant pour les séries
+  // récurrentes (bug signalé le 04/07). On pousse un maximum dans le budget
+  // temps de la fonction ; le reste est rattrapé automatiquement par le cron
+  // horaire (repushUnsyncedBookings) ou le bouton "Pousser vers Google".
+  const createdBookings = await prisma.booking.findMany({
+    where: {
+      clientId,
+      status: "CONFIRMED",
+      googleEventId: null,
+      startAt: { in: toCreate.map((c) => c.startAt) }
+    },
+    select: { id: true },
+    orderBy: { startAt: "asc" }
+  });
+  const pushStarted = Date.now();
+  let pushedNow = 0;
+  for (let i = 0; i < createdBookings.length && Date.now() - pushStarted < 8000; i += 10) {
+    const chunk = createdBookings.slice(i, i + 10);
+    const results = await Promise.allSettled(
+      chunk.map((b: { id: number }) => pushBookingToGoogle(b.id, "create"))
+    );
+    pushedNow += results.filter((r) => r.status === "fulfilled").length;
+    results
+      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      .forEach((r) => console.error("[GoogleSync] Recurring booking push failed:", r.reason));
+  }
 
   toCreate.forEach((created) => {
     void sendMakeBookingWebhook(
@@ -756,9 +799,13 @@ export async function createRecurringBlockAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/book");
   revalidatePath("/manage");
+  const syncMsg =
+    pushedNow >= createdBookings.length
+      ? `${pushedNow} synchronisés vers Google`
+      : `${pushedNow}/${createdBookings.length} synchronisés vers Google (le reste suivra automatiquement)`;
   redirect(
     `/admin/availability?success=${encodeURIComponent(
-      `${toCreate.length} rendez-vous créés avec succès`
+      `${toCreate.length} rendez-vous créés — ${syncMsg}`
     )}`
   );
 }

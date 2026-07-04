@@ -97,6 +97,45 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
     }
   }
 
+  // ─── PUSH TO GOOGLE: agenda → Google (RDV jamais synchronisés) ─
+  // Boucle jusqu'à ce qu'il ne reste plus rien à pousser (max 10 passes
+  // de 50), s'arrête au premier échec (auth morte → inutile d'insister).
+  const pushMissingToGoogle = async (): Promise<{ pushed: number; remaining: number }> => {
+    let totalPushed = 0
+    let remaining = 0
+    for (let pass = 0; pass < 10; pass++) {
+      const res = await fetch('/api/calendar/sync?step=push-missing', { method: 'POST' })
+      if (!res.ok) throw new Error(`Push vers Google échoué: ${res.status}`)
+      const data = await res.json()
+      totalPushed += data.pushed ?? 0
+      remaining = data.remaining ?? 0
+      setProgress(`Envoi vers Google... ${totalPushed} poussés, ${remaining} restants`)
+      if (remaining === 0 || (data.failed ?? 0) > 0) break
+    }
+    return { pushed: totalPushed, remaining }
+  }
+
+  const handlePushMissing = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    setProgress('Envoi vers Google...')
+    try {
+      const { pushed, remaining } = await pushMissingToGoogle()
+      setSyncResult('success')
+      setProgress(
+        remaining === 0
+          ? `${pushed} RDV poussés vers Google — tout est synchronisé`
+          : `${pushed} RDV poussés, ${remaining} restants (réessayez ou vérifiez la connexion Google)`
+      )
+    } catch (err) {
+      console.error('[Sync:push] Error:', err)
+      setSyncResult('error')
+      setProgress(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   // ─── INCREMENTAL SYNC: fast skip of known events ──────────────
   const handleSync = async () => {
     setSyncing(true)
@@ -154,8 +193,20 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
         setProgress(`Traitement... ${totalProcessed}/${allEvents.length}`)
       }
 
+      // Direction agenda → Google : pousse les RDV jamais synchronisés
+      // (la sync est ainsi réellement bidirectionnelle à chaque clic).
+      let pushedToGoogle = 0
+      try {
+        const pushResult = await pushMissingToGoogle()
+        pushedToGoogle = pushResult.pushed
+      } catch (err) {
+        console.error('[Sync] Push to Google failed:', err)
+      }
+
       setSyncResult('success')
-      setProgress(`${totalProcessed} traités, ${totalImported} importés`)
+      setProgress(
+        `${totalProcessed} traités, ${totalImported} importés${pushedToGoogle > 0 ? `, ${pushedToGoogle} poussés vers Google` : ''}`
+      )
     } catch (err) {
       console.error('[Sync] Error:', err)
       setSyncResult('error')
@@ -236,6 +287,17 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
             ) : (
               '\u21BB Synchroniser maintenant'
             )}
+          </button>
+
+          <button
+            onClick={handlePushMissing}
+            disabled={syncing}
+            className="text-sm px-4 py-2 rounded-lg border border-gray-200
+              bg-white hover:bg-gray-50 transition-colors disabled:opacity-50
+              disabled:cursor-not-allowed font-medium text-gray-700"
+            title="Pousse vers Google Calendar les rendez-vous de l'agenda qui n'y sont pas encore"
+          >
+            {'↑'} Pousser vers Google
           </button>
 
           <button

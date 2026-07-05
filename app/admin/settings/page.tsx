@@ -33,10 +33,18 @@ export default async function AdminSettingsPage() {
   const [settings, sessionModes, googleToken, availabilityRules, locationPeriods, recentAuthError, lastSyncOk] =
     await Promise.all([
       getSettings(),
-      prisma.sessionMode.findMany({ orderBy: { startDate: "asc" } }),
+      // Périodes terminées masquées : elles n'ont plus aucun effet sur les
+      // créneaux et encombraient la liste (les données restent en base).
+      prisma.sessionMode.findMany({
+        where: { endDate: { gte: new Date() } },
+        orderBy: { startDate: "asc" }
+      }),
       prisma.googleToken.findFirst(),
       prisma.availabilityRule.findMany({ orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] }),
-      prisma.locationPeriod.findMany({ orderBy: { startDate: "asc" } }),
+      prisma.locationPeriod.findMany({
+        where: { endDate: { gte: new Date() } },
+        orderBy: { startDate: "asc" }
+      }),
       // Dernière erreur d'authentification Google.
       prisma.syncLog.findFirst({
         where: {

@@ -12,8 +12,16 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(null)
   const [progress, setProgress] = useState('')
+  // Le bouton "Reset & re-sync" (purge destructive) est masqué par défaut
+  // pour éviter les clics accidentels — il a causé des boucles de purge/
+  // re-import massives. Ajouter ?debug=1 à l'URL pour l'afficher.
+  const [showDangerZone, setShowDangerZone] = useState(false)
   const abortRef = useRef(false)
   const autoSyncDone = useRef(false)
+
+  useEffect(() => {
+    setShowDangerZone(new URLSearchParams(window.location.search).has('debug'))
+  }, [])
 
   useEffect(() => {
     if (syncResult) {
@@ -300,15 +308,17 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
             {'↑'} Pousser vers Google
           </button>
 
-          <button
-            onClick={handleFullResync}
-            disabled={syncing}
-            className="text-xs px-3 py-2 rounded-lg border border-red-200
-              text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50
-              disabled:cursor-not-allowed"
-          >
-            Reset & re-sync
-          </button>
+          {showDangerZone && (
+            <button
+              onClick={handleFullResync}
+              disabled={syncing}
+              className="text-xs px-3 py-2 rounded-lg border border-red-200
+                text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50
+                disabled:cursor-not-allowed"
+            >
+              Reset & re-sync
+            </button>
+          )}
 
           <a
             href="/api/auth/google"

@@ -5,6 +5,9 @@ import { fetchChangedEvents } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
 
 export const dynamic = 'force-dynamic'
+// Les runs post-purge traitent des centaines d'événements et dépassaient la
+// limite par défaut (504 FUNCTION_INVOCATION_TIMEOUT, cf. logs Vercel).
+export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -31,13 +34,6 @@ export async function GET(req: NextRequest) {
       finalSyncToken = fullSync.nextSyncToken
     }
 
-    if (finalSyncToken) {
-      await prisma.googleToken.update({
-        where: { id: token.id },
-        data: { syncToken: finalSyncToken },
-      })
-    }
-
     console.log(`[Cron sync] Processing ${events.length} events...`)
 
     const results: Array<{ eventId: string; action: string }> = []
@@ -55,6 +51,18 @@ export async function GET(req: NextRequest) {
         console.error(`[Cron sync] Error processing event ${event.id}:`, message)
         results.push({ eventId: event.id, action: `error: ${message}` })
       }
+    }
+
+    // Persiste le syncToken APRÈS le traitement (même logique que le webhook) :
+    // si la fonction meurt en plein milieu (timeout), l'ancien token est
+    // conservé et le prochain run re-fetche les événements manqués
+    // (pullFromGoogle est idempotent). L'ancien ordre — token sauvé AVANT le
+    // traitement — perdait des événements à chaque 504.
+    if (finalSyncToken) {
+      await prisma.googleToken.update({
+        where: { id: token.id },
+        data: { syncToken: finalSyncToken },
+      })
     }
 
     const imported = results.filter(

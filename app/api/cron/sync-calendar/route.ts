@@ -75,6 +75,21 @@ export async function GET(req: NextRequest) {
       `[Cron sync] Done: ${events.length} events, ${imported} imported, ${errors} errors, ${repushed.pushed} repushed`
     )
 
+    // Heartbeat : trace le succès du cron même sans événement à traiter.
+    // Sans ça, une sync réussie "vide" n'écrit rien en SyncLog et le badge
+    // "Reconnexion requise" (lib/google-health.ts) reste bloqué sur la
+    // dernière auth_error. Fire-and-forget.
+    await prisma.syncLog
+      .create({
+        data: {
+          table: 'GoogleToken',
+          action: 'sync_ok',
+          direction: 'google_to_app',
+          details: { processed: events.length, repushed: repushed.pushed },
+        },
+      })
+      .catch(() => {})
+
     return NextResponse.json({
       success: true,
       processed: events.length,

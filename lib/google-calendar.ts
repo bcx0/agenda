@@ -7,16 +7,32 @@ const DEFAULT_TIMEZONE = 'Europe/Paris'
 // timeout Vercel si l'API Google est lente (perte de syncToken, resync en boucle).
 const GOOGLE_FETCH_TIMEOUT_MS = 8000
 
+// Contexte de déploiement joint aux auth_error : identifie QUEL deploy/env
+// échoue (diagnostic post_refresh_401 — plusieurs déploiements peuvent
+// partager la même DB avec des env Google différentes).
+function diagContext(): Record<string, string | null> {
+  return {
+    vercelUrl: process.env.VERCEL_URL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    gitSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+    clientIdPrefix: process.env.GOOGLE_CLIENT_ID?.slice(0, 20) ?? 'MISSING',
+  }
+}
+
 // Log an auth error in SyncLog so admin UI / monitoring can surface it.
 // Fire-and-forget — never block or rethrow on logging failure.
-async function logAuthError(message: string, reason: string): Promise<void> {
+async function logAuthError(
+  message: string,
+  reason: string,
+  extra: Record<string, string | null> = {}
+): Promise<void> {
   try {
     await prisma.syncLog.create({
       data: {
         table: 'GoogleToken',
         action: 'auth_error',
         direction: 'google',
-        details: { message, reason },
+        details: { message, reason, ...diagContext(), ...extra },
       },
     })
   } catch (e) {
@@ -176,7 +192,8 @@ async function googleApiFetch(
       const errBody = await res.clone().text().catch(() => 'no body')
       await logAuthError(
         `Calendar API 401 after forced refresh: ${errBody.slice(0, 500)}`,
-        'post_refresh_401'
+        'post_refresh_401',
+        { url, tokenPrefix: accessToken.slice(0, 16) }
       )
       throw new GoogleReauthRequiredError(
         'Google Calendar rejette encore le token après refresh. ' +

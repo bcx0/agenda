@@ -392,6 +392,14 @@ export async function pullFromGoogle(
   ])
 
   if (existingBooking) {
+    // Même etag = écho de notre propre push (ou événement déjà à jour) → skip.
+    // Indispensable après une purge : l'étiquette recordId de l'événement
+    // Google pointe vers un id supprimé, donc TOUS ses échos retombaient ici
+    // et déclenchaient un update + résolution client à chaque sync (boucle
+    // "purged, re-importing" + runs de 70s+, cf. logs Vercel).
+    if (existingBooking.googleEtag === googleEvent.etag) {
+      return { action: 'etag_unchanged', skipped: true }
+    }
     try {
       const relinkId = await resolveRelinkClientId(googleEvent.summary, existingBooking.clientId)
       await prisma.booking.update({

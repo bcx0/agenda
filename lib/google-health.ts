@@ -23,7 +23,9 @@ export async function getGoogleSyncHealth(): Promise<GoogleSyncHealth> {
     }),
     prisma.syncLog.findFirst({
       where: {
-        action: { notIn: ["auth_error", "error"] },
+        // sync_error = run du cron planté (timeout, Google down…) : ne doit
+        // pas compter comme une sync réussie pour le badge.
+        action: { notIn: ["auth_error", "error", "sync_error"] },
         direction: { in: ["google_to_app", "app_to_google"] }
       },
       orderBy: { createdAt: "desc" }

@@ -51,9 +51,12 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // PAS de orderBy ici : l'API Google ne renvoie JAMAIS nextSyncToken
+      // quand orderBy est présent → le syncToken n'était jamais persisté et
+      // chaque webhook repartait en full sync (lent, timeout). L'ordre des
+      // événements n'a pas d'importance pour le traitement.
       const params = new URLSearchParams({
         singleEvents: "true",
-        orderBy: "startTime",
         maxResults: "250",
         timeMin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),

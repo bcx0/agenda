@@ -1,7 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { pullFromGoogle } from "../../../../lib/sync-engine";
-import { fetchChangedEvents } from "../../../../lib/google-calendar";
+import {
+  fetchChangedEvents,
+  type GoogleCalendarEvent,
+} from "../../../../lib/google-calendar";
+
+// Sans maxDuration, une notification qui déclenche une full sync (syncToken
+// null ou expiré 410) meurt au timeout par défaut AVANT de sauver le
+// syncToken → chaque notification suivante repart en full sync. Une fois le
+// syncToken en place, les notifications ne traitent que les deltas (<1s).
+export const maxDuration = 300;
+
+// Traite les événements par lots de 5 en parallèle (même logique que le cron).
+async function processEvents(
+  events: GoogleCalendarEvent[],
+  results: Array<{ eventId: string; action: string }>
+): Promise<void> {
+  const CONCURRENCY = 5;
+  for (let i = 0; i < events.length; i += CONCURRENCY) {
+    const chunk = events.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (event) => {
+        try {
+          const result = await pullFromGoogle(
+            event.status === "cancelled" ? null : event,
+            event.id
+          );
+          results.push({ eventId: event.id, action: result.action });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[Webhook] Error processing event ${event.id}:`, message);
+          results.push({ eventId: event.id, action: `error: ${message}` });
+        }
+      })
+    );
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,18 +58,7 @@ export async function POST(req: NextRequest) {
           const { items, nextSyncToken } = await fetchChangedEvents(token.syncToken);
 
           const results: Array<{ eventId: string; action: string }> = [];
-          for (const event of items) {
-            try {
-              const result = await pullFromGoogle(
-                event.status === "cancelled" ? null : event,
-                event.id
-              );
-              results.push({ eventId: event.id, action: result.action });
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : String(err);
-              results.push({ eventId: event.id, action: `error: ${message}` });
-            }
-          }
+          await processEvents(items, results);
 
           // Persist the syncToken only AFTER processing: if the function dies
           // mid-loop (timeout), the old token stays and the next notification
@@ -73,22 +97,9 @@ export async function POST(req: NextRequest) {
       finalSyncToken = fullSync.nextSyncToken;
     }
 
-    // Process each changed event
+    // Process each changed event (lots de 5 en parallèle)
     const results: Array<{ eventId: string; action: string }> = [];
-
-    for (const event of events) {
-      try {
-        const result = await pullFromGoogle(
-          event.status === "cancelled" ? null : event,
-          event.id
-        );
-        results.push({ eventId: event.id, action: result.action });
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[Webhook] Error processing event ${event.id}:`, err);
-        results.push({ eventId: event.id, action: `error: ${message}` });
-      }
-    }
+    await processEvents(events, results);
 
     // Persist the syncToken only AFTER processing (see comment above): a crash
     // mid-loop keeps the old token so missed events are re-fetched next time.

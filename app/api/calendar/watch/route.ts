@@ -17,6 +17,29 @@ export async function POST(request: NextRequest) {
     try {
           const accessToken = await getValidAccessToken()
 
+      // Stoppe TOUS les canaux connus avant d'en créer un nouveau : sans ça,
+      // chaque reconnexion empilait un canal de plus (8 canaux actifs le
+      // 14/07 → 8 notifications et 8 syncs par événement Google).
+      const oldWatches = await prisma.googleCalendarWatch.findMany()
+      for (const old of oldWatches) {
+        try {
+          await fetch('https://www.googleapis.com/calendar/v3/channels/stop', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id: old.channelId,
+              resourceId: old.resourceId,
+            }),
+          })
+        } catch {
+          // Canal déjà expiré/inconnu — on ignore.
+        }
+      }
+      await prisma.googleCalendarWatch.deleteMany()
+
       const channelId = uuidv4()
 
       const res = await fetch(

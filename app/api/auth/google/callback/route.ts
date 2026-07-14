@@ -52,6 +52,40 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(appUrl('/admin?error=missing_refresh_token'))
   }
 
+  // Consentement granulaire Google : si les cases calendrier ne sont PAS
+  // cochées, l'OAuth "réussit" quand même mais le token n'a que le scope
+  // email → tous les appels Calendar renvoient ensuite 401 Invalid
+  // Credentials (pannes récurrentes du 13-14/07 : chaque reconnexion faite
+  // sans cocher les cases cassait la sync ~1h plus tard, au premier refresh).
+  // On refuse net la connexion et on explique quoi faire.
+  const grantedScopes = String(tokens.scope ?? '').split(' ')
+  const hasCalendarScope = grantedScopes.some(
+    (scope) =>
+      scope === 'https://www.googleapis.com/auth/calendar' ||
+      scope === 'https://www.googleapis.com/auth/calendar.events'
+  )
+  if (!hasCalendarScope) {
+    console.error('[OAuth callback] Calendar scope missing. Granted:', tokens.scope)
+    await prisma.syncLog
+      .create({
+        data: {
+          table: 'GoogleToken',
+          action: 'auth_error',
+          direction: 'google',
+          details: { reason: 'missing_calendar_scope', grantedScopes: tokens.scope ?? '' },
+        },
+      })
+      .catch(() => {})
+    return NextResponse.redirect(
+      appUrl(
+        '/admin?error=' +
+          encodeURIComponent(
+            "Connexion refusée : les cases d'accès à Google Agenda n'ont pas été cochées. Recommencez et cochez TOUTES les cases sur l'écran Google."
+          )
+      )
+    )
+  }
+
   const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: {
       Authorization: `Bearer ${tokens.access_token}`,

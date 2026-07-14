@@ -139,6 +139,27 @@ export async function getValidAccessToken(
 
   console.log('[GoogleCalendar] Token refreshed successfully')
 
+  // Diagnostic : si le refresh token en base a été émis SANS les cases
+  // calendrier cochées (consentement granulaire), le refresh OAuth réussit
+  // mais le scope ne contient pas calendar → l'API renverra 401. Tracer ça
+  // ici transforme un mystère (post_refresh_401) en cause évidente.
+  const refreshedScopes = String(refreshed.scope ?? '')
+  if (
+    refreshedScopes &&
+    !refreshedScopes
+      .split(' ')
+      .some(
+        (s) =>
+          s === 'https://www.googleapis.com/auth/calendar' ||
+          s === 'https://www.googleapis.com/auth/calendar.events'
+      )
+  ) {
+    await logAuthError(
+      `Refresh OK mais sans scope calendrier — reconnexion faite sans cocher les cases. Scopes: ${refreshedScopes}`,
+      'refresh_missing_scope'
+    )
+  }
+
   await prisma.googleToken.update({
     where: { id: token.id },
     data: {

@@ -38,19 +38,29 @@ export async function GET(req: NextRequest) {
 
     const results: Array<{ eventId: string; action: string }> = []
 
-    // Process sequentially to avoid connection pool issues
-    for (const event of events) {
-      try {
-        const result = await pullFromGoogle(
-          event.status === 'cancelled' ? null : event,
-          event.id
-        )
-        results.push({ eventId: event.id, action: result.action })
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        console.error(`[Cron sync] Error processing event ${event.id}:`, message)
-        results.push({ eventId: event.id, action: `error: ${message}` })
-      }
+    // Traitement par lots de 5 en parallèle : le tout-séquentiel ne tenait
+    // pas dans maxDuration=300s sur une full sync (~800+ événements quand
+    // syncToken est null) → la fonction mourait en 504 AVANT de sauver le
+    // syncToken et le heartbeat, et la full sync repartait à chaque run.
+    // 5 reste sous la limite du pool de connexions Prisma.
+    const CONCURRENCY = 5
+    for (let i = 0; i < events.length; i += CONCURRENCY) {
+      const chunk = events.slice(i, i + CONCURRENCY)
+      await Promise.all(
+        chunk.map(async (event) => {
+          try {
+            const result = await pullFromGoogle(
+              event.status === 'cancelled' ? null : event,
+              event.id
+            )
+            results.push({ eventId: event.id, action: result.action })
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err)
+            console.error(`[Cron sync] Error processing event ${event.id}:`, message)
+            results.push({ eventId: event.id, action: `error: ${message}` })
+          }
+        })
+      )
     }
 
     // Persiste le syncToken APRÈS le traitement (même logique que le webhook) :
@@ -127,6 +137,22 @@ export async function GET(req: NextRequest) {
     }
 
     console.error('[Cron sync] Error:', error)
+
+    // Trace l'échec en SyncLog : sans ça, un run qui plante hors-auth est
+    // totalement invisible en base (seuls les logs Vercel le voient).
+    await prisma.syncLog
+      .create({
+        data: {
+          table: 'GoogleToken',
+          action: 'sync_error',
+          direction: 'google_to_app',
+          details: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        },
+      })
+      .catch(() => {})
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Sync error' },
       { status: 500 }

@@ -364,7 +364,11 @@ export async function setGeneralAvailabilityForDateAction(
   if (!date) {
     return { error: "Date manquante" } as const;
   }
-  const parsed = parseRangesSafe(rangesRaw);
+  // "[]" explicite = retrait du dernier créneau du jour → fermer la journée.
+  const isEmptyDay = rangesRaw.trim() === "[]";
+  const parsed = isEmptyDay
+    ? ({ ranges: [] as { startTime: string; endTime: string }[] } as const)
+    : parseRangesSafe(rangesRaw);
   if ("error" in parsed) {
     return { error: parsed.error } as const;
   }
@@ -372,7 +376,7 @@ export async function setGeneralAvailabilityForDateAction(
   // avant écriture (un double-clic ou un client bugué ne crée jamais de
   // doublons d'overrides en base).
   const ranges = mergeRanges(parsed.ranges);
-  if (ranges.length === 0) {
+  if (!isEmptyDay && ranges.length === 0) {
     return { error: "Aucune plage horaire valide" } as const;
   }
 
@@ -381,6 +385,42 @@ export async function setGeneralAvailabilityForDateAction(
     return { error: "Date invalide" } as const;
   }
   const dayEnd = dayStart.plus({ days: 1 });
+
+  // Journée fermée : on supprime les ouvertures du jour ET on pose un BLOCK
+  // pleine journée. Sans le BLOCK, les horaires hebdo (ou le fallback)
+  // referaient apparaître des créneaux — l'inverse de ce que veut l'admin
+  // qui vient de retirer son dernier créneau.
+  if (isEmptyDay && ranges.length === 0) {
+    await prisma.$transaction(async (tx: any) => {
+      await tx.availabilityOverride.deleteMany({
+        where: {
+          type: "OPEN",
+          date: { gte: dayStart.toUTC().toJSDate(), lt: dayEnd.toUTC().toJSDate() }
+        }
+      });
+      // Évite d'empiler des BLOCK pleine journée identiques
+      await tx.availabilityOverride.deleteMany({
+        where: {
+          type: "BLOCK",
+          startTime: "00:00",
+          endTime: "24:00",
+          date: { gte: dayStart.toUTC().toJSDate(), lt: dayEnd.toUTC().toJSDate() }
+        }
+      });
+      await tx.availabilityOverride.create({
+        data: {
+          date: dayStart.toUTC().toJSDate(),
+          startTime: "00:00",
+          endTime: "24:00",
+          type: "BLOCK",
+          note: "Journée fermée depuis le panneau jour"
+        }
+      });
+    });
+    revalidatePath("/admin/availability");
+    revalidatePath("/book");
+    return { success: true, message: "Journée fermée — plus aucune disponibilité" } as const;
+  }
 
   const bookings = await prisma.booking.findMany({
     where: {

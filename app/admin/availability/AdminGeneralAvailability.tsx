@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useFormState } from "react-dom";
+import { useFormState, useFormStatus } from "react-dom";
 import { DateTime } from "luxon";
 import Link from "next/link";
 import type { SlotView } from "../../../lib/booking";
@@ -10,7 +10,7 @@ import { CalendarViewToggle, type ViewMode } from "../../../components/CalendarV
 import { MonthCalendar } from "../../../components/MonthCalendar";
 import { SubmitButton } from "../../../components/SubmitButton";
 import { useLanguage } from "../../../components/LanguageProvider";
-import { mergeRanges } from "../../../lib/ranges.mjs";
+import { mergeRanges, subtractRange } from "../../../lib/ranges.mjs";
 import {
   setGeneralAvailabilityForDateAction,
   setGeneralRecurringForDayAction,
@@ -105,6 +105,86 @@ function plusOneHour(time: string): string {
 }
 
 /**
+ * Plages horaires effectives d'un jour, reconstruites depuis les créneaux
+ * affichés + les RDV existants (arrondis à l'heure). Base commune de l'ajout
+ * ET du retrait de créneau : ce qui est soumis au serveur est toujours
+ * l'état complet du jour, jamais une plage isolée.
+ */
+function buildDayRanges(
+  slots: SlotView[],
+  dayBookings: { startDate: Date; endDate: Date }[]
+): Range[] {
+  const existing = slots.map((slot) => ({
+    startTime: DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm"),
+    endTime: DateTime.fromJSDate(slot.end, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")
+  }));
+  const bookingRanges = dayBookings.map((booking) => {
+    const start = DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ);
+    const end = DateTime.fromJSDate(booking.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ);
+    const endCeil = end.minute > 0 || end.second > 0 ? end.startOf("hour").plus({ hours: 1 }) : end;
+    return {
+      startTime: start.startOf("hour").toFormat("HH:mm"),
+      endTime: endCeil.toFormat("HH:mm")
+    };
+  });
+  return [...existing, ...bookingRanges];
+}
+
+function RemoveSlotSubmit({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      title={label}
+      aria-label={label}
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/15 text-sm text-white/50 transition hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+    >
+      {pending ? "…" : "✕"}
+    </button>
+  );
+}
+
+/**
+ * Bouton "Retirer ce créneau" : soumet les plages du jour MOINS l'heure du
+ * créneau. Si c'était le dernier, envoie "[]" → le serveur ferme la journée
+ * (BLOCK pleine journée) au lieu de laisser revenir les horaires hebdo.
+ */
+function RemoveSlotButton({
+  dayKey,
+  slot,
+  slots,
+  dayBookings
+}: {
+  dayKey: string;
+  slot: SlotView;
+  slots: SlotView[];
+  dayBookings: { startDate: Date; endDate: Date }[];
+}) {
+  const { t } = useLanguage();
+  const [state, formAction] = useFormState(setGeneralAvailabilityForDateAction, null);
+
+  const rangesJson = useMemo(() => {
+    const slotRange = {
+      startTime: DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm"),
+      endTime: DateTime.fromJSDate(slot.end, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")
+    };
+    return JSON.stringify(subtractRange(buildDayRanges(slots, dayBookings), slotRange));
+  }, [slot, slots, dayBookings]);
+
+  return (
+    <form action={formAction} className="flex flex-col items-end gap-1">
+      <input type="hidden" name="date" value={dayKey} />
+      <input type="hidden" name="ranges" value={rangesJson} />
+      <RemoveSlotSubmit label={t("availability.removeSlot")} />
+      {state && "error" in state && state.error ? (
+        <p className="max-w-[160px] text-right text-[10px] text-red-400">{state.error}</p>
+      ) : null}
+    </form>
+  );
+}
+
+/**
  * Formulaire "Ajouter un créneau" du panneau jour.
  *
  * Soumet à setGeneralAvailabilityForDateAction l'UNION des plages effectives
@@ -134,24 +214,13 @@ function AddSlotForm({
 
   const invalid = endTime <= startTime;
 
-  const rangesJson = useMemo(() => {
-    const existing = slots.map((slot) => ({
-      startTime: DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm"),
-      endTime: DateTime.fromJSDate(slot.end, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")
-    }));
-    const bookingRanges = dayBookings.map((booking) => {
-      const start = DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ);
-      const end = DateTime.fromJSDate(booking.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ);
-      const endCeil = end.minute > 0 || end.second > 0 ? end.startOf("hour").plus({ hours: 1 }) : end;
-      return {
-        startTime: start.startOf("hour").toFormat("HH:mm"),
-        endTime: endCeil.toFormat("HH:mm")
-      };
-    });
-    return JSON.stringify(
-      mergeRanges([...existing, ...bookingRanges, { startTime, endTime }])
-    );
-  }, [slots, dayBookings, startTime, endTime]);
+  const rangesJson = useMemo(
+    () =>
+      JSON.stringify(
+        mergeRanges([...buildDayRanges(slots, dayBookings), { startTime, endTime }])
+      ),
+    [slots, dayBookings, startTime, endTime]
+  );
 
   if (isPast) return null;
 
@@ -610,18 +679,28 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     : "border-gray-800 bg-[#0F0F0F] opacity-50"
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold">
                     {isBrusselsSlot ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                    slot.status === "available"
-                      ? "bg-[#C8A060] text-black"
-                      : slot.status === "booked"
-                      ? "bg-green-900/30 text-green-400"
-                      : "bg-white/10 text-white/60"
-                  }`}>
-                    {translateSlotStatus(slot.status)}
+                  <span className="flex items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      slot.status === "available"
+                        ? "bg-[#C8A060] text-black"
+                        : slot.status === "booked"
+                        ? "bg-green-900/30 text-green-400"
+                        : "bg-white/10 text-white/60"
+                    }`}>
+                      {translateSlotStatus(slot.status)}
+                    </span>
+                    {slot.status === "available" && mobileSelectedKey >= todayKey ? (
+                      <RemoveSlotButton
+                        dayKey={mobileSelectedKey}
+                        slot={slot}
+                        slots={mobileSelectedData.slots}
+                        dayBookings={mobileBookingsForDay}
+                      />
+                    ) : null}
                   </span>
                 </div>
                 <div className="text-xs text-white/60">
@@ -933,14 +1012,24 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                       return (
                         <div
                           key={slot.start.toISOString()}
-                          className={`rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm ${isSlotBrussels ? "border-l-2 border-l-blue-500 border-blue-500/30" : "border-gray-700"}`}
+                          className={`flex items-center justify-between gap-3 rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm ${isSlotBrussels ? "border-l-2 border-l-blue-500 border-blue-500/30" : "border-gray-700"}`}
                         >
-                          <p className="font-semibold text-white">
-                            {isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}
-                          </p>
-                          <p className="text-xs text-white/70">
-                            {isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}
-                          </p>
+                          <div>
+                            <p className="font-semibold text-white">
+                              {isSlotBrussels ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}
+                            </p>
+                            <p className="text-xs text-white/70">
+                              {isSlotBrussels ? `${slot.miami} Miami` : `${slot.brussels} Brussels`}
+                            </p>
+                          </div>
+                          {selectedDay.key >= todayKey ? (
+                            <RemoveSlotButton
+                              dayKey={selectedDay.key}
+                              slot={slot}
+                              slots={selectedDay.slots}
+                              dayBookings={bookingsForDay}
+                            />
+                          ) : null}
                         </div>
                       );
                     })}

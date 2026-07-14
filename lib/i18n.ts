@@ -94,6 +94,7 @@ export const translations = {
   "availability.addSlotInvalid": { fr: "L'heure de fin doit être après l'heure de début.", en: "End time must be after start time." },
   "availability.addSlotPast": { fr: "Date passée — ajout impossible.", en: "Past date — cannot add a slot." },
   "availability.customDay": { fr: "Ce jour utilise des horaires personnalisés (les horaires hebdo ne s'y appliquent plus).", en: "This day uses custom hours (weekly hours no longer apply to it)." },
+  "availability.removeSlot": { fr: "Retirer ce créneau", en: "Remove this slot" },
   "availability.reservations": { fr: "Réservations", en: "Reservations" },
   "availability.noReservation": { fr: "Aucune réservation", en: "No reservation" },
   "availability.summary": { fr: "Récapitulatif du", en: "Summary for" },

@@ -8,7 +8,7 @@
  * Lancer :  node tests/merge-ranges.test.mjs
  */
 
-import { mergeRanges, parseTimeToMinutes, minutesToTime } from "../lib/ranges.mjs";
+import { mergeRanges, subtractRange, parseTimeToMinutes, minutesToTime } from "../lib/ranges.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -111,6 +111,72 @@ eq(
 // ── liste vide / null ──
 eq(mergeRanges([]), [], "liste vide → []");
 eq(mergeRanges(null), [], "null → []");
+
+// ── subtractRange : retrait au milieu → scission ──
+eq(
+  subtractRange(
+    [{ startTime: "09:00", endTime: "17:00" }],
+    { startTime: "12:00", endTime: "13:00" }
+  ),
+  [
+    { startTime: "09:00", endTime: "12:00" },
+    { startTime: "13:00", endTime: "17:00" }
+  ],
+  "retrait au milieu scinde la plage"
+);
+
+// ── subtractRange : retrait sur un bord → troncature ──
+eq(
+  subtractRange(
+    [{ startTime: "09:00", endTime: "12:00" }],
+    { startTime: "09:00", endTime: "10:00" }
+  ),
+  [{ startTime: "10:00", endTime: "12:00" }],
+  "retrait au bord tronque la plage"
+);
+
+// ── subtractRange : plage exacte → supprimée ──
+eq(
+  subtractRange(
+    [
+      { startTime: "09:00", endTime: "10:00" },
+      { startTime: "14:00", endTime: "15:00" }
+    ],
+    { startTime: "14:00", endTime: "15:00" }
+  ),
+  [{ startTime: "09:00", endTime: "10:00" }],
+  "retrait exact supprime la plage"
+);
+
+// ── subtractRange : dernier créneau → liste vide ──
+eq(
+  subtractRange(
+    [{ startTime: "18:00", endTime: "19:00" }],
+    { startTime: "18:00", endTime: "19:00" }
+  ),
+  [],
+  "retrait du dernier créneau → []"
+);
+
+// ── subtractRange : pas de chevauchement → inchangé ──
+eq(
+  subtractRange(
+    [{ startTime: "09:00", endTime: "10:00" }],
+    { startTime: "15:00", endTime: "16:00" }
+  ),
+  [{ startTime: "09:00", endTime: "10:00" }],
+  "retrait sans chevauchement ne change rien"
+);
+
+// ── subtractRange : coupe invalide → plages juste fusionnées ──
+eq(
+  subtractRange(
+    [{ startTime: "09:00", endTime: "10:00" }],
+    { startTime: "xx", endTime: "yy" }
+  ),
+  [{ startTime: "09:00", endTime: "10:00" }],
+  "coupe invalide ignorée"
+);
 
 console.log(`\n${passed} OK, ${failed} échec(s)`);
 if (failed > 0) process.exit(1);

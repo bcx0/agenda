@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "../../lib/session";
 import { getServerLocale, t, translateStatus } from "../../lib/i18n";
 import { adminLoginAction, adminLogoutAction, toggleBookingLockAction } from "./actions";
-import { listUpcomingBookingsThisMonth } from "../../lib/admin";
+import { DateTime } from "luxon";
 import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
 import { prisma } from "../../lib/prisma";
 import { getGoogleSyncHealth } from "../../lib/google-health";
@@ -57,40 +57,25 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
     );
   }
 
-  const now = new Date();
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  // Jour courant défini en Europe/Brussels (fuseau de référence du calendrier)
+  const todayBrussels = DateTime.now().setZone(BRUSSELS_TZ);
+  const todayStartUtc = todayBrussels.startOf("day").toUTC().toJSDate();
+  const todayEndUtc = todayBrussels.endOf("day").toUTC().toJSDate();
 
-  const [activeClientCount, bookings, thisMonthUpcomingBookings, recurringBlocks, settings, googleHealth] =
-    await Promise.all([
-      prisma.client.count({ where: { isActive: true } }),
-      listUpcomingBookingsThisMonth(),
-      prisma.booking.count({
-        where: {
-          status: "CONFIRMED",
-          startAt: { gte: now, lte: endOfMonth }
-        }
-      }),
-      prisma.recurringBlock.findMany(),
-      prisma.settings.findUnique({ where: { id: 1 } }),
-      getGoogleSyncHealth()
-    ]);
+  const [todayBookings, settings, googleHealth] = await Promise.all([
+    prisma.booking.findMany({
+      where: {
+        status: { not: "CANCELLED" },
+        startAt: { gte: todayStartUtc, lte: todayEndUtc }
+      },
+      orderBy: { startAt: "asc" },
+      include: { client: true }
+    }),
+    prisma.settings.findUnique({ where: { id: 1 } }),
+    getGoogleSyncHealth()
+  ]);
 
   const bookingLocked = settings?.bookingLocked ?? false;
-  // Compter les occurrences de RecurringBlocks restantes ce mois
-  let recurringCount = 0;
-  const cursor = new Date(now);
-  cursor.setHours(0, 0, 0, 0);
-  while (cursor <= endOfMonth) {
-    // JS getDay() : 0=dim, 1=lun... on convertit en Prisma dayOfWeek (1=lun, 7=dim)
-    const jsDay = cursor.getDay();
-    const prismaDay = jsDay === 0 ? 7 : jsDay;
-    const todayBlocks = recurringBlocks.filter((b: any) => b.dayOfWeek === prismaDay);
-    recurringCount += todayBlocks.length;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  const totalRdv = thisMonthUpcomingBookings + recurringCount;
-  const upcoming = bookings.slice(0, 4);
 
   return (
     <section className="space-y-8">
@@ -120,10 +105,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
         </form>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <StatCard label={t("dashboard.activeClients", locale)} value={activeClientCount} />
-        <StatCard label={t("dashboard.appointments", locale)} value={totalRdv} />
-      </div>
+      <StatCard label={t("dashboard.appointments", locale)} value={todayBookings.length} />
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="card space-y-3 p-5">
@@ -134,10 +116,10 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
             </Link>
           </div>
           <div className="space-y-3">
-            {upcoming.length === 0 ? (
+            {todayBookings.length === 0 ? (
               <p className="text-sm text-white/60">{t("dashboard.noBookings", locale)}</p>
             ) : (
-              upcoming.map((b: any) => (
+              todayBookings.map((b: any) => (
                 <div
                   key={b.id}
                   className="rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm"

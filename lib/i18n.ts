@@ -36,14 +36,14 @@ export const translations = {
   "dashboard.title": { fr: "Administration", en: "Administration" },
   "dashboard.subtitle": { fr: "Vue rapide des clients et rendez-vous.", en: "Quick overview of clients and bookings." },
   "dashboard.activeClients": { fr: "Clients actifs", en: "Active clients" },
-  "dashboard.appointments": { fr: "Rendez-vous", en: "Appointments" },
-  "dashboard.recentBookings": { fr: "Rendez-vous récents", en: "Recent bookings" },
+  "dashboard.appointments": { fr: "Rendez-vous du jour", en: "Today's appointments" },
+  "dashboard.recentBookings": { fr: "Rendez-vous du jour", en: "Today's appointments" },
   "dashboard.viewAll": { fr: "Voir tout", en: "View all" },
   "dashboard.quickActions": { fr: "Actions rapides", en: "Quick actions" },
   "dashboard.viewAgenda": { fr: "Voir l'agenda", en: "View agenda" },
   "dashboard.manageClients": { fr: "Gérer les clients", en: "Manage clients" },
   "dashboard.manageBookings": { fr: "Gérer les rendez-vous", en: "Manage bookings" },
-  "dashboard.noBookings": { fr: "Aucun rendez-vous.", en: "No bookings." },
+  "dashboard.noBookings": { fr: "Aucun rendez-vous aujourd'hui.", en: "No bookings today." },
   "dashboard.logout": { fr: "Se déconnecter", en: "Log out" },
 
   // Bookings

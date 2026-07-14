@@ -42,9 +42,32 @@ export async function POST(req: NextRequest) {
   try {
     const channelToken = req.headers.get("x-goog-channel-token");
     const resourceState = req.headers.get("x-goog-resource-state");
+    const channelId = req.headers.get("x-goog-channel-id");
 
     const expectedToken = process.env.GOOGLE_WEBHOOK_SECRET;
-    if (!channelToken || channelToken !== expectedToken) {
+    const tokenOk = !!channelToken && channelToken === expectedToken;
+
+    // Diagnostic : trace CHAQUE notification reçue, même rejetée. Sans ça,
+    // un mismatch de GOOGLE_WEBHOOK_SECRET ou un canal fantôme est
+    // totalement invisible (panne du 14/07 : zéro trace côté app).
+    await prisma.syncLog
+      .create({
+        data: {
+          table: "GoogleToken",
+          action: "webhook_hit",
+          direction: "google",
+          details: {
+            resourceState,
+            channelId,
+            tokenOk,
+            hasToken: !!channelToken,
+            hasSecret: !!expectedToken,
+          },
+        },
+      })
+      .catch(() => {});
+
+    if (!tokenOk) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

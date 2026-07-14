@@ -450,6 +450,18 @@ export async function setGeneralAvailabilityForDateAction(
         date: { gte: dayStart.toUTC().toJSDate(), lt: dayEnd.toUTC().toJSDate() }
       }
     });
+    // Ré-ouverture d'un jour fermé : retire le BLOCK pleine journée posé par
+    // le retrait du dernier créneau — sinon les nouveaux créneaux naissent
+    // bloqués et n'apparaissent jamais dans les disponibilités. Les BLOCK
+    // partiels (exceptions posées à la main) sont conservés.
+    await tx.availabilityOverride.deleteMany({
+      where: {
+        type: "BLOCK",
+        startTime: "00:00",
+        endTime: "24:00",
+        date: { gte: dayStart.toUTC().toJSDate(), lt: dayEnd.toUTC().toJSDate() }
+      }
+    });
     await tx.availabilityOverride.createMany({
       data: ranges.map((range) => ({
         date: dayStart.toUTC().toJSDate(),

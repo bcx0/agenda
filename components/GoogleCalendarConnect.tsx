@@ -164,7 +164,11 @@ export function GoogleCalendarConnect({ isConnected, googleEmail, needsReauth }:
         if (abortRef.current) break
         const params = new URLSearchParams({ step: 'fetch' })
         if (pageToken) params.set('pageToken', pageToken)
-        if (isFirst) params.set('reset', 'true')
+        // PAS de reset=true ici : reset efface le syncToken AVANT le fetch,
+        // donc une sync manuelle qui échoue (ex. 401) laissait le syncToken
+        // NULL → retour aux full syncs lentes du webhook/cron (panne du
+        // 14/07 au soir). Le syncToken est de toute façon re-sauvé en fin de
+        // pagination par step=fetch. Le reset reste réservé au Reset & re-sync.
         const res = await fetch(`/api/calendar/sync?${params.toString()}`, { method: 'POST' })
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: 'Erreur' }))

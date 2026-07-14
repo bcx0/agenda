@@ -28,6 +28,7 @@ import { BRUSSELS_TZ, MIAMI_WORK_START, monthBoundsUtc } from "../../lib/time";
 import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
+import { mergeRanges } from "../../lib/ranges.mjs";
 import { pushBookingToGoogle, pushBlockToGoogle, reconcileNoAccountBlocksForClient } from "@/lib/sync-engine";
 import { cancelBooking, computeModeForSlotSync, getModeContext } from "../../lib/booking";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
@@ -367,7 +368,13 @@ export async function setGeneralAvailabilityForDateAction(
   if ("error" in parsed) {
     return { error: parsed.error } as const;
   }
-  const ranges = parsed.ranges;
+  // Fusion défensive : dédoublonne et fusionne les chevauchements/adjacences
+  // avant écriture (un double-clic ou un client bugué ne crée jamais de
+  // doublons d'overrides en base).
+  const ranges = mergeRanges(parsed.ranges);
+  if (ranges.length === 0) {
+    return { error: "Aucune plage horaire valide" } as const;
+  }
 
   const dayStart = DateTime.fromISO(date, { zone: BRUSSELS_TZ }).startOf("day");
   if (!dayStart.isValid) {

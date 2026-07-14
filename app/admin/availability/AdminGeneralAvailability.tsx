@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { DateTime } from "luxon";
 import Link from "next/link";
@@ -8,7 +8,9 @@ import type { SlotView } from "../../../lib/booking";
 import { BRUSSELS_TZ, MIAMI_TZ, CALENDAR_TZ } from "../../../lib/time";
 import { CalendarViewToggle, type ViewMode } from "../../../components/CalendarViewToggle";
 import { MonthCalendar } from "../../../components/MonthCalendar";
+import { SubmitButton } from "../../../components/SubmitButton";
 import { useLanguage } from "../../../components/LanguageProvider";
+import { mergeRanges } from "../../../lib/ranges.mjs";
 import {
   setGeneralAvailabilityForDateAction,
   setGeneralRecurringForDayAction,
@@ -94,6 +96,128 @@ function toRangeJson(ranges: Range[]) {
   );
 }
 
+const HOUR_START_OPTIONS = Array.from({ length: 23 }, (_, h) => `${String(h).padStart(2, "0")}:00`); // 00:00 → 22:00
+const HOUR_END_OPTIONS = Array.from({ length: 23 }, (_, h) => `${String(h + 1).padStart(2, "0")}:00`); // 01:00 → 23:00
+
+function plusOneHour(time: string): string {
+  const hour = Number(time.split(":")[0]);
+  return `${String(Math.min(hour + 1, 23)).padStart(2, "0")}:00`;
+}
+
+/**
+ * Formulaire "Ajouter un créneau" du panneau jour.
+ *
+ * Soumet à setGeneralAvailabilityForDateAction l'UNION des plages effectives
+ * du jour (reconstruites depuis les créneaux affichés) + la nouvelle plage +
+ * les plages des RDV existants (arrondies à l'heure). Sans cette union, un
+ * override OPEN REMPLACERAIT les dispos du jour (lib/booking.ts) et l'ajout
+ * ferait disparaître les autres créneaux ; sans les plages des RDV, l'action
+ * refuserait tout jour ayant un RDV hors plages (ex. imports Google).
+ */
+function AddSlotForm({
+  dayKey,
+  isPast,
+  slots,
+  dayBookings,
+  hasOverrides
+}: {
+  dayKey: string;
+  isPast: boolean;
+  slots: SlotView[];
+  dayBookings: { startDate: Date; endDate: Date }[];
+  hasOverrides: boolean;
+}) {
+  const { t } = useLanguage();
+  const [state, formAction] = useFormState(setGeneralAvailabilityForDateAction, null);
+  const [startTime, setStartTime] = useState("18:00");
+  const [endTime, setEndTime] = useState("19:00");
+
+  const invalid = endTime <= startTime;
+
+  const rangesJson = useMemo(() => {
+    const existing = slots.map((slot) => ({
+      startTime: DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm"),
+      endTime: DateTime.fromJSDate(slot.end, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("HH:mm")
+    }));
+    const bookingRanges = dayBookings.map((booking) => {
+      const start = DateTime.fromJSDate(booking.startDate, { zone: "utc" }).setZone(BRUSSELS_TZ);
+      const end = DateTime.fromJSDate(booking.endDate, { zone: "utc" }).setZone(BRUSSELS_TZ);
+      const endCeil = end.minute > 0 || end.second > 0 ? end.startOf("hour").plus({ hours: 1 }) : end;
+      return {
+        startTime: start.startOf("hour").toFormat("HH:mm"),
+        endTime: endCeil.toFormat("HH:mm")
+      };
+    });
+    return JSON.stringify(
+      mergeRanges([...existing, ...bookingRanges, { startTime, endTime }])
+    );
+  }, [slots, dayBookings, startTime, endTime]);
+
+  if (isPast) return null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-[#C8A060]/30 bg-[#0F0F0F] p-4">
+      <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">
+        {t("availability.addSlotTitle")}
+      </h4>
+      <form action={formAction} className="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="date" value={dayKey} />
+        <input type="hidden" name="ranges" value={rangesJson} />
+        <div className="space-y-1">
+          <label className="block text-[11px] uppercase tracking-widest text-white/50">
+            {t("availability.addSlotStart")}
+          </label>
+          <select
+            className="input"
+            value={startTime}
+            onChange={(e) => {
+              setStartTime(e.target.value);
+              setEndTime(plusOneHour(e.target.value));
+            }}
+          >
+            {HOUR_START_OPTIONS.map((time) => (
+              <option key={`add-start-${time}`} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[11px] uppercase tracking-widest text-white/50">
+            {t("availability.addSlotEnd")}
+          </label>
+          <select
+            className="input"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+          >
+            {HOUR_END_OPTIONS.map((time) => (
+              <option key={`add-end-${time}`} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+        </div>
+        <SubmitButton className="btn btn-primary" disabled={invalid}>
+          {t("availability.addSlotSubmit")}
+        </SubmitButton>
+      </form>
+      {invalid ? (
+        <p className="text-xs text-red-400">{t("availability.addSlotInvalid")}</p>
+      ) : null}
+      {state && "error" in state && state.error ? (
+        <p className="text-xs text-red-400">{state.error}</p>
+      ) : null}
+      {state && "success" in state && state.success ? (
+        <p className="text-xs text-green-400">{state.message}</p>
+      ) : null}
+      {hasOverrides ? (
+        <p className="text-[11px] text-white/40">{t("availability.customDay")}</p>
+      ) : null}
+    </div>
+  );
+}
+
 
 export default function AdminGeneralAvailability({ slots, bookings, rules, overrides, noAccountBlocks = [] }: Props) {
   const { t, translateSlotStatus, locale } = useLanguage();
@@ -132,6 +256,23 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
     () => new Map(Array.from(dayMap.entries()).map(([k, v]) => [k, v.slots])),
     [dayMap]
   );
+
+  // Jours ayant déjà des overrides OPEN (horaires personnalisés)
+  const overrideDayKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const override of overrides) {
+      const key = DateTime.fromISO(override.date).setZone(BRUSSELS_TZ).toISODate();
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [overrides]);
+
+  // Après un ajout de créneau, revalidatePath renvoie de nouvelles props :
+  // resynchronise le jour sélectionné pour que le créneau apparaisse
+  // immédiatement dans le panneau sans re-cliquer sur le jour.
+  useEffect(() => {
+    setSelectedDay((prev) => (prev ? dayMap.get(prev.key) ?? prev : prev));
+  }, [dayMap]);
 
   const openDay = (day: DateTime) => {
     const inMiami = day.setZone(CALENDAR_TZ);
@@ -437,6 +578,16 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               }`}
         </p>
       </div>
+
+      {/* Add manual slot */}
+      <AddSlotForm
+        key={mobileSelectedKey}
+        dayKey={mobileSelectedKey}
+        isPast={mobileSelectedKey < todayKey}
+        slots={mobileSelectedData.slots}
+        dayBookings={mobileBookingsForDay}
+        hasOverrides={overrideDayKeys.has(mobileSelectedKey)}
+      />
 
       {/* Slots + Bookings for selected day */}
       {mobileSelectedData.slots.length > 0 ? (
@@ -761,6 +912,15 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   {t("availability.close")}
                 </button>
               </div>
+
+              <AddSlotForm
+                key={selectedDay.key}
+                dayKey={selectedDay.key}
+                isPast={selectedDay.key < todayKey}
+                slots={selectedDay.slots}
+                dayBookings={bookingsForDay}
+                hasOverrides={overrideDayKeys.has(selectedDay.key)}
+              />
 
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">

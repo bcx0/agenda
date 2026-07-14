@@ -336,11 +336,18 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
     return keys;
   }, [overrides]);
 
-  // Après un ajout de créneau, revalidatePath renvoie de nouvelles props :
-  // resynchronise le jour sélectionné pour que le créneau apparaisse
-  // immédiatement dans le panneau sans re-cliquer sur le jour.
+  // Après un ajout/retrait de créneau, revalidatePath renvoie de nouvelles
+  // props : resynchronise le jour sélectionné pour que le changement
+  // apparaisse immédiatement dans le panneau sans re-cliquer sur le jour.
+  // Si le jour n'a PLUS aucun créneau (dernier créneau retiré), il disparaît
+  // de dayMap → on garde le jour affiché mais avec une liste vide (sinon
+  // l'ancien créneau restait affiché en fantôme).
   useEffect(() => {
-    setSelectedDay((prev) => (prev ? dayMap.get(prev.key) ?? prev : prev));
+    setSelectedDay((prev) => {
+      if (!prev) return prev;
+      const fresh = dayMap.get(prev.key);
+      return fresh ?? { ...prev, slots: [] };
+    });
   }, [dayMap]);
 
   const openDay = (day: DateTime) => {

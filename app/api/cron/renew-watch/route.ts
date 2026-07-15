@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '../../../../lib/prisma'
-import { getValidAccessToken } from '../../../../lib/google-calendar'
+import { googleApiFetch } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -12,26 +12,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const accessToken = await getValidAccessToken()
-
-    // Stop existing watch if any
-    const existing = await prisma.googleCalendarWatch.findFirst({
-      orderBy: { createdAt: 'desc' },
-    })
-
-    if (existing) {
+    // googleApiFetch : refresh forcé + retry sur 401 — un token capricieux au
+    // moment du renouvellement (tous les 5 jours) ne doit pas tuer le canal
+    // en silence, sinon retour à la sync horaire sans que personne ne le voie.
+    // Stop ALL known watches (même logique que /api/calendar/watch)
+    const oldWatches = await prisma.googleCalendarWatch.findMany()
+    for (const old of oldWatches) {
       try {
-        await fetch(
+        await googleApiFetch(
           'https://www.googleapis.com/calendar/v3/channels/stop',
           {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              id: existing.channelId,
-              resourceId: existing.resourceId,
+              id: old.channelId,
+              resourceId: old.resourceId,
             }),
           }
         )
@@ -39,18 +34,16 @@ export async function GET(req: NextRequest) {
         // Ignore errors stopping old watch
       }
     }
+    await prisma.googleCalendarWatch.deleteMany()
 
     // Create new watch
     const channelId = uuidv4()
 
-    const res = await fetch(
+    const res = await googleApiFetch(
       'https://www.googleapis.com/calendar/v3/calendars/primary/events/watch',
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: channelId,
           type: 'web_hook',

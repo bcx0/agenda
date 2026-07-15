@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getValidAccessToken } from '@/lib/google-calendar'
+import { googleApiFetch } from '@/lib/google-calendar'
 import { getAdminSession } from '@/lib/session'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -15,20 +15,16 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-          const accessToken = await getValidAccessToken()
-
       // Stoppe TOUS les canaux connus avant d'en créer un nouveau : sans ça,
       // chaque reconnexion empilait un canal de plus (8 canaux actifs le
       // 14/07 → 8 notifications et 8 syncs par événement Google).
+      // googleApiFetch : refresh forcé + retry sur 401 (chemin blindé).
       const oldWatches = await prisma.googleCalendarWatch.findMany()
       for (const old of oldWatches) {
         try {
-          await fetch('https://www.googleapis.com/calendar/v3/channels/stop', {
+          await googleApiFetch('https://www.googleapis.com/calendar/v3/channels/stop', {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               id: old.channelId,
               resourceId: old.resourceId,
@@ -42,14 +38,11 @@ export async function POST(request: NextRequest) {
 
       const channelId = uuidv4()
 
-      const res = await fetch(
+      const res = await googleApiFetch(
               'https://www.googleapis.com/calendar/v3/calendars/primary/events/watch',
         {
                   method: 'POST',
-                  headers: {
-                              Authorization: `Bearer ${accessToken}`,
-                              'Content-Type': 'application/json',
-                  },
+                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                               id: channelId,
                               type: 'web_hook',

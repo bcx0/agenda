@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
-import { getValidAccessToken, type GoogleCalendarEvent } from "../../../../lib/google-calendar";
+import { googleApiFetch, type GoogleCalendarEvent } from "../../../../lib/google-calendar";
 import { pullFromGoogle, bulkImportFromGoogle, repushUnsyncedBookings } from "../../../../lib/sync-engine";
 import { getAdminSession } from "../../../../lib/session";
 
@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
     const step = url.searchParams.get("step") || "fetch";
 
     if (step === "fetch") {
-      const accessToken = await getValidAccessToken();
       const pageToken = url.searchParams.get("pageToken") || undefined;
       const shouldReset = url.searchParams.get("reset") === "true";
 
@@ -63,15 +62,15 @@ export async function POST(req: NextRequest) {
       });
       if (pageToken) params.set("pageToken", pageToken);
 
-      // Retry up to 3 times on rate limit (429/403)
+      // googleApiFetch = même chemin blindé que le cron/webhook : sur 401,
+      // refresh forcé + retry + auth_error loggé en base. L'ancien fetch brut
+      // affichait un 401 cru à l'admin dès qu'un token était en fin de vie.
+      // On garde en plus le retry local sur rate-limit (429/403).
       let response: Response | null = null;
       for (let attempt = 0; attempt < 3; attempt++) {
-        response = await fetch(
+        response = await googleApiFetch(
           `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            cache: "no-store",
-          }
+          { cache: "no-store" }
         );
         if (response.status !== 403 && response.status !== 429) break;
         // Wait before retry: 2s, 4s, 8s

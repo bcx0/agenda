@@ -174,8 +174,12 @@ export async function getValidAccessToken(
 
 // ─── Helper: appel API Google avec retry auto sur 401 ───────────────
 // Si Google renvoie 401, on force un refresh et on retente UNE fois.
+// Exporté : TOUT appel à l'API Calendar doit passer par ici (la sync
+// manuelle utilisait un fetch brut sans retry → 401 en pleine figure de
+// l'admin dès qu'un token arrivait en fin de vie, panique, reconnexions
+// précipitées — cause racine de la cascade du 13-14/07).
 
-async function googleApiFetch(
+export async function googleApiFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {

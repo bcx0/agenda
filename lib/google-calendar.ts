@@ -199,7 +199,13 @@ export async function googleApiFetch(
     console.warn(
       '[GoogleCalendar] API returned 401, forcing token refresh and retrying...'
     )
+    const rejectedToken = accessToken
     accessToken = await getValidAccessToken(true) // forceRefresh
+    // Subtilité Google : un refresh "forcé" alors que le token courant est
+    // encore valide à ses yeux renvoie souvent LE MÊME token — donc le retry
+    // repart avec le token déjà rejeté. On trace ce cas pour le diagnostic
+    // des 401 intermittents du 15/07.
+    const sameTokenAfterRefresh = accessToken === rejectedToken
 
     res = await fetch(url, {
       ...options,
@@ -210,15 +216,37 @@ export async function googleApiFetch(
       signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
     })
 
-    // Si toujours 401 après refresh forcé → le refresh a "réussi" côté
-    // OAuth mais l'API Calendar rejette toujours. Signifie que le token
-    // est probablement révoqué côté utilisateur ou les scopes sont invalides.
+    // Toujours 401 → pause de 2s puis ULTIME tentative : les 401
+    // "Invalid Credentials" transitoires de Google passent souvent au coup
+    // suivant. Sans ça, ~1 run de cron sur 5 échouait le 15/07 alors que
+    // l'heure suivante réussissait avec le même contexte.
+    if (res.status === 401) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      accessToken = await getValidAccessToken(true)
+      res = await fetch(url, {
+        ...options,
+        headers: {
+          ...((options.headers as Record<string, string>) || {}),
+          Authorization: `Bearer ${accessToken}`,
+        },
+        signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
+      })
+    }
+
+    // Si toujours 401 après 2 refreshes forcés + pause → on abandonne ce run
+    // (le cron suivant rattrapera : le syncToken n'est avancé qu'en cas de
+    // succès). Le log enrichi dira si Google a re-servi le token rejeté.
     if (res.status === 401) {
       const errBody = await res.clone().text().catch(() => 'no body')
       await logAuthError(
         `Calendar API 401 after forced refresh: ${errBody.slice(0, 500)}`,
         'post_refresh_401',
-        { url, tokenPrefix: accessToken.slice(0, 16) }
+        {
+          url,
+          tokenPrefix: accessToken.slice(0, 16),
+          rejectedTokenPrefix: rejectedToken.slice(0, 16),
+          sameTokenAfterRefresh: String(sameTokenAfterRefresh),
+        }
       )
       throw new GoogleReauthRequiredError(
         'Google Calendar rejette encore le token après refresh. ' +

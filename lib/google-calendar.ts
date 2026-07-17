@@ -7,6 +7,10 @@ const DEFAULT_TIMEZONE = 'Europe/Paris'
 // timeout Vercel si l'API Google est lente (perte de syncToken, resync en boucle).
 const GOOGLE_FETCH_TIMEOUT_MS = 8000
 
+// Diagnostic : le dernier refresh a-t-il émis un token différent de celui en
+// base ? (null = aucun refresh dans cette invocation)
+let lastRefreshMintedNewToken: boolean | null = null
+
 // Contexte de déploiement joint aux auth_error : identifie QUEL deploy/env
 // échoue (diagnostic post_refresh_401 — plusieurs déploiements peuvent
 // partager la même DB avec des env Google différentes).
@@ -139,6 +143,11 @@ export async function getValidAccessToken(
 
   console.log('[GoogleCalendar] Token refreshed successfully')
 
+  // Trace si Google a réellement émis un NOUVEAU token ou re-servi celui en
+  // base (dédoublonnage). Combiné à post_refresh_401, distingue "token neuf
+  // rejeté" (blocage compte/app côté Google) de "vieux token re-servi".
+  lastRefreshMintedNewToken = refreshed.access_token !== token.accessToken
+
   // Diagnostic : si le refresh token en base a été émis SANS les cases
   // calendrier cochées (consentement granulaire), le refresh OAuth réussit
   // mais le scope ne contient pas calendar → l'API renverra 401. Tracer ça
@@ -246,6 +255,7 @@ export async function googleApiFetch(
           tokenPrefix: accessToken.slice(0, 16),
           rejectedTokenPrefix: rejectedToken.slice(0, 16),
           sameTokenAfterRefresh: String(sameTokenAfterRefresh),
+          mintedNewToken: String(lastRefreshMintedNewToken),
         }
       )
       throw new GoogleReauthRequiredError(

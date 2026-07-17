@@ -10,6 +10,10 @@ export default async function Footer() {
           {/* Left — Legal */}
           <span className="text-xs tracking-widest uppercase text-white/50 md:w-1/3">
             {t("footer.legal", locale)} — Geoffrey Mahieu 2026
+            {" · "}
+            <a href="/confidentialite" className="underline hover:text-white/80 transition-colors">
+              {t("footer.privacy", locale)}
+            </a>
           </span>
 
           {/* Center — Social links */}

@@ -147,6 +147,7 @@ export const translations = {
   "footer.madeBy": { fr: "Réalisé par", en: "Made by" },
   "footer.agency": { fr: "L'agence", en: "The Agency" },
   "footer.legal": { fr: "Mentions légales", en: "Legal notice" },
+  "footer.privacy": { fr: "Confidentialité", en: "Privacy" },
   "footer.followUs": { fr: "Suivez-nous", en: "Follow us" },
 
   // Admin login

@@ -13,7 +13,9 @@ export default function PasswordInput({
   name,
   placeholder,
   required,
-  className = "w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-3 text-sm focus:border-[#1C4A63] focus:outline-none",
+  // text-[#10222E] explicite : sur les pages sombres (login admin), la
+  // couleur héritée est blanche → texte invisible sur le champ blanc.
+  className = "w-full rounded-md border border-[#D4DCE1] bg-white px-3 py-3 text-sm text-[#10222E] placeholder:text-[#8A98A1] focus:border-[#1C4A63] focus:outline-none",
 }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
 

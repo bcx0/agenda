@@ -24,6 +24,13 @@ a {
   text-decoration: none;
 }
 
+/* Masque l'œil natif d'Edge sur les champs mot de passe : il faisait
+   doublon avec notre bouton afficher/masquer (deux yeux côte à côte). */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 .safe-area-inset-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }

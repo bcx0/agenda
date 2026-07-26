@@ -20,9 +20,23 @@ const inter = Inter({
   variable: "--font-inter"
 });
 
+// Nom d'application aligné sur l'écran de consentement OAuth ("Agenda
+// Geoffrey Mahieu") : la validation Google compare le nom configuré au
+// contenu de la page d'accueil (title, og:site_name, contenu).
 export const metadata: Metadata = {
-  title: "Geoffrey Mahieu | Espace Client",
-  description: "Prise de rendez-vous privée pour les clients de Geoffrey Mahieu"
+  title: {
+    default: "Agenda Geoffrey Mahieu",
+    template: "%s | Agenda Geoffrey Mahieu"
+  },
+  description:
+    "Agenda Geoffrey Mahieu : prise de rendez-vous privée pour les clients de Geoffrey Mahieu, coach mental. Synchronisé avec Google Calendar.",
+  applicationName: "Agenda Geoffrey Mahieu",
+  openGraph: {
+    siteName: "Agenda Geoffrey Mahieu",
+    title: "Agenda Geoffrey Mahieu",
+    description:
+      "Prise de rendez-vous privée pour les clients de Geoffrey Mahieu, coach mental."
+  }
 };
 
 export default function RootLayout({

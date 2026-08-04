@@ -147,14 +147,20 @@ model SessionMode {
 }
 
 model GoogleToken {
-  id           Int      @id @default(autoincrement())
-  accessToken  String
-  refreshToken String
-  expiresAt    DateTime
-  googleEmail  String?
-  syncToken    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 Int       @id @default(autoincrement())
+  accessToken        String
+  refreshToken       String
+  expiresAt          DateTime
+  googleEmail        String?
+  syncToken          String?
+  // Failover : refresh token de la connexion PRÉCÉDENTE, gardé en secours.
+  // Quand Google tue la famille de tokens active (post_refresh_401 +
+  // mintedNewToken=false, pannes quotidiennes de juillet 2026), l'app bascule
+  // automatiquement dessus au lieu d'attendre une reconnexion humaine.
+  backupRefreshToken String?
+  backupUpdatedAt    DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 model GoogleCalendarWatch {

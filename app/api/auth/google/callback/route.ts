@@ -109,6 +109,15 @@ export async function GET(request: NextRequest) {
         googleEmail: userInfo.email,
         syncToken: null,
         updatedAt: new Date(),
+        // Failover : l'ancien refresh token est gardé en secours. Si Google
+        // tue la nouvelle famille de tokens (pannes quotidiennes de juillet
+        // 2026), l'app rebasculera automatiquement dessus sans reconnexion.
+        ...(existing.refreshToken && existing.refreshToken !== tokens.refresh_token
+          ? {
+              backupRefreshToken: existing.refreshToken,
+              backupUpdatedAt: new Date(),
+            }
+          : {}),
       },
     })
   } else {

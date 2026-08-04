@@ -11,6 +11,52 @@ const GOOGLE_FETCH_TIMEOUT_MS = 8000
 // base ? (null = aucun refresh dans cette invocation)
 let lastRefreshMintedNewToken: boolean | null = null
 
+// ─── Failover sur le refresh token de secours ────────────────────────
+// Quand Google tue la famille de tokens active (401 persistant après
+// refreshes forcés — pannes quotidiennes de juillet 2026), on promeut le
+// refresh token de la connexion PRÉCÉDENTE (backupRefreshToken, alimenté par
+// le callback OAuth). Observation empirique : les anciennes familles restent
+// fonctionnelles quand la famille active est tuée. L'échange (l'actuel
+// devient le secours) permet de re-basculer au prochain incident.
+async function promoteBackupRefreshToken(): Promise<boolean> {
+  const token = await prisma.googleToken.findFirst()
+  if (!token?.backupRefreshToken || token.backupRefreshToken === token.refreshToken) {
+    return false
+  }
+
+  await prisma.googleToken.update({
+    where: { id: token.id },
+    data: {
+      refreshToken: token.backupRefreshToken,
+      backupRefreshToken: token.refreshToken,
+      backupUpdatedAt: new Date(),
+      // Force un vrai refresh au prochain getValidAccessToken
+      expiresAt: new Date(0),
+    },
+  })
+
+  console.warn(
+    '[GoogleCalendar] FAILOVER: bascule sur le refresh token de secours'
+  )
+  try {
+    await prisma.syncLog.create({
+      data: {
+        table: 'GoogleToken',
+        action: 'token_failover',
+        direction: 'google',
+        details: {
+          promotedPrefix: token.backupRefreshToken.slice(0, 8),
+          demotedPrefix: token.refreshToken.slice(0, 8),
+          ...diagContext(),
+        },
+      },
+    })
+  } catch (e) {
+    console.error('[GoogleCalendar] Failed to log failover:', e)
+  }
+  return true
+}
+
 // Contexte de déploiement joint aux auth_error : identifie QUEL deploy/env
 // échoue (diagnostic post_refresh_401 — plusieurs déploiements peuvent
 // partager la même DB avec des env Google différentes).
@@ -242,9 +288,29 @@ export async function googleApiFetch(
       })
     }
 
-    // Si toujours 401 après 2 refreshes forcés + pause → on abandonne ce run
-    // (le cron suivant rattrapera : le syncToken n'est avancé qu'en cas de
-    // succès). Le log enrichi dira si Google a re-servi le token rejeté.
+    // Toujours 401 après 2 refreshes forcés + pause → DERNIER recours :
+    // bascule sur le refresh token de secours (famille de tokens précédente)
+    // et ultime tentative. C'est ce qui remplace la "reconnexion manuelle
+    // quotidienne" pendant les purges de tokens de Google.
+    if (res.status === 401) {
+      const swapped = await promoteBackupRefreshToken()
+      if (swapped) {
+        accessToken = await getValidAccessToken(true)
+        res = await fetch(url, {
+          ...options,
+          headers: {
+            ...((options.headers as Record<string, string>) || {}),
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
+        })
+      }
+    }
+
+    // Si toujours 401 après 2 refreshes forcés + pause + failover → on
+    // abandonne ce run (le cron suivant rattrapera : le syncToken n'est
+    // avancé qu'en cas de succès). Le log enrichi dira si Google a re-servi
+    // le token rejeté.
     if (res.status === 401) {
       const errBody = await res.clone().text().catch(() => 'no body')
       await logAuthError(

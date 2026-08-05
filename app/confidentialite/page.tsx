@@ -93,12 +93,73 @@ export default function ConfidentialitePage() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Stockage et sécurité</h2>
+        <h2 className="text-lg font-semibold">
+          Stockage, sécurité et mécanismes de protection des données
+        </h2>
         <p className="text-[#5A6B76]">
-          Les données sont hébergées dans l&apos;Union européenne et aux États-Unis auprès de
-          prestataires d&apos;hébergement (Vercel, Supabase). Les jetons d&apos;accès Google
-          sont stockés de manière sécurisée et ne sont jamais exposés côté client. Les accès
-          d&apos;administration sont protégés par authentification.
+          Les données sont hébergées auprès de prestataires d&apos;hébergement (Vercel,
+          Supabase) et protégées par les mécanismes suivants :
+        </p>
+        <ul className="list-disc space-y-2 pl-6 text-[#5A6B76]">
+          <li>
+            <strong>Chiffrement en transit</strong> : toutes les communications (navigateur ↔
+            application, application ↔ API Google, application ↔ base de données) sont
+            chiffrées via HTTPS/TLS.
+          </li>
+          <li>
+            <strong>Chiffrement au repos</strong> : la base de données Postgres (Supabase)
+            chiffre l&apos;ensemble des données stockées au repos (AES-256), y compris les
+            données de rendez-vous et les jetons Google.
+          </li>
+          <li>
+            <strong>Protection des jetons OAuth</strong> : les jetons d&apos;accès et de
+            rafraîchissement Google sont stockés exclusivement côté serveur, ne sont jamais
+            exposés au navigateur ni inclus dans le code source ou les journaux, et ne
+            transitent que vers les API Google via TLS.
+          </li>
+          <li>
+            <strong>Gestion des secrets</strong> : identifiants OAuth et secrets applicatifs
+            sont stockés dans des variables d&apos;environnement chiffrées (Vercel), avec
+            accès restreint.
+          </li>
+          <li>
+            <strong>Contrôle d&apos;accès et moindre privilège</strong> : seul
+            l&apos;administrateur authentifié peut connecter ou déconnecter Google Calendar ;
+            chaque client n&apos;accède qu&apos;à ses propres rendez-vous ; les portées
+            (scopes) demandées sont limitées au strict nécessaire (Google Calendar
+            uniquement).
+          </li>
+          <li>
+            <strong>Minimisation des données</strong> : seuls les champs d&apos;événement
+            nécessaires à la synchronisation (dates, intitulé, identifiants techniques) sont
+            traités.
+          </li>
+          <li>
+            <strong>Journalisation de sécurité</strong> : les erreurs d&apos;authentification
+            et opérations de synchronisation sont journalisées afin de détecter toute
+            anomalie.
+          </li>
+          <li>
+            <strong>Révocation et suppression</strong> : la déconnexion depuis
+            l&apos;administration invalide les jetons stockés ; l&apos;accès peut aussi être
+            révoqué à tout moment via myaccount.google.com/permissions ; les données sont
+            supprimées sur demande (RGPD).
+          </li>
+          <li>
+            <strong>Notification d&apos;incident</strong> : en cas d&apos;incident de
+            sécurité affectant des données personnelles, les personnes concernées et les
+            autorités compétentes sont notifiées conformément au RGPD.
+          </li>
+        </ul>
+        <p className="text-sm text-[#5A6B76]">
+          <em>
+            (English summary — data protection mechanisms: TLS encryption in transit; AES-256
+            encryption at rest for the database including Google OAuth tokens; tokens stored
+            server-side only, never exposed to the browser, source code or logs; secrets kept
+            in encrypted environment variables; least-privilege access control; data
+            minimization; security logging; token revocation on disconnect; GDPR-compliant
+            deletion and breach notification.)
+          </em>
         </p>
       </div>
 

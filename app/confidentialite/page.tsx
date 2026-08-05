@@ -20,7 +20,7 @@ export default function ConfidentialitePage() {
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
           Politique de confidentialité
         </h1>
-        <p className="text-sm text-[#5A6B76]">Dernière mise à jour : 17 juillet 2026</p>
+        <p className="text-sm text-[#5A6B76]">Dernière mise à jour : 5 août 2026</p>
       </div>
 
       <div className="space-y-3">

@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/sync-calendar",
-      "schedule": "0 * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }

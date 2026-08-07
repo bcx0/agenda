@@ -42,7 +42,7 @@ export default async function ManagePage({ searchParams }: { searchParams?: Sear
   return (
     <section className="mx-auto max-w-4xl space-y-8 px-5 py-14 md:py-20">
       <CleanUrlAfterAction />
-      <AutoRefresh />
+      <AutoRefresh intervalMs={10000} />
       <div className="space-y-2">
         <p className="pill w-fit">{t("manage.pill", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">

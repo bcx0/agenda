@@ -145,7 +145,7 @@ export default async function AdminAvailabilityPage({
 
   return (
     <section className="space-y-6">
-      <AutoRefresh />
+      <AutoRefresh intervalMs={10000} />
       <div className="space-y-2">
         <p className="pill w-fit">{t("common.admin", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">

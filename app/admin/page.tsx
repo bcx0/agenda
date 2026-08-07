@@ -80,7 +80,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
 
   return (
     <section className="space-y-8">
-      <AutoRefresh />
+      <AutoRefresh intervalMs={10000} />
       {googleHealth.needsReauth ? (
         <div className="rounded-lg border border-red-400 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           <p className="font-semibold">⚠️ Synchronisation Google Calendar interrompue</p>

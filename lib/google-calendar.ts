@@ -130,7 +130,8 @@ export interface GoogleCalendarEvent {
 // forceRefresh = true pour ignorer le cache et forcer un nouveau token.
 
 export async function getValidAccessToken(
-  forceRefresh = false
+  forceRefresh = false,
+  allowFailover = true
 ): Promise<string> {
   const token = await prisma.googleToken.findFirst()
 
@@ -171,13 +172,17 @@ export async function getValidAccessToken(
     )
 
     // Si invalid_grant → le refresh token est expiré/révoqué
-    // (projet Google Cloud en mode "Testing" = expiration 7 jours)
     if (refreshed.error === 'invalid_grant') {
       await logAuthError(errorDetail, 'invalid_grant')
+      // Failover : le refresh token ACTIF est révoqué — tente la famille de
+      // secours avant d'exiger une reconnexion humaine. (allowFailover=false
+      // au 2e passage : pas de boucle si le secours est mort aussi.)
+      if (allowFailover && (await promoteBackupRefreshToken())) {
+        return getValidAccessToken(true, false)
+      }
       throw new GoogleReauthRequiredError(
         'Refresh token Google expiré ou révoqué. ' +
-          'Reconnectez Google Calendar depuis le panel admin. ' +
-          'Si le problème revient tous les 7 jours, passez le projet Google Cloud en mode "Production".',
+          'Reconnectez Google Calendar depuis le panel admin.',
         'invalid_grant'
       )
     }

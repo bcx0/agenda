@@ -156,11 +156,13 @@ export async function createBlock(
 }
 
 export async function deleteBlock(blockId: number) {
-  const deletedBlock = await prisma.block.delete({ where: { id: blockId } });
-  pushBlockToGoogle(blockId, "delete").catch((err) =>
+  // Pousser la suppression AVANT d'effacer la ligne : pushBlockToGoogle relit
+  // le bloc en base — après le delete il jetait "Block introuvable" et
+  // l'événement "Indisponible" restait sur Google Calendar.
+  await pushBlockToGoogle(blockId, "delete").catch((err) =>
     console.error("[GoogleSync] Block delete failed:", err)
   );
-  return deletedBlock;
+  return prisma.block.delete({ where: { id: blockId } });
 }
 
 export async function listUpcomingBookingsThisMonth() {

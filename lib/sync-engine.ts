@@ -115,7 +115,13 @@ export async function pushBookingToGoogle(
   })
   if (!booking) throw new Error(`Booking ${bookingId} introuvable`)
 
-  if (booking.syncSource === 'google' && action !== 'delete') {
+  // Garde anti-doublon UNIQUEMENT pour 'create' : une résa importée de Google
+  // a déjà son événement côté Google, la re-créer ferait un double.
+  // Les 'update' et 'delete' sont de vraies actions utilisateur (client/admin)
+  // et doivent toujours être propagés — avant, un RDV importé de Google puis
+  // déplacé dans l'app n'était jamais répercuté sur Google Calendar (le garde
+  // marquait même la résa "synced" sans rien pousser).
+  if (booking.syncSource === 'google' && action === 'create' && booking.googleEventId) {
     await prisma.booking.update({
       where: { id: bookingId },
       data: {
@@ -171,6 +177,7 @@ export async function pushBookingToGoogle(
         where: { id: bookingId },
         data: {
           googleEtag: updated.etag,
+          syncSource: 'app',
           syncStatus: 'synced',
           lastSyncedAt: new Date(),
         },
@@ -198,7 +205,12 @@ export async function pushBlockToGoogle(
   const block = await prisma.block.findUnique({ where: { id: blockId } })
   if (!block) throw new Error(`Block ${blockId} introuvable`)
 
-  if (block.syncSource === 'google') {
+  // Même garde anti-doublon que pushBookingToGoogle : seul un 'create' sur un
+  // bloc déjà lié à un événement Google est ignoré. 'update' et 'delete'
+  // doivent toujours être propagés (avant, supprimer dans l'app un bloc
+  // importé de Google le laissait sur le calendrier → il réapparaissait à la
+  // sync suivante).
+  if (block.syncSource === 'google' && action === 'create' && block.googleEventId) {
     await prisma.block.update({
       where: { id: blockId },
       data: {
@@ -253,6 +265,7 @@ export async function pushBlockToGoogle(
         where: { id: blockId },
         data: {
           googleEtag: updated.etag,
+          syncSource: 'app',
           syncStatus: 'synced',
           lastSyncedAt: new Date(),
         },

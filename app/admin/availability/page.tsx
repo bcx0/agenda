@@ -27,6 +27,7 @@ import { getAvailability } from "../../../lib/booking";
 import { prisma } from "../../../lib/prisma";
 import { getServerLocale, t, translateStatus, type Locale } from "../../../lib/i18n";
 import AdminGeneralAvailability from "./AdminGeneralAvailability";
+import AutoRefresh from "../../../components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +145,7 @@ export default async function AdminAvailabilityPage({
 
   return (
     <section className="space-y-6">
+      <AutoRefresh />
       <div className="space-y-2">
         <p className="pill w-fit">{t("common.admin", locale)}</p>
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">

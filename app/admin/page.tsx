@@ -10,6 +10,7 @@ import { formatInZone, BRUSSELS_TZ } from "../../lib/time";
 import { prisma } from "../../lib/prisma";
 import { getGoogleSyncHealth } from "../../lib/google-health";
 import PasswordInput from "../../components/PasswordInput";
+import AutoRefresh from "../../components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
 
   return (
     <section className="space-y-8">
+      <AutoRefresh />
       {googleHealth.needsReauth ? (
         <div className="rounded-lg border border-red-400 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           <p className="font-semibold">⚠️ Synchronisation Google Calendar interrompue</p>

@@ -43,7 +43,10 @@ function buildSlotLine(startAt: Date, endAt: Date, timeZone: string) {
 }
 
 function buildAppLink(path: string) {
-  const base = process.env.APP_URL;
+  // NEXT_PUBLIC_APP_URL d'abord : en prod, APP_URL contenait un domaine avec
+  // faute de frappe ("agenda-gepffreymahieu", en http) → tous les liens des
+  // emails clients étaient cassés. NEXT_PUBLIC_APP_URL est la valeur fiable.
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
   if (!base) return "";
   return `${base.replace(/\/$/, "")}${path}`;
 }

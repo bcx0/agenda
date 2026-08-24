@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
-import { pullFromGoogle } from "../../../../lib/sync-engine";
+import {
+  pullFromGoogle,
+  reconcileDeletionsFromGoogle,
+} from "../../../../lib/sync-engine";
 import {
   fetchChangedEvents,
   type GoogleCalendarEvent,
@@ -123,6 +126,36 @@ export async function POST(req: NextRequest) {
     // Process each changed event (lots de 5 en parallèle)
     const results: Array<{ eventId: string; action: string }> = [];
     await processEvents(events, results);
+
+    // Full sync (syncToken expiré 410) = les deltas ont été perdus : on
+    // réconcilie immédiatement avec le listing complet qu'on vient d'obtenir,
+    // sinon toute suppression Google survenue pendant le trou devient un
+    // événement fantôme permanent dans l'app.
+    if (fullSyncRequired) {
+      try {
+        const reconcile = await reconcileDeletionsFromGoogle(events);
+        if (!reconcile.aborted) {
+          await prisma.syncLog
+            .create({
+              data: {
+                table: "GoogleToken",
+                action: "reconcile_ok",
+                direction: "google_to_app",
+                details: {
+                  scanned: reconcile.scanned,
+                  activeInGoogle: reconcile.activeInGoogle,
+                  bookingsCancelled: reconcile.bookingsCancelled,
+                  blocksDeleted: reconcile.blocksDeleted,
+                  trigger: "webhook_full_sync",
+                },
+              },
+            })
+            .catch(() => {});
+        }
+      } catch (err) {
+        console.error("[Webhook] Reconcile failed:", err);
+      }
+    }
 
     // Persist the syncToken only AFTER processing (see comment above): a crash
     // mid-loop keeps the old token so missed events are re-fetched next time.

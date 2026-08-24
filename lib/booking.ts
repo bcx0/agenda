@@ -14,6 +14,7 @@ import {
   monthBoundsUtc
 } from "./time";
 import { getSettings } from "./settings";
+import { recurringBlockOverlapsSlot, recurringBlockLabel } from "./recurring.mjs";
 import {
   sendBookingCancelledEmail,
   sendBookingConfirmationEmail
@@ -36,6 +37,8 @@ export type SlotView = {
   activeLocation: "MIAMI" | "BELGIUM";
   presentielLocation?: string;
   presentielNote?: string | null;
+  /** Cause du blocage quand status === "blocked" (diagnostic admin). */
+  blockReason?: string | null;
 };
 
 type AvailabilityRuleRow = {
@@ -85,6 +88,7 @@ type RecurringBlockRow = {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  timeZone: string | null;
   clientId: number | null;
   note: string | null;
 };
@@ -160,15 +164,11 @@ function slotOverlapsOverride(
   return minutes.start < end && minutes.end > start;
 }
 
-function slotOverlapsRecurring(
-  minutes: { start: number; end: number },
-  block: RecurringBlockRow
-) {
-  const start = parseTimeToMinutes(block.startTime);
-  const end = parseTimeToMinutes(block.endTime);
-  if (start === null || end === null) return false;
-  return minutes.start < end && minutes.end > start;
-}
+// NB : le chevauchement avec un RecurringBlock est désormais calculé par
+// recurringBlockOverlapsSlot (lib/recurring.mjs), qui respecte la colonne
+// `timeZone` du bloc (root cause du bug "13h jamais disponible" : des blocs
+// stockés en UTC étaient lus comme de l'heure de Bruxelles, et un bloc Miami
+// aurait bloqué l'heure de Bruxelles).
 
 function legacyBlocksWhere(rangeStart: Date, rangeEnd: Date) {
   return {
@@ -321,13 +321,10 @@ export async function getAvailability() {
     }
   }
 
-  // Pre-index recurring blocks by dayOfWeek for O(1) lookup
-  const recurringBlocksByDay = new Map<number, RecurringBlockRow[]>();
-  for (const block of recurringBlocks) {
-    const arr = recurringBlocksByDay.get(block.dayOfWeek);
-    if (arr) arr.push(block);
-    else recurringBlocksByDay.set(block.dayOfWeek, [block]);
-  }
+  // Blocs récurrents : liste courte (~10 lignes) parcourue par créneau via
+  // recurringBlockOverlapsSlot — l'indexation par jour "Bruxelles" est
+  // volontairement supprimée car le jour d'un bloc se juge dans SA timezone
+  // (un bloc lundi 22:00 Miami tombe mardi 04:00 à Bruxelles).
 
   // Pre-index bookings by Brussels date for O(1) lookup.
   // Index under EVERY Brussels day the booking spans (start day .. end day), so a
@@ -358,14 +355,27 @@ export async function getAvailability() {
     const dateKey = day.toISODate() ?? "";
     const dayOverrides = overridesByDate.get(dateKey) ?? [];
     const blockOverrides = dayOverrides.filter((override: AvailabilityOverrideRow) => override.type === "BLOCK");
-    const dayRecurringBlocks = recurringBlocksByDay.get(day.weekday) ?? [];
     const dayBookings = bookingsByDate.get(dateKey) ?? [];
 
-    const isBlocked =
-      (!!minutes &&
-        (blockOverrides.some((override: AvailabilityOverrideRow) => slotOverlapsOverride(minutes, override)) ||
-          dayRecurringBlocks.some((block: RecurringBlockRow) => slotOverlapsRecurring(minutes, block)))) ||
-      legacyBlocks.some((block: { startAt: Date; endAt: Date }) => overlaps(block.startAt, block.endAt, slot.start, slot.end));
+    const matchedOverride = minutes
+      ? blockOverrides.find((override: AvailabilityOverrideRow) => slotOverlapsOverride(minutes, override))
+      : undefined;
+    const matchedRecurring = recurringBlocks.find((block: RecurringBlockRow) =>
+      recurringBlockOverlapsSlot(slot.start, slot.end, block)
+    );
+    const matchedLegacy = legacyBlocks.find((block: { startAt: Date; endAt: Date; reason?: string | null }) =>
+      overlaps(block.startAt, block.endAt, slot.start, slot.end)
+    );
+
+    const isBlocked = !!(matchedOverride || matchedRecurring || matchedLegacy);
+
+    const blockReason = matchedOverride
+      ? `Exception ${matchedOverride.startTime}-${matchedOverride.endTime}`
+      : matchedRecurring
+        ? recurringBlockLabel(matchedRecurring)
+        : matchedLegacy
+          ? (matchedLegacy.reason ?? "Bloc importé du calendrier")
+          : null;
 
     const isBooked = dayBookings.some((booking: { startAt: Date; endAt: Date }) =>
       overlaps(booking.startAt, booking.endAt, slot.start, slot.end)
@@ -386,7 +396,8 @@ export async function getAvailability() {
       location: baseLocation,
       activeLocation: slot.activeLocation,
       presentielLocation: settings.presentielLocation,
-      presentielNote: settings.presentielNote
+      presentielNote: settings.presentielNote,
+      blockReason: isBooked ? null : blockReason
     };
   });
 
@@ -403,6 +414,12 @@ export async function checkSlotAvailability(
   endUtc: Date,
   options: SlotCheckOptions = {}
 ) {
+  // Garde structurelle : durée nulle ou négative (fin avant début). Sans elle,
+  // un créneau inversé passait slotWithinRule ET la détection de conflit
+  // (aucun chevauchement possible avec une plage vide) → ligne corrompue.
+  if (endUtc.getTime() <= startUtc.getTime()) {
+    return { ok: false as const, error: "Créneau invalide." };
+  }
   const minutes = slotMinutesInBrussels(startUtc, endUtc);
   if (!minutes) {
     return { ok: false as const, error: "Créneau invalide." };
@@ -414,7 +431,9 @@ export async function checkSlotAvailability(
   const [allRules, overrides, recurringBlocks, legacyBlocks, conflicts, locationPeriods] = await Promise.all([
     prisma.availabilityRule.findMany(),
     prisma.availabilityOverride.findMany({ where: { date: { gte: dayStart, lt: dayEnd } } }),
-    prisma.recurringBlock.findMany({ where: { dayOfWeek: minutes.day.weekday } }),
+    // TOUS les blocs récurrents : le jour d'un bloc se juge dans SA timezone
+    // (recurringBlockOverlapsSlot), pas dans le jour Bruxelles du créneau.
+    prisma.recurringBlock.findMany(),
     prisma.block.findMany({
       where: legacyBlocksWhere(startUtc, endUtc)
     }),
@@ -454,7 +473,9 @@ export async function checkSlotAvailability(
 
   const blocked =
     blockOverrides.some((override: AvailabilityOverrideRow) => slotOverlapsOverride(minutes, override)) ||
-    recurringBlocks.some((block: RecurringBlockRow) => slotOverlapsRecurring(minutes, block)) ||
+    recurringBlocks.some((block: RecurringBlockRow) =>
+      recurringBlockOverlapsSlot(startUtc, endUtc, block)
+    ) ||
     legacyBlocks.some((block: { startAt: Date; endAt: Date }) => overlaps(block.startAt, block.endAt, startUtc, endUtc));
 
   if (blocked) {
@@ -573,6 +594,14 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
   // requests cannot both pass the pre-check.
   const booking = await prisma
     .$transaction(async (tx: Prisma.TransactionClient) => {
+      // Verrou de la ligne client : sérialise les réservations SIMULTANÉES du
+      // même client. Sans lui, deux requêtes parallèles comptaient chacune le
+      // quota AVANT le commit de l'autre et le dépassaient (prouvé par le
+      // harnais de tests : quota=1, 2 résas parallèles → 2 CONFIRMED).
+      // FOR UPDATE relâché en fin de transaction — compatible pgbouncer
+      // (transaction pooling Supabase).
+      await tx.$queryRaw`SELECT id FROM "Client" WHERE id = ${clientId} FOR UPDATE`;
+
       const conflict = await tx.booking.findFirst({
         where: {
           status: "CONFIRMED",
@@ -629,7 +658,9 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     console.error("[GoogleSync] Booking create failed:", err)
   );
 
-  const appUrl = process.env.APP_URL;
+  // NEXT_PUBLIC_APP_URL d'abord (APP_URL prod contenait un domaine erroné —
+  // cf. lib/email/booking.ts buildAppLink).
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
   const manageUrl = appUrl
     ? `${appUrl.replace(/\/$/, "")}/rdv/manage/${booking.manageToken}`
     : null;
@@ -685,6 +716,14 @@ export async function cancelBooking(bookingId: number, reason?: string) {
   });
 
   if ("error" in result) return result;
+
+  // Déjà annulé (double-clic, deux onglets, requête rejouée) : réponse
+  // idempotente. Avant, ce cas passait dans le check ci-dessous et JETAIT
+  // "Booking manquant pour l'annulation." → erreur 500 pour l'utilisateur.
+  if ("alreadyCancelled" in result && result.alreadyCancelled) {
+    return result;
+  }
+
   const booking = result.booking;
 
   if (!booking) {

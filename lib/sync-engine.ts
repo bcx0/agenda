@@ -154,8 +154,14 @@ export async function pushBookingToGoogle(
   }
 
   try {
-    if (action === 'delete' && booking.googleEventId) {
-      await deleteGoogleEvent(booking.googleEventId)
+    if (action === 'delete') {
+      // GARDE : un booking jamais synchronisé (googleEventId null) qu'on
+      // annule ne doit RIEN créer côté Google. Avant, il tombait dans la
+      // branche "create" ci-dessous et l'annulation faisait apparaître un
+      // événement fantôme sur le calendrier.
+      if (booking.googleEventId) {
+        await deleteGoogleEvent(booking.googleEventId)
+      }
       await prisma.booking.update({
         where: { id: bookingId },
         data: { syncStatus: 'cancelled' },
@@ -242,8 +248,12 @@ export async function pushBlockToGoogle(
   }
 
   try {
-    if (action === 'delete' && block.googleEventId) {
-      await deleteGoogleEvent(block.googleEventId)
+    if (action === 'delete') {
+      // Même garde que pushBookingToGoogle : supprimer un bloc jamais
+      // synchronisé ne doit pas CRÉER d'événement Google.
+      if (block.googleEventId) {
+        await deleteGoogleEvent(block.googleEventId)
+      }
       await prisma.block.update({
         where: { id: blockId },
         data: { syncStatus: 'cancelled' },
@@ -335,13 +345,20 @@ export async function pullFromGoogle(
       if (recordType === 'booking') {
         const existing = await prisma.booking.findUnique({
           where: { id: parseInt(recordId) },
-          select: { googleEtag: true, clientId: true },
+          select: { googleEtag: true, clientId: true, status: true, cancelReason: true },
         })
         if (!existing) {
           throw { code: 'P2025' }
         }
+        // Résurrection : l'événement est VIVANT côté Google alors que le
+        // booking avait été annulé PAR la sync (suppression Google puis
+        // "Annuler" / undo côté Google, ou faux positif de réconciliation).
+        // On restaure AVANT le test d'etag — un undo peut re-servir le même etag.
+        const restoreFromCancel =
+          existing.status === 'CANCELLED' &&
+          !!existing.cancelReason?.includes('Google Calendar')
         // Same etag = echo of our own push -> skip
-        if (existing.googleEtag === googleEvent.etag) {
+        if (!restoreFromCancel && existing.googleEtag === googleEvent.etag) {
           return { action: 'etag_unchanged', skipped: true }
         }
         // Etag differs -> real change in Google (e.g. time OR client name edited
@@ -357,9 +374,13 @@ export async function pullFromGoogle(
             syncSource: 'google',
             syncStatus: 'synced',
             lastSyncedAt: new Date(),
+            ...(restoreFromCancel ? { status: 'CONFIRMED', cancelReason: null } : {}),
             ...(relinkId ? { clientId: relinkId } : {}),
           },
         })
+        if (restoreFromCancel) {
+          logSync('Booking', parseInt(recordId), 'pull_restore', 'google_to_app')
+        }
         logSync('Booking', parseInt(recordId), relinkId ? 'pull_update_relink' : 'pull_update', 'google_to_app', relinkId ? { fromClientId: existing.clientId, toClientId: relinkId } : undefined)
         return { action: relinkId ? 'booking_relinked_from_google' : 'booking_updated_from_google' }
       }
@@ -405,12 +426,17 @@ export async function pullFromGoogle(
   ])
 
   if (existingBooking) {
+    // Résurrection (voir chemin app-tag ci-dessus) : événement vivant côté
+    // Google + booking annulé PAR la sync → on restaure, même à etag identique.
+    const restoreFromCancel =
+      existingBooking.status === 'CANCELLED' &&
+      !!existingBooking.cancelReason?.includes('Google Calendar')
     // Même etag = écho de notre propre push (ou événement déjà à jour) → skip.
     // Indispensable après une purge : l'étiquette recordId de l'événement
     // Google pointe vers un id supprimé, donc TOUS ses échos retombaient ici
     // et déclenchaient un update + résolution client à chaque sync (boucle
     // "purged, re-importing" + runs de 70s+, cf. logs Vercel).
-    if (existingBooking.googleEtag === googleEvent.etag) {
+    if (!restoreFromCancel && existingBooking.googleEtag === googleEvent.etag) {
       return { action: 'etag_unchanged', skipped: true }
     }
     try {
@@ -424,9 +450,13 @@ export async function pullFromGoogle(
           syncSource: 'google',
           syncStatus: 'synced',
           lastSyncedAt: new Date(),
+          ...(restoreFromCancel ? { status: 'CONFIRMED', cancelReason: null } : {}),
           ...(relinkId ? { clientId: relinkId } : {}),
         },
       })
+      if (restoreFromCancel) {
+        logSync('Booking', existingBooking.id, 'pull_restore', 'google_to_app')
+      }
       if (relinkId) {
         logSync('Booking', existingBooking.id, 'pull_update_relink', 'google_to_app', {
           fromClientId: existingBooking.clientId,
@@ -902,6 +932,175 @@ export async function repushUnsyncedBookings(
     console.log(`[Sync:repush] ${pushed}/${unsynced.length} réservations repoussées vers Google (${failed} échecs)`)
   }
   return { pushed, failed }
+}
+
+// ─── RÉCONCILIATION DB ↔ GOOGLE (filet de sécurité anti-fantômes) ────
+// Problème structurel corrigé (incident du 24/08 : RDV du 10/09 15h-21h
+// supprimé côté téléphone mais resté CONFIRMED dans l'app) : une suppression
+// Google peut échapper aux deltas (webhook manqué, syncToken réinitialisé
+// après panne d'auth/purge — la full sync ne voyait pas les suppressions, et
+// un syncToken établi APRÈS la suppression ne la rejouera jamais).
+// Principe : à partir d'un LISTING COMPLET de la fenêtre [maintenant-30j,
+// +365j], tout booking CONFIRMED futur (ou Block futur) dont l'événement
+// Google n'existe plus est annulé/supprimé localement. Diff pur, idempotent.
+
+export type ReconcileResult = {
+  scanned: number
+  activeInGoogle: number
+  bookingsCancelled: number
+  blocksDeleted: number
+  aborted: string | null
+}
+
+// Ne juger que les enregistrements dont l'événement DEVRAIT être couvert par
+// la fenêtre du listing (timeMax = +365j) — marge de sécurité de 5 jours.
+const RECONCILE_HORIZON_DAYS = 360
+
+export const RECONCILE_CANCEL_REASON =
+  'Supprimé de Google Calendar (réconciliation)'
+
+export async function reconcileDeletionsFromGoogle(
+  events: GoogleCalendarEvent[]
+): Promise<ReconcileResult> {
+  const result: ReconcileResult = {
+    scanned: 0,
+    activeInGoogle: 0,
+    bookingsCancelled: 0,
+    blocksDeleted: 0,
+    aborted: null,
+  }
+
+  // Garde-fou n°1 : un listing vide alors que la base attend des événements
+  // signifie presque sûrement un listing cassé/tronqué → on ne touche à rien.
+  if (events.length === 0) {
+    result.aborted = 'empty_listing'
+    logSync('GoogleToken', undefined, 'reconcile_aborted', 'google_to_app', {
+      reason: 'empty_listing',
+    })
+    return result
+  }
+
+  const activeIds = new Set<string>()
+  for (const event of events) {
+    if (event && event.status !== 'cancelled') activeIds.add(event.id)
+  }
+  result.activeInGoogle = activeIds.size
+
+  const now = new Date()
+  const horizon = new Date(
+    now.getTime() + RECONCILE_HORIZON_DAYS * 24 * 60 * 60 * 1000
+  )
+
+  const [bookings, blocks] = await Promise.all([
+    prisma.booking.findMany({
+      where: {
+        status: 'CONFIRMED',
+        googleEventId: { not: null },
+        startAt: { gte: now, lt: horizon },
+      },
+      select: { id: true, googleEventId: true, startAt: true },
+    }),
+    prisma.block.findMany({
+      where: {
+        googleEventId: { not: null },
+        startAt: { gte: now, lt: horizon },
+      },
+      select: { id: true, googleEventId: true, startAt: true },
+    }),
+  ])
+  result.scanned = bookings.length + blocks.length
+
+  const bookingsToCancel = bookings.filter(
+    (b) => b.googleEventId && !activeIds.has(b.googleEventId)
+  )
+  const blocksToDelete = blocks.filter(
+    (b) => b.googleEventId && !activeIds.has(b.googleEventId)
+  )
+
+  // Garde-fou n°2 : si plus de la moitié des enregistrements (et > 10)
+  // seraient supprimés d'un coup, le listing est suspect (page manquante,
+  // erreur API) → on n'applique rien et on trace.
+  const totalToRemove = bookingsToCancel.length + blocksToDelete.length
+  if (totalToRemove > 10 && totalToRemove > result.scanned / 2) {
+    result.aborted = 'suspicious_mass_delete'
+    logSync('GoogleToken', undefined, 'reconcile_aborted', 'google_to_app', {
+      reason: 'suspicious_mass_delete',
+      scanned: result.scanned,
+      wouldRemove: totalToRemove,
+      activeInGoogle: activeIds.size,
+    })
+    return result
+  }
+
+  for (const booking of bookingsToCancel) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: 'CANCELLED',
+        cancelReason: RECONCILE_CANCEL_REASON,
+        syncStatus: 'cancelled',
+        syncSource: 'google',
+        lastSyncedAt: new Date(),
+      },
+    })
+    logSync('Booking', booking.id, 'reconcile_delete', 'google_to_app', {
+      googleEventId: booking.googleEventId,
+      startAt: booking.startAt.toISOString(),
+    })
+    result.bookingsCancelled++
+  }
+
+  for (const block of blocksToDelete) {
+    await prisma.block.delete({ where: { id: block.id } }).catch(() => {})
+    logSync('Block', block.id, 'reconcile_delete', 'google_to_app', {
+      googleEventId: block.googleEventId,
+      startAt: block.startAt.toISOString(),
+    })
+    result.blocksDeleted++
+  }
+
+  if (result.bookingsCancelled > 0 || result.blocksDeleted > 0) {
+    console.log(
+      `[Sync:reconcile] ${result.bookingsCancelled} booking(s) annulé(s), ${result.blocksDeleted} bloc(s) supprimé(s) (fantômes Google)`
+    )
+  }
+  return result
+}
+
+// ─── RE-TENTATIVE des suppressions Google échouées ───────────────
+// Un booking annulé dans l'app dont le push_delete a échoué (panne d'auth,
+// timeout) laisse l'événement sur le calendrier de Geoffrey. Ce filet
+// retente la suppression pour les annulés futurs encore marqués error/pending.
+export async function retryFailedCancellations(
+  limit = 25
+): Promise<{ retried: number; failed: number }> {
+  const stuck = await prisma.booking.findMany({
+    where: {
+      status: 'CANCELLED',
+      googleEventId: { not: null },
+      syncStatus: { in: ['error', 'pending'] },
+      startAt: { gte: new Date() },
+    },
+    select: { id: true },
+    take: limit,
+  })
+
+  let retried = 0
+  let failed = 0
+  for (const b of stuck) {
+    try {
+      await pushBookingToGoogle(b.id, 'delete')
+      retried++
+    } catch (err) {
+      failed++
+      console.error(
+        `[Sync:retry-cancel] Booking #${b.id} delete failed:`,
+        err instanceof Error ? err.message : err
+      )
+      if (failed >= 3) break
+    }
+  }
+  return { retried, failed }
 }
 
 function logSync(

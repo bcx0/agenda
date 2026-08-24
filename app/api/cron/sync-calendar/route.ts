@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '../../../../lib/prisma'
-import { pullFromGoogle, repushUnsyncedBookings } from '../../../../lib/sync-engine'
+import {
+  pullFromGoogle,
+  repushUnsyncedBookings,
+  reconcileDeletionsFromGoogle,
+  retryFailedCancellations,
+} from '../../../../lib/sync-engine'
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
+
+// Intervalle minimal entre deux réconciliations complètes DB ↔ Google.
+const RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export const dynamic = 'force-dynamic'
 // Les runs post-purge traitent des centaines d'événements et dépassaient la
@@ -89,8 +97,68 @@ export async function GET(req: NextRequest) {
       console.error('[Cron sync] Repush failed:', err instanceof Error ? err.message : err)
     }
 
+    // Auto-guérison inverse : retente la SUPPRESSION Google des RDV annulés
+    // dans l'app dont le push_delete a échoué (l'événement restait sur le
+    // calendrier de Geoffrey).
+    let cancelRetries = { retried: 0, failed: 0 }
+    try {
+      cancelRetries = await retryFailedCancellations()
+    } catch (err) {
+      console.error('[Cron sync] Retry-cancel failed:', err instanceof Error ? err.message : err)
+    }
+
+    // ── RÉCONCILIATION DB ↔ Google (anti-fantômes) ─────────────────────
+    // 1) Immédiate quand on vient de faire une FULL sync (syncToken perdu :
+    //    c'est exactement là que des suppressions ont pu être manquées).
+    // 2) Sinon au plus une fois par 24h : rattrape tout RDV supprimé côté
+    //    Google qui aurait échappé aux deltas (webhook manqué, suppression
+    //    plus vieille que la rétention showDeleted, etc.).
+    let reconcile: Awaited<ReturnType<typeof reconcileDeletionsFromGoogle>> | null = null
+    try {
+      if (fullSyncRequired) {
+        reconcile = await reconcileDeletionsFromGoogle(events)
+      } else {
+        const lastReconcile = await prisma.syncLog.findFirst({
+          where: { table: 'GoogleToken', action: 'reconcile_ok' },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        })
+        const due =
+          !lastReconcile ||
+          Date.now() - lastReconcile.createdAt.getTime() > RECONCILE_INTERVAL_MS
+        if (due) {
+          // Listing complet frais, utilisé UNIQUEMENT pour le diff : on ne
+          // touche pas au syncToken incrémental (aucun delta perdu).
+          const full = await fetchChangedEvents(null)
+          reconcile = await reconcileDeletionsFromGoogle(full.items)
+        }
+      }
+      if (reconcile && !reconcile.aborted) {
+        await prisma.syncLog
+          .create({
+            data: {
+              table: 'GoogleToken',
+              action: 'reconcile_ok',
+              direction: 'google_to_app',
+              details: {
+                scanned: reconcile.scanned,
+                activeInGoogle: reconcile.activeInGoogle,
+                bookingsCancelled: reconcile.bookingsCancelled,
+                blocksDeleted: reconcile.blocksDeleted,
+              },
+            },
+          })
+          .catch(() => {})
+      }
+    } catch (err) {
+      console.error('[Cron sync] Reconcile failed:', err instanceof Error ? err.message : err)
+    }
+
     console.log(
-      `[Cron sync] Done: ${events.length} events, ${imported} imported, ${errors} errors, ${repushed.pushed} repushed`
+      `[Cron sync] Done: ${events.length} events, ${imported} imported, ${errors} errors, ${repushed.pushed} repushed, ${cancelRetries.retried} cancel-retries` +
+        (reconcile
+          ? `, reconcile: ${reconcile.bookingsCancelled} bookings / ${reconcile.blocksDeleted} blocks${reconcile.aborted ? ` (ABORTED: ${reconcile.aborted})` : ''}`
+          : '')
     )
 
     // Heartbeat : trace le succès du cron même sans événement à traiter.
@@ -115,6 +183,14 @@ export async function GET(req: NextRequest) {
       errors,
       repushed: repushed.pushed,
       repushFailed: repushed.failed,
+      cancelRetries: cancelRetries.retried,
+      reconcile: reconcile
+        ? {
+            bookingsCancelled: reconcile.bookingsCancelled,
+            blocksDeleted: reconcile.blocksDeleted,
+            aborted: reconcile.aborted,
+          }
+        : null,
     })
   } catch (error: unknown) {
     // Reauth requise (token révoqué/expiré côté Google) → on skip proprement.

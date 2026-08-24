@@ -399,8 +399,10 @@ export async function deleteGoogleEvent(googleEventId: string): Promise<void> {
     { method: 'DELETE' }
   )
 
-  // 204 = deleted, 410 = already deleted (both are fine)
-  if (!res.ok && res.status !== 410) {
+  // 204 = deleted, 410 = already deleted, 404 = introuvable (déjà supprimé
+  // côté Google ou id d'un autre calendrier) — les trois sont OK : l'objectif
+  // "l'événement n'existe plus" est atteint, inutile de marquer syncStatus=error.
+  if (!res.ok && res.status !== 410 && res.status !== 404) {
     const errText = await res.text().catch(() => 'no body')
     console.error('[GoogleCalendar] Delete failed:', res.status, errText)
     throw new Error(
@@ -442,7 +444,12 @@ export async function fetchChangedEvents(
       const timeMax = new Date(
         Date.now() + 365 * 24 * 60 * 60 * 1000
       ).toISOString()
-      url += `&timeMin=${timeMin}&timeMax=${timeMax}`
+      // showDeleted : sans lui, une FULL sync (syncToken null après panne
+      // d'auth, purge ou 410) ne voit JAMAIS les événements supprimés → tout
+      // RDV supprimé côté Google pendant la panne restait CONFIRMED dans
+      // l'app pour toujours (événement fantôme). Les instances annulées
+      // arrivent avec status="cancelled" et sont traitées par pullFromGoogle.
+      url += `&timeMin=${timeMin}&timeMax=${timeMax}&showDeleted=true`
     }
 
     if (pageToken) {

@@ -506,6 +506,13 @@ export async function setGeneralRecurringForDayAction(
   assertAdmin();
   const dayOfWeek = Number(formData.get("dayOfWeek"));
   const rangesRaw = formData.get("ranges")?.toString() ?? "[]";
+  // Portée par lieu : l'ancien code supprimait TOUTES les règles du jour
+  // (MIAMI + BELGIUM) puis recréait sans lieu (défaut MIAMI) → éditer la
+  // récurrence détruisait silencieusement les horaires Belgique du jour.
+  const locationRaw = formData.get("location")?.toString() ?? "MIAMI";
+  if (locationRaw !== "MIAMI" && locationRaw !== "BELGIUM") {
+    return { error: "Lieu invalide" } as const;
+  }
   if (!isValidDayOfWeek(dayOfWeek)) {
     return { error: "Jour invalide" } as const;
   }
@@ -538,12 +545,13 @@ export async function setGeneralRecurringForDayAction(
   }
 
   await prisma.$transaction(async (tx: any) => {
-    await tx.availabilityRule.deleteMany({ where: { dayOfWeek } });
+    await tx.availabilityRule.deleteMany({ where: { dayOfWeek, location: locationRaw } });
     await tx.availabilityRule.createMany({
       data: ranges.map((range) => ({
         dayOfWeek,
         startTime: range.startTime,
-        endTime: range.endTime
+        endTime: range.endTime,
+        location: locationRaw
       }))
     });
   });
@@ -559,10 +567,16 @@ export async function deleteGeneralRecurringForDayAction(
 ) {
   assertAdmin();
   const dayOfWeek = Number(formData.get("dayOfWeek"));
+  // Même portée par lieu que setGeneralRecurringForDayAction : ne jamais
+  // effacer les règles de l'autre lieu par effet de bord.
+  const locationRaw = formData.get("location")?.toString() ?? "MIAMI";
+  if (locationRaw !== "MIAMI" && locationRaw !== "BELGIUM") {
+    return { error: "Lieu invalide" } as const;
+  }
   if (!isValidDayOfWeek(dayOfWeek)) {
     return { error: "Jour invalide" } as const;
   }
-  await prisma.availabilityRule.deleteMany({ where: { dayOfWeek } });
+  await prisma.availabilityRule.deleteMany({ where: { dayOfWeek, location: locationRaw } });
   revalidatePath("/admin/availability");
   revalidatePath("/book");
   return { success: true, message: "Recurrence supprimee" } as const;

@@ -1,4 +1,5 @@
 import { DateTime } from "luxon";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { BRUSSELS_TZ, MIAMI_TZ, isWithinMiamiWindow, monthBoundsUtc } from "./time";
 import { sendBookingConfirmationEmail, sendBookingUpdatedEmail } from "./email/booking";
@@ -37,6 +38,32 @@ export async function setClientActive(clientId: number, isActive: boolean) {
 }
 
 export async function deleteClient(clientId: number) {
+  // AVANT de supprimer les lignes : retirer du calendrier Google les RDV
+  // futurs confirmés de ce client. Sans ça, les événements restaient sur le
+  // calendrier et la sync suivante les réimportait en blocs [NO_ACCOUNT]
+  // fantômes qui re-bloquaient les créneaux pour toujours.
+  const futureSynced = await prisma.booking.findMany({
+    where: {
+      clientId,
+      status: "CONFIRMED",
+      googleEventId: { not: null },
+      startAt: { gte: new Date() }
+    },
+    select: { id: true },
+    take: 100
+  });
+  if (futureSynced.length > 0) {
+    const results = await Promise.allSettled(
+      futureSynced.map((b: { id: number }) => pushBookingToGoogle(b.id, "delete"))
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) {
+      console.error(
+        `[deleteClient] ${failed}/${futureSynced.length} suppression(s) Google échouée(s) — les événements restants seront rattrapés par la réconciliation.`
+      );
+    }
+  }
+
   // Cascade: delete related records first, then the client
   await prisma.$transaction([
     prisma.booking.deleteMany({ where: { clientId } }),
@@ -302,15 +329,39 @@ export async function adminRescheduleBooking(
   const oldStartAt = booking.startAt;
   const oldEndAt = booking.endAt;
 
-  const updated = await prisma.booking.update({
-    where: { id },
-    data: {
-      startAt: startUtc,
-      endAt: endUtc,
-      status: "CONFIRMED",
-      rescheduleReason: reason ?? booking.rescheduleReason
-    }
-  });
+  // Transaction + re-check de conflit : sans elle, un client pouvait réserver
+  // le même créneau entre le checkSlotAvailability ci-dessus et l'update
+  // (même protection que le reschedule côté client).
+  const updated = await prisma
+    .$transaction(async (tx: Prisma.TransactionClient) => {
+      const conflict = await tx.booking.findFirst({
+        where: {
+          status: "CONFIRMED",
+          id: { not: id },
+          startAt: { lt: endUtc },
+          endAt: { gt: startUtc }
+        },
+        select: { id: true }
+      });
+      if (conflict) throw new Error("SLOT_TAKEN");
+      return tx.booking.update({
+        where: { id },
+        data: {
+          startAt: startUtc,
+          endAt: endUtc,
+          status: "CONFIRMED",
+          rescheduleReason: reason ?? booking.rescheduleReason
+        }
+      });
+    })
+    .catch((err: unknown) => {
+      if (err instanceof Error && err.message === "SLOT_TAKEN") return null;
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return null;
+      throw err;
+    });
+  if (!updated) {
+    return { error: "Ce créneau vient d'être pris." };
+  }
   pushBookingToGoogle(updated.id, "update").catch((err) =>
     console.error("[GoogleSync] Booking update failed:", err)
   );

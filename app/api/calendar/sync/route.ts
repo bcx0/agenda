@@ -59,6 +59,10 @@ export async function POST(req: NextRequest) {
         maxResults: "250",
         timeMin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         timeMax: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        // Inclut les événements supprimés (status=cancelled) : la sync
+        // manuelle propage ainsi les suppressions Google récentes au lieu de
+        // laisser des RDV fantômes (step=process gère status==="cancelled").
+        showDeleted: "true",
       });
       if (pageToken) params.set("pageToken", pageToken);
 

@@ -391,6 +391,13 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
   const availabilitiesForDay = selectedDay
     ? selectedDay.slots.filter((slot) => slot.status === "available")
     : [];
+  // Créneaux bloqués AVEC leur cause (bloc récurrent, exception, import
+  // Google) : avant, ils étaient simplement invisibles dans ce panneau — un
+  // créneau "mystérieusement complet" côté client (ex. bug du 13h) était
+  // indiagnosticable depuis l'admin.
+  const blockedForDay = selectedDay
+    ? selectedDay.slots.filter((slot) => slot.status === "blocked")
+    : [];
   const bookingsForDay = useMemo(() => {
     if (!selectedDay) return [];
     return bookings
@@ -719,6 +726,9 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     <span className="text-[11px] font-medium text-blue-400">Belgique</span>
                   </div>
                 )}
+                {slot.status === "blocked" && slot.blockReason ? (
+                  <div className="mt-1 text-[11px] text-white/45">{slot.blockReason}</div>
+                ) : null}
               </div>
             );
           })}
@@ -1045,6 +1055,35 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   <p className="text-sm text-white/50">{t("availability.noAvailability")}</p>
                 )}
               </div>
+
+              {blockedForDay.length > 0 ? (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-widest text-white/50">
+                    {locale === "fr" ? "Créneaux bloqués" : "Blocked slots"}
+                  </h4>
+                  <div className="space-y-2">
+                    {blockedForDay.map((slot) => (
+                      <div
+                        key={slot.start.toISOString()}
+                        className="rounded-lg border border-white/10 bg-[#0F0F0F] px-3 py-2 text-sm opacity-80"
+                      >
+                        <p className="font-semibold text-white/80">
+                          {slot.brussels} Brussels · {slot.miami} Miami
+                        </p>
+                        <p className="text-xs text-white/50">
+                          {slot.blockReason ??
+                            (locale === "fr" ? "Bloqué" : "Blocked")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-white/40">
+                    {locale === "fr"
+                      ? "Ces heures apparaissent « Complet » côté client. Blocs récurrents : onglet RDV réguliers · Exceptions : onglet Exceptions."
+                      : "These hours show as “Full” on the client side. Recurring blocks: Recurring tab · Exceptions: Overrides tab."}
+                  </p>
+                </div>
+              ) : null}
 
               {/* Unified list: bookings + NO_ACCOUNT blocks, sorted by start time */}
               <div className="space-y-3">

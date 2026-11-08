@@ -296,13 +296,55 @@ export async function pushBlockToGoogle(
   }
 }
 
+// Deux traitements simultanés du même événement (webhook + cron, ou deux
+// notifications Google rapprochées) passaient tous deux le findFirst puis
+// tentaient le create : le second échouait sur la contrainte unique
+// googleEventId (P2002, 4 erreurs en prod du 14/07 au 19/10/2026). On
+// rejoue alors UNE fois : l'enregistrement existe désormais, le chemin
+// "existing record" le met à jour normalement (traitement idempotent).
+function isGoogleEventIdConflict(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false
+  const e = err as { code?: unknown; meta?: { target?: unknown } }
+  if (e.code !== 'P2002') return false
+  const target = e.meta?.target
+  return Array.isArray(target)
+    ? target.includes('googleEventId')
+    : String(target ?? '').includes('googleEventId')
+}
+
 export async function pullFromGoogle(
+  googleEvent: GoogleCalendarEvent | null,
+  googleEventId: string
+): Promise<{ action: string; [key: string]: any }> {
+  try {
+    return await pullFromGoogleOnce(googleEvent, googleEventId)
+  } catch (err: unknown) {
+    if (!isGoogleEventIdConflict(err)) throw err
+    console.warn(`[Sync:pull] googleEventId ${googleEventId} créé en parallèle, nouvelle passe`)
+    return pullFromGoogleOnce(googleEvent, googleEventId)
+  }
+}
+
+async function pullFromGoogleOnce(
   googleEvent: GoogleCalendarEvent | null,
   googleEventId: string
 ): Promise<{ action: string; [key: string]: any }> {
   // ─── CANCELLED / DELETED events ───────────────────────────────
   if (!googleEvent || googleEvent.status === 'cancelled') {
     const booking = await prisma.booking.findFirst({ where: { googleEventId } })
+    if (booking && booking.status === 'CANCELLED') {
+      // Déjà annulé (souvent par l'app elle-même, dont la suppression revient
+      // ensuite de Google) : ne pas écraser le motif d'annulation d'origine
+      // (client/admin) ni rejouer l'annulation à chaque full sync (rafales de
+      // centaines de pull_delete sur les mêmes RDV, 04-08/11/2026).
+      if (booking.syncStatus !== 'cancelled') {
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: { syncStatus: 'cancelled', lastSyncedAt: new Date() },
+        })
+      }
+      return { action: 'already_cancelled' }
+    }
     if (booking) {
       await prisma.booking.update({
         where: { id: booking.id },

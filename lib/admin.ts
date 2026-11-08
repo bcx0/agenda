@@ -193,8 +193,9 @@ export async function deleteBlock(blockId: number) {
 }
 
 export async function listUpcomingBookingsThisMonth() {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // Début de journée à Bruxelles (le serveur Vercel tourne en UTC :
+  // setHours(0) donnait minuit UTC, soit 01:00/02:00 à Bruxelles).
+  const todayStart = DateTime.now().setZone(BRUSSELS_TZ).startOf("day").toJSDate();
   return prisma.booking.findMany({
     where: {
       status: { not: "CANCELLED" },

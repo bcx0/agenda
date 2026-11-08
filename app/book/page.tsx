@@ -5,7 +5,7 @@ import Link from "next/link";
 import { DateTime } from "luxon";
 import { BookingViews } from "../../components/BookingViews";
 import { getCurrentClient } from "../../lib/auth";
-import { getQuotaStatus } from "../../lib/booking";
+import { computeModeForSlotSync, getModeContext, getQuotaStatus } from "../../lib/booking";
 import { BRUSSELS_TZ } from "../../lib/time";
 import { formatTimeSlot, getAvailableTimeSlots } from "../../lib/timeSlots";
 import { logoutAction } from "../login/actions";
@@ -120,6 +120,11 @@ export default async function BookPage({
     quotaByMonth[key] = quotaResults[i].creditsUsedThisMonth >= quotaResults[i].creditsPerMonth;
   });
 
+  // Mode affiché = mode qui sera enregistré : même calcul que le serveur
+  // (période Belgique prioritaire, puis SessionMode, puis défaut). L'ancien
+  // calcul ignorait les périodes Belgique : « Visio » affiché, RDV stocké
+  // en présentiel.
+  const modeContext = await getModeContext();
   const slotsWithModeByDate = slots.map((slot) => {
     const modeForDate = getModeForDate(
       slot.start,
@@ -127,12 +132,14 @@ export default async function BookPage({
       settings.defaultMode === "PRESENTIEL" ? "PRESENTIEL" : "VISIO",
       settings.presentielLocation
     );
+    const mode = computeModeForSlotSync(slot.start, modeContext);
 
     return {
       ...slot,
       label: formatTimeSlot({ startTime: slot.startTime, date: slot.date }),
-      mode: modeForDate.mode,
-      presentielLocation: modeForDate.presentielLocation
+      mode,
+      presentielLocation:
+        mode === "PRESENTIEL" ? modeForDate.presentielLocation ?? settings.presentielLocation : undefined
     };
   });
 

@@ -24,7 +24,7 @@ import {
 } from "../../lib/admin";
 import { checkAdminPassword } from "../../lib/auth";
 import { clearAdminSession, getAdminSession, setAdminSession } from "../../lib/session";
-import { BRUSSELS_TZ, MIAMI_WORK_START, monthBoundsUtc } from "../../lib/time";
+import { BRUSSELS_TZ, MIAMI_WORK_START, monthBoundsUtc, toMonthKey } from "../../lib/time";
 import { updateBookingMode } from "../../lib/admin";
 import { prisma } from "../../lib/prisma";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWebhook";
@@ -691,8 +691,11 @@ export async function createRecurringBlockAction(formData: FormData) {
 
   const horizonStart = DateTime.now().setZone(timeZone).startOf("day");
   const horizonEnd = horizonStart.plus({ days: 364 }).endOf("day");
-  const monthStart = horizonStart.startOf("month");
-  const monthEnd = horizonEnd.endOf("month");
+  // Le quota se compte par mois de BRUXELLES partout ailleurs (toMonthKey) :
+  // une séance jeudi 19:00 Miami le 28/02 tombe le 01/03 à Bruxelles. Fenêtre
+  // élargie d'un jour de chaque côté pour couvrir ce décalage.
+  const monthStart = horizonStart.startOf("month").minus({ days: 1 });
+  const monthEnd = horizonEnd.endOf("month").plus({ days: 1 });
 
   const existingClientBookings = await prisma.booking.findMany({
     where: {
@@ -708,9 +711,7 @@ export async function createRecurringBlockAction(formData: FormData) {
 
   const monthlyUsage = new Map<string, number>();
   for (const booking of existingClientBookings) {
-    const key = DateTime.fromJSDate(booking.startAt, { zone: "utc" })
-      .setZone(timeZone)
-      .toFormat("yyyy-LL");
+    const key = toMonthKey(booking.startAt);
     monthlyUsage.set(key, (monthlyUsage.get(key) ?? 0) + 1);
   }
 
@@ -737,7 +738,7 @@ export async function createRecurringBlockAction(formData: FormData) {
     candidates.push({
       startAt: startBrussels.toUTC().toJSDate(),
       endAt: endBrussels.toUTC().toJSDate(),
-      monthKey: day.toFormat("yyyy-LL")
+      monthKey: toMonthKey(startBrussels.toUTC().toJSDate())
     });
   }
 

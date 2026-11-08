@@ -298,7 +298,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
     DateTime.now().setZone(CALENDAR_TZ).startOf("month")
   );
   const [weekStart, setWeekStart] = useState<DateTime>(
-    DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 })
+    DateTime.now().setZone(CALENDAR_TZ).startOf("week")
   );
   const [selectedDay, setSelectedDay] = useState<DayGroup | null>(null);
   const [dateRanges, setDateRanges] = useState<Range[]>([]);
@@ -819,7 +819,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
             onSelectDay={(d) => {
               openDay(d);
               const inMiami = d.setZone(CALENDAR_TZ);
-              setWeekStart(inMiami.startOf("week").plus({ days: 1 }));
+              setWeekStart(inMiami.startOf("week"));
             }}
           />
         )}
@@ -847,7 +847,7 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
               <button
                 type="button"
                 onClick={() =>
-                  setWeekStart(DateTime.now().setZone(CALENDAR_TZ).startOf("week").plus({ days: 1 }))
+                  setWeekStart(DateTime.now().setZone(CALENDAR_TZ).startOf("week"))
                 }
                 className="rounded-full border border-border px-4 py-2 text-sm text-white/70 hover:bg-white/5 transition"
               >

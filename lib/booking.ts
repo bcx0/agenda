@@ -55,12 +55,20 @@ type LocationPeriodRow = {
   note: string | null;
 };
 
+// Les périodes sont enregistrées en début/fin de journée À BRUXELLES puis
+// converties en UTC (app/admin/actions.ts) : 14/12 00:00 Bruxelles devient
+// 13/12 23:00 UTC. Il faut donc relire la date dans le fuseau de Bruxelles ;
+// la lecture en UTC faisait commencer chaque période un jour trop tôt.
+function brusselsIsoDate(date: Date): string | null {
+  return DateTime.fromJSDate(date, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
+}
+
 function isDateInBrusselsPeriod(day: DateTime, periods: LocationPeriodRow[]): boolean {
   const dayIso = day.toISODate();
   if (!dayIso) return false;
   for (const period of periods) {
-    const start = DateTime.fromJSDate(period.startDate, { zone: "utc" }).toISODate();
-    const end = DateTime.fromJSDate(period.endDate, { zone: "utc" }).toISODate();
+    const start = brusselsIsoDate(period.startDate);
+    const end = brusselsIsoDate(period.endDate);
     if (start && end && dayIso >= start && dayIso <= end) return true;
   }
   return false;
@@ -70,8 +78,8 @@ function getBrusselsPeriodForDate(day: DateTime, periods: LocationPeriodRow[]): 
   const dayIso = day.toISODate();
   if (!dayIso) return null;
   for (const period of periods) {
-    const start = DateTime.fromJSDate(period.startDate, { zone: "utc" }).toISODate();
-    const end = DateTime.fromJSDate(period.endDate, { zone: "utc" }).toISODate();
+    const start = brusselsIsoDate(period.startDate);
+    const end = brusselsIsoDate(period.endDate);
     if (start && end && dayIso >= start && dayIso <= end) return period;
   }
   return null;
@@ -128,10 +136,16 @@ function overlaps(startA: Date, endA: Date, startB: Date, endB: Date) {
 function slotMinutesInBrussels(startUtc: Date, endUtc: Date) {
   const startBrussels = DateTime.fromJSDate(startUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
   const endBrussels = DateTime.fromJSDate(endUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
-  if (startBrussels.toISODate() !== endBrussels.toISODate()) return null;
+  // Un créneau qui finit pile à minuit (23:00-00:00) est valide : sa fin
+  // vaut 1440 minutes du jour de début. Au-delà, il chevauche deux jours.
+  const endsAtMidnight =
+    endBrussels.hour === 0 &&
+    endBrussels.minute === 0 &&
+    endBrussels.toISODate() === startBrussels.plus({ days: 1 }).toISODate();
+  if (startBrussels.toISODate() !== endBrussels.toISODate() && !endsAtMidnight) return null;
   return {
     start: startBrussels.hour * 60 + startBrussels.minute,
-    end: endBrussels.hour * 60 + endBrussels.minute,
+    end: endsAtMidnight ? 24 * 60 : endBrussels.hour * 60 + endBrussels.minute,
     day: startBrussels
   };
 }
@@ -293,6 +307,10 @@ export async function getAvailability() {
           second: 0,
           millisecond: 0
         });
+        // Nuit du passage à l'heure d'été : 02:00 n'existe pas à Bruxelles et
+        // Luxon le décale à 03:00. Ce créneau décalé serait affiché puis
+        // refusé à la réservation (« hors disponibilités ») : on l'ignore.
+        if (start.hour * 60 + start.minute !== cursor) continue;
         const end = start.plus({ minutes: 60 });
         const startUtc = start.toUTC().toJSDate();
         const endUtc = end.toUTC().toJSDate();
@@ -707,10 +725,17 @@ export async function cancelBooking(bookingId: number, reason?: string) {
       return { error: "Annulation impossible pour ce statut." } as const;
     }
 
-    await tx.booking.update({
-      where: { id: bookingId },
+    // Mise à jour conditionnelle : si deux annulations arrivent en même
+    // temps, elles lisent toutes deux CONFIRMED, mais une seule passe ici
+    // (l'autre trouve count = 0) → un seul email et une seule suppression
+    // Google au lieu de deux.
+    const { count } = await tx.booking.updateMany({
+      where: { id: bookingId, status: "CONFIRMED" },
       data: { status: "CANCELLED", cancelReason: reason ?? booking.cancelReason }
     });
+    if (count === 0) {
+      return { ok: true, alreadyCancelled: true } as const;
+    }
 
     return { ok: true, booking } as const;
   });

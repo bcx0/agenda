@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Playfair_Display, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { Suspense } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -9,15 +9,26 @@ import { ToastProvider } from "../components/ToastProvider";
 import { MobileNav } from "../components/MobileNav";
 import { LanguageProvider } from "../components/LanguageProvider";
 
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-playfair"
+// Polices auto-hébergées (fichiers @fontsource 5.3.0, sous-ensemble latin) :
+// next/font/google 14.2 plante au build depuis nov. 2026 en lisant la
+// réponse de Google Fonts ("Cannot read properties of null (reading '1')").
+const playfair = localFont({
+  src: [
+    { path: "./fonts/playfair-display-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/playfair-display-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/playfair-display-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/playfair-display-latin-700-normal.woff2", weight: "700", style: "normal" }
+  ],
+  variable: "--font-playfair",
+  display: "swap"
 });
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter"
+const inter = localFont({
+  src: "./fonts/inter-latin-wght-normal.woff2",
+  weight: "100 900",
+  style: "normal",
+  variable: "--font-inter",
+  display: "swap"
 });
 
 // Nom d'application aligné sur l'écran de consentement OAuth ("Agenda

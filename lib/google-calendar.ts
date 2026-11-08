@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { GoogleReauthRequiredError } from './google-errors'
+import { proxyRequest } from './google-proxy.mjs'
 
 const DEFAULT_TIMEZONE = 'Europe/Paris'
 
@@ -87,6 +88,59 @@ async function logAuthError(
     })
   } catch (e) {
     console.error('[GoogleCalendar] Failed to log auth error:', e)
+  }
+}
+
+// ─── Relais Apps Script (GOOGLE_PROXY_URL) ──────────────────────────
+// Depuis le 03/11/2026, Google rejette par intermittence (401 « Invalid
+// Credentials ») les access tokens que l'app obtient par refresh, alors que
+// le refresh lui-même réussit ; seule une reconnexion manuelle relançait la
+// sync. Le relais supprime ce maillon : un script Apps Script déployé dans le
+// compte Google de l'agenda (scripts/google-apps-script/) exécute la requête
+// Calendar avec le token que Google gère lui-même pour ce script, et renvoie
+// { status, body }. Toute la logique de sync reste inchangée.
+
+const PROXY_NO_BODY_STATUSES = new Set([204, 205, 304])
+
+async function logProxyError(message: string, url: string): Promise<void> {
+  try {
+    await prisma.syncLog.create({
+      data: {
+        table: 'GoogleToken',
+        action: 'sync_error',
+        direction: 'google',
+        details: { reason: 'proxy_error', message, url, ...diagContext() },
+      },
+    })
+  } catch (e) {
+    console.error('[GoogleCalendar] Failed to log proxy error:', e)
+  }
+}
+
+export async function proxyGoogleFetch(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  if (options.body != null && typeof options.body !== 'string') {
+    throw new Error('Relais Google : seul un corps de requête JSON (string) est supporté')
+  }
+  try {
+    const result = await proxyRequest({
+      proxyUrl: process.env.GOOGLE_PROXY_URL,
+      secret: process.env.GOOGLE_PROXY_SECRET,
+      url,
+      method: options.method ?? 'GET',
+      body: typeof options.body === 'string' ? options.body : null,
+    })
+    return new Response(PROXY_NO_BODY_STATUSES.has(result.status) ? null : result.body, {
+      status: result.status,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[GoogleCalendar] Proxy error:', message)
+    await logProxyError(message, url)
+    throw err
   }
 }
 
@@ -243,6 +297,11 @@ export async function googleApiFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
+  // Relais Apps Script configuré → plus aucun token OAuth géré par l'app.
+  if (process.env.GOOGLE_PROXY_URL) {
+    return proxyGoogleFetch(url, options)
+  }
+
   let accessToken = await getValidAccessToken()
 
   let res = await fetch(url, {

@@ -8,6 +8,7 @@ import {
 } from '../../../../lib/sync-engine'
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
+import { checkSyncAlerts } from '../../../../lib/admin-alerts'
 
 // Intervalle minimal entre deux réconciliations complètes DB ↔ Google.
 const RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -176,6 +177,9 @@ export async function GET(req: NextRequest) {
       })
       .catch(() => {})
 
+    // Envoie « sync rétablie » si une alerte de panne était ouverte.
+    await checkSyncAlerts()
+
     return NextResponse.json({
       success: true,
       processed: events.length,
@@ -201,6 +205,7 @@ export async function GET(req: NextRequest) {
         '[Cron sync] Skipped — Google reauth required:',
         error.message
       )
+      await checkSyncAlerts(error.message)
       return NextResponse.json(
         {
           success: false,
@@ -228,6 +233,8 @@ export async function GET(req: NextRequest) {
         },
       })
       .catch(() => {})
+
+    await checkSyncAlerts(error instanceof Error ? error.message : String(error))
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Sync error' },

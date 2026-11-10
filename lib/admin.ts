@@ -317,8 +317,12 @@ export async function adminRescheduleBooking(
     return { error: "Créneau invalide." };
   }
 
+  // Conserver la durée d'origine : un RDV importé de Google (ex. 90 min) était
+  // ramené en silence à 1 h lors d'une reprogrammation depuis l'admin.
+  const originalDurationMs = booking.endAt.getTime() - booking.startAt.getTime();
+  const durationMs = originalDurationMs > 0 ? originalDurationMs : 60 * 60 * 1000;
   const startUtc = startBrussels.toUTC().toJSDate();
-  const endUtc = startBrussels.plus({ hours: 1 }).toUTC().toJSDate();
+  const endUtc = new Date(startUtc.getTime() + durationMs);
 
   const availability = await checkSlotAvailability(startUtc, endUtc, {
     excludeBookingId: booking.id

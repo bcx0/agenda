@@ -111,3 +111,25 @@ test("mois de quota (Bruxelles) : une séance du soir à Miami le dernier jour b
   const brusselsMonth = miami.setZone(BXL).toFormat("yyyy-LL");
   assert.equal(brusselsMonth, "2030-03");
 });
+
+test("règles Miami lues en heure de Miami : 9h Miami chaque jour ouvré 2026-2036 (même calcul que lib/booking.ts)", () => {
+  // getAvailableSlots : date calendaire du jour, heure de la règle posée
+  // dans le fuseau du lieu (ruleZone).
+  const slotStart = (isoDate, hhmm, zone) => {
+    const d = DateTime.fromISO(isoDate);
+    const [h, m] = hhmm.split(":").map(Number);
+    return DateTime.fromObject({ year: d.year, month: d.month, day: d.day }, { zone }).set({ hour: h, minute: m });
+  };
+  let oldMismatchDays = 0;
+  for (let d = DateTime.fromISO("2026-01-01"); d.year <= 2036; d = d.plus({ days: 1 })) {
+    if (d.weekday > 5) continue;
+    const iso = d.toISODate();
+    const now = slotStart(iso, "09:00", NY);
+    assert.equal(now.setZone(NY).toFormat("HH:mm"), "09:00", iso);
+    // Ancien calcul : règle 15:00 lue en heure de Bruxelles.
+    const old = slotStart(iso, "15:00", BXL);
+    if (old.setZone(NY).toFormat("HH:mm") !== "09:00") oldMismatchDays++;
+  }
+  // Les fenêtres où Europe et US ne sont pas alignés existaient chaque année.
+  assert.ok(oldMismatchDays > 100, `ancien calcul décalé ${oldMismatchDays} jours ouvrés sur 2026-2036`);
+});

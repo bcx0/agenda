@@ -9,6 +9,7 @@ import {
   BRUSSELS_WORK_END,
   MIAMI_WORK_START,
   MIAMI_WORK_END,
+  MIAMI_TZ,
   formatInZone,
   formatSlotBothTZ,
   monthBoundsUtc
@@ -134,8 +135,23 @@ function overlaps(startA: Date, endA: Date, startB: Date, endB: Date) {
 }
 
 function slotMinutesInBrussels(startUtc: Date, endUtc: Date) {
-  const startBrussels = DateTime.fromJSDate(startUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
-  const endBrussels = DateTime.fromJSDate(endUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
+  return slotMinutesInZone(startUtc, endUtc, BRUSSELS_TZ);
+}
+
+// Les règles de disponibilité sont exprimées en heure LOCALE du lieu :
+// Belgique = Bruxelles, Miami = Miami. (Avant le 10/11/2026, les règles
+// Miami étaient lues en heure de Bruxelles : 15:00-22:00 Bruxelles visait
+// 9h-16h Miami, mais l'Europe et les États-Unis ne changent pas d'heure le
+// même jour → ~3 semaines par an, 9h Miami disparaissait et 16h apparaissait.)
+// Les exceptions ponctuelles (AvailabilityOverride) restent en heure de
+// Bruxelles.
+function ruleZone(location: "MIAMI" | "BELGIUM"): string {
+  return location === "MIAMI" ? MIAMI_TZ : BRUSSELS_TZ;
+}
+
+function slotMinutesInZone(startUtc: Date, endUtc: Date, zone: string) {
+  const startBrussels = DateTime.fromJSDate(startUtc, { zone: "utc" }).setZone(zone);
+  const endBrussels = DateTime.fromJSDate(endUtc, { zone: "utc" }).setZone(zone);
   // Un créneau qui finit pile à minuit (23:00-00:00) est valide : sa fin
   // vaut 1440 minutes du jour de début. Au-delà, il chevauche deux jours.
   const endsAtMidnight =
@@ -295,19 +311,26 @@ export async function getAvailability() {
     const dateKey = day.toISODate() ?? "";
     const openOverrides = openOverridesByDate.get(dateKey) ?? [];
     const activeRanges: { startTime: string; endTime: string }[] = openOverrides.length ? openOverrides : dayRules;
+    // Exceptions OPEN : heure de Bruxelles. Règles : heure locale du lieu, sur
+    // la même date calendaire.
+    const rangeZone = openOverrides.length ? BRUSSELS_TZ : ruleZone(activeLocation);
+    const rangeDay = DateTime.fromObject(
+      { year: day.year, month: day.month, day: day.day },
+      { zone: rangeZone }
+    );
 
     const addSlotsFromRange = (startTime: string, endTime: string) => {
       const startMinutes = parseTimeToMinutes(startTime);
       const endMinutes = parseTimeToMinutes(endTime);
       if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) return;
       for (let cursor = startMinutes; cursor + 60 <= endMinutes; cursor += 60) {
-        const start = day.set({
+        const start = rangeDay.set({
           hour: Math.floor(cursor / 60),
           minute: cursor % 60,
           second: 0,
           millisecond: 0
         });
-        // Nuit du passage à l'heure d'été : 02:00 n'existe pas à Bruxelles et
+        // Nuit du passage à l'heure d'été : 02:00 n'existe pas localement et
         // Luxon le décale à 03:00. Ce créneau décalé serait affiché puis
         // refusé à la réservation (« hors disponibilités ») : on l'ignore.
         if (start.hour * 60 + start.minute !== cursor) continue;
@@ -470,20 +493,28 @@ export async function checkSlotAvailability(
   const isBrussels = isDateInBrusselsPeriod(minutes.day, locationPeriods);
   const activeLocation = isBrussels ? "BELGIUM" : "MIAMI";
 
-  const locationRules = allRules.filter((r: AvailabilityRuleRow) => r.location === activeLocation);
-  const hasRules = locationRules.length > 0;
-  const dayRules = locationRules.filter((rule: AvailabilityRuleRow) => rule.dayOfWeek === minutes.day.weekday);
   const openOverrides = overrides.filter((override: AvailabilityOverrideRow) => override.type === "OPEN");
   const hasOpenOverrides = openOverrides.length > 0;
-  const effectiveRules = hasRules
-    ? dayRules
-    : buildFallbackRules(activeLocation).filter((rule: AvailabilityRuleRow) => rule.dayOfWeek === minutes.day.weekday);
   const blockOverrides = overrides.filter((override: AvailabilityOverrideRow) => override.type === "BLOCK");
   const inOpenOverride = openOverrides.some((override: AvailabilityOverrideRow) => slotWithinOverride(minutes, override));
 
-  const withinRule = hasOpenOverrides
-    ? inOpenOverride
-    : effectiveRules.some((rule: AvailabilityRuleRow) => slotWithinRule(minutes, rule));
+  // Règles : heure locale du lieu (même calcul que getAvailableSlots). Pour
+  // Miami, minutes, jour de semaine et date de période se lisent à Miami.
+  const zone = ruleZone(activeLocation);
+  const localMinutes = activeLocation === "MIAMI" ? slotMinutesInZone(startUtc, endUtc, zone) : minutes;
+  const locationRules = allRules.filter((r: AvailabilityRuleRow) => r.location === activeLocation);
+  const hasRules = locationRules.length > 0;
+  const effectiveRules = localMinutes
+    ? (hasRules ? locationRules : buildFallbackRules(activeLocation)).filter(
+        (rule: AvailabilityRuleRow) => rule.dayOfWeek === localMinutes.day.weekday
+      )
+    : [];
+  const inRule =
+    !!localMinutes &&
+    (activeLocation === "BELGIUM" || !isDateInBrusselsPeriod(localMinutes.day, locationPeriods)) &&
+    effectiveRules.some((rule: AvailabilityRuleRow) => slotWithinRule(localMinutes, rule));
+
+  const withinRule = hasOpenOverrides ? inOpenOverride : inRule;
 
   if (!withinRule) {
     return { ok: false as const, error: "Créneau hors disponibilités." };

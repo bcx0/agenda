@@ -245,7 +245,8 @@ export default async function AdminAvailabilityPage({
                     <div>
                       <div className="font-semibold">
                         {weekDays.find((d) => d.value === rule.dayOfWeek)?.label} ·{" "}
-                        {rule.startTime} → {rule.endTime} Brussels
+                        {rule.startTime} → {rule.endTime}{" "}
+                        {rule.location === "BELGIUM" ? "Bruxelles" : "Miami"}
                       </div>
                     </div>
                     <form action={deleteAvailabilityRuleAction}>

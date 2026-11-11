@@ -20,7 +20,7 @@ export default function ConfidentialitePage() {
         <h1 className="font-[var(--font-playfair)] text-3xl uppercase tracking-wider">
           Politique de confidentialité
         </h1>
-        <p className="text-sm text-[#5A6B76]">Dernière mise à jour : 5 août 2026</p>
+        <p className="text-sm text-[#5A6B76]">Dernière mise à jour : 11 novembre 2026</p>
       </div>
 
       <div className="space-y-3">
@@ -41,7 +41,7 @@ export default function ConfidentialitePage() {
         <p className="text-[#5A6B76]">
           Pour les clients : nom, adresse e-mail, historique de rendez-vous et préférences de
           session (visio ou présentiel). Ces données servent uniquement à la gestion des
-          rendez-vous et à la communication liée aux séances (confirmations, rappels,
+          rendez-vous et à la communication liée aux séances (confirmations, modifications,
           annulations). Elles ne sont ni vendues, ni louées, ni partagées avec des tiers à des
           fins commerciales.
         </p>
@@ -137,13 +137,14 @@ export default function ConfidentialitePage() {
           <li>
             <strong>Journalisation de sécurité</strong> : les erreurs d&apos;authentification
             et opérations de synchronisation sont journalisées afin de détecter toute
-            anomalie.
+            anomalie. Ces journaux ne contiennent aucun jeton et sont supprimés
+            automatiquement après 30 jours (90 jours pour les incidents).
           </li>
           <li>
-            <strong>Révocation et suppression</strong> : la déconnexion depuis
-            l&apos;administration invalide les jetons stockés ; l&apos;accès peut aussi être
-            révoqué à tout moment via myaccount.google.com/permissions ; les données sont
-            supprimées sur demande (RGPD).
+            <strong>Révocation et suppression</strong> : l&apos;accès peut être révoqué à
+            tout moment via myaccount.google.com/permissions, ce qui rend immédiatement
+            inutilisables les jetons stockés ; les jetons et les données sont supprimés sur
+            simple demande (RGPD).
           </li>
           <li>
             <strong>Notification d&apos;incident</strong> : en cas d&apos;incident de
@@ -157,8 +158,8 @@ export default function ConfidentialitePage() {
             encryption at rest for the database including Google OAuth tokens; tokens stored
             server-side only, never exposed to the browser, source code or logs; secrets kept
             in encrypted environment variables; least-privilege access control; data
-            minimization; security logging; token revocation on disconnect; GDPR-compliant
-            deletion and breach notification.)
+            minimization; security logging; token revocation at any time from the Google account
+            and deletion on request; GDPR-compliant deletion and breach notification.)
           </em>
         </p>
       </div>
@@ -167,9 +168,8 @@ export default function ConfidentialitePage() {
         <h2 className="text-lg font-semibold">Conservation et suppression</h2>
         <p className="text-[#5A6B76]">
           Les données de rendez-vous sont conservées pendant la durée de la relation
-          contractuelle. Le professionnel peut déconnecter son compte Google à tout moment
-          depuis l&apos;administration (les jetons sont alors invalidés) et révoquer les accès
-          sur{" "}
+          contractuelle. Le professionnel peut révoquer à tout moment l&apos;accès de
+          l&apos;application à son compte Google sur{" "}
           <a
             href="https://myaccount.google.com/permissions"
             target="_blank"

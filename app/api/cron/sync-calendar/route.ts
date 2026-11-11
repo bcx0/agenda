@@ -9,6 +9,7 @@ import {
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
 import { checkSyncAlerts } from '../../../../lib/admin-alerts'
+import { isCronRequestAuthorized } from '../../../../lib/cron-auth.mjs'
 
 // Intervalle minimal entre deux réconciliations complètes DB ↔ Google.
 const RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -19,8 +20,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronRequestAuthorized(req.headers.get('authorization'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

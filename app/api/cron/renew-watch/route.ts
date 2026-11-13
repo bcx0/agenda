@@ -3,11 +3,11 @@ import { prisma } from '../../../../lib/prisma'
 import { googleApiFetch } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
 import { v4 as uuidv4 } from 'uuid'
+import { isCronRequestAuthorized } from '../../../../lib/cron-auth.mjs'
 
 export async function GET(req: NextRequest) {
   // Verify Vercel Cron secret
-  const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronRequestAuthorized(req.headers.get('authorization'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

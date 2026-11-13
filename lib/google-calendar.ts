@@ -1,5 +1,13 @@
 import { prisma } from './prisma'
 import { GoogleReauthRequiredError } from './google-errors'
+import { createHash } from 'node:crypto'
+
+// Empreinte non réversible d'un jeton pour les journaux : permet de voir si
+// deux traces concernent le même jeton sans jamais écrire le jeton, ni même
+// un fragment, dans SyncLog (engagement de la politique de confidentialité).
+function tokenFingerprint(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 12)
+}
 import { proxyRequest } from './google-proxy.mjs'
 
 const DEFAULT_TIMEZONE = 'Europe/Paris'
@@ -46,8 +54,8 @@ async function promoteBackupRefreshToken(): Promise<boolean> {
         action: 'token_failover',
         direction: 'google',
         details: {
-          promotedPrefix: token.backupRefreshToken.slice(0, 8),
-          demotedPrefix: token.refreshToken.slice(0, 8),
+          promotedFingerprint: tokenFingerprint(token.backupRefreshToken),
+          demotedFingerprint: tokenFingerprint(token.refreshToken),
           ...diagContext(),
         },
       },
@@ -382,8 +390,8 @@ export async function googleApiFetch(
         'post_refresh_401',
         {
           url,
-          tokenPrefix: accessToken.slice(0, 16),
-          rejectedTokenPrefix: rejectedToken.slice(0, 16),
+          tokenFingerprint: tokenFingerprint(accessToken),
+          rejectedTokenFingerprint: tokenFingerprint(rejectedToken),
           sameTokenAfterRefresh: String(sameTokenAfterRefresh),
           mintedNewToken: String(lastRefreshMintedNewToken),
         }

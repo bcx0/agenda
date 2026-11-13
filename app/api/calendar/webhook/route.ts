@@ -50,29 +50,48 @@ export async function POST(req: NextRequest) {
     const expectedToken = process.env.GOOGLE_WEBHOOK_SECRET;
     const tokenOk = !!channelToken && channelToken === expectedToken;
 
-    // Diagnostic : trace CHAQUE notification reçue, même rejetée. Sans ça,
-    // un mismatch de GOOGLE_WEBHOOK_SECRET ou un canal fantôme est
-    // totalement invisible (panne du 14/07 : zéro trace côté app).
-    await prisma.syncLog
-      .create({
-        data: {
-          table: "GoogleToken",
-          action: "webhook_hit",
-          direction: "google",
-          details: {
-            resourceState,
-            channelId,
-            tokenOk,
-            hasToken: !!channelToken,
-            hasSecret: !!expectedToken,
+    // Diagnostic : trace les notifications en base. Sans ça, un mismatch de
+    // GOOGLE_WEBHOOK_SECRET ou un canal fantôme est totalement invisible
+    // (panne du 14/07 : zéro trace côté app). Une requête rejetée n'est
+    // tracée en base que si elle vient d'un canal Google connu (le cas utile
+    // au diagnostic) : une requête anonyme ne peut plus remplir la base, elle
+    // ne laisse qu'une ligne dans les journaux Vercel.
+    const logHit = () =>
+      prisma.syncLog
+        .create({
+          data: {
+            table: "GoogleToken",
+            action: "webhook_hit",
+            direction: "google",
+            details: {
+              resourceState,
+              channelId,
+              tokenOk,
+              hasToken: !!channelToken,
+              hasSecret: !!expectedToken,
+            },
           },
-        },
-      })
-      .catch(() => {});
+        })
+        .catch(() => {});
 
     if (!tokenOk) {
+      const knownChannel = channelId
+        ? await prisma.googleCalendarWatch
+            .findUnique({ where: { channelId }, select: { id: true } })
+            .catch(() => null)
+        : null;
+      if (knownChannel) {
+        await logHit();
+      } else {
+        console.warn("[webhook] notification rejetée (canal inconnu, jeton invalide)", {
+          hasChannelId: !!channelId,
+          hasToken: !!channelToken,
+        });
+      }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    await logHit();
 
     // Initial sync notification from Google — do a full sync to catch up
     // This fires when a watch is first registered and ensures we capture

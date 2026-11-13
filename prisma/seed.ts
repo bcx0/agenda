@@ -3,7 +3,32 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+// Ce script EFFACE les réservations, blocs, règles, exceptions, blocs
+// récurrents, le journal d'e-mails et les réglages. Il est réservé à une base
+// locale de démonstration : il refuse de tourner ailleurs, même lancé par
+// erreur (prisma db seed, prisma migrate reset) avec l'adresse de production.
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function assertLocalDemoDatabase() {
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== "1") {
+    throw new Error(
+      "Seed refusé : ce script efface des données. Pour une base locale de démonstration, " +
+        "relancer avec ALLOW_DESTRUCTIVE_SEED=1."
+    );
+  }
+  let host = "";
+  try {
+    host = new URL(process.env.DATABASE_URL ?? "").hostname;
+  } catch {
+    host = "";
+  }
+  if (!LOCAL_HOSTS.has(host)) {
+    throw new Error(`Seed refusé : la base (${host || "adresse illisible"}) n'est pas une base locale.`);
+  }
+}
+
 async function main() {
+  assertLocalDemoDatabase();
   const hash = (password: string) => bcrypt.hash(password, 10);
 
   await prisma.client.upsert({
@@ -48,14 +73,6 @@ async function main() {
     }
   });
 
-  await prisma.admin.upsert({
-    where: { email: "admin@geoffreymahieu.com" },
-    update: {},
-    create: {
-      email: "admin@geoffreymahieu.com",
-      passwordHash: await hash("220700mG")
-    }
-  });
 
   await prisma.settings.upsert({
     where: { id: 1 },

@@ -5,6 +5,10 @@ import { isReauthError } from '../../../../lib/google-errors'
 import { v4 as uuidv4 } from 'uuid'
 import { isCronRequestAuthorized } from '../../../../lib/cron-auth.mjs'
 
+// Même règle que les autres crons : aucun fetch sortant servi depuis le cache
+// de Next (tests/google-no-store.test.mjs).
+export const fetchCache = 'force-no-store'
+
 export async function GET(req: NextRequest) {
   // Verify Vercel Cron secret
   if (!isCronRequestAuthorized(req.headers.get('authorization'), process.env.CRON_SECRET)) {

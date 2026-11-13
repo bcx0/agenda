@@ -15,6 +15,10 @@ import { isCronRequestAuthorized } from '../../../../lib/cron-auth.mjs'
 const RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export const dynamic = 'force-dynamic'
+// Aucun fetch sortant de ce cron ne doit être servi depuis le cache de Next
+// (jeton Google périmé re-servi, email d'alerte identique jamais renvoyé) :
+// voir lib/google-calendar.ts et tests/google-no-store.test.mjs.
+export const fetchCache = 'force-no-store'
 // Les runs post-purge traitent des centaines d'événements et dépassaient la
 // limite par défaut (504 FUNCTION_INVOCATION_TIMEOUT, cf. logs Vercel).
 export const maxDuration = 300

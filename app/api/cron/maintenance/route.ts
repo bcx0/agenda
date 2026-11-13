@@ -14,6 +14,9 @@ import { isCronRequestAuthorized } from '../../../../lib/cron-auth.mjs'
 // Chaque étape est isolée : l'échec de l'une n'empêche pas les autres.
 
 export const dynamic = 'force-dynamic'
+// Aucun fetch sortant servi depuis le cache de Next : sinon un email d'alerte
+// au contenu identique au précédent ne partirait pas (tests/google-no-store.test.mjs).
+export const fetchCache = 'force-no-store'
 export const maxDuration = 120
 
 async function lastSystemEventAt(action: string): Promise<number | null> {

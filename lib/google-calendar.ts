@@ -16,6 +16,16 @@ const DEFAULT_TIMEZONE = 'Europe/Paris'
 // timeout Vercel si l'API Google est lente (perte de syncToken, resync en boucle).
 const GOOGLE_FETCH_TIMEOUT_MS = 8000
 
+// CAUSE RACINE des pannes « post_refresh_401 » (trouvée le 13/11/2026) : dans
+// un route handler GET en force-dynamic (le cron de sync), Next 14 met en
+// cache la réponse de fetch, POST compris, sans limite de durée et d'un
+// déploiement à l'autre (Data Cache Vercel, clé = URL + corps). Le « refresh »
+// re-servait donc indéfiniment le premier access token obtenu pour un refresh
+// token donné : jeton périmé au bout d'une heure, 401 de Google, panne jusqu'à
+// la reconnexion suivante (nouveau refresh token = nouvelle clé de cache).
+// Tout appel Google doit donc être en `cache: 'no-store'` : ne jamais le
+// retirer (garde-fou : tests/google-no-store.test.mjs).
+
 // Diagnostic : le dernier refresh a-t-il émis un token différent de celui en
 // base ? (null = aucun refresh dans cette invocation)
 let lastRefreshMintedNewToken: boolean | null = null
@@ -212,6 +222,7 @@ export async function getValidAccessToken(
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -314,6 +325,7 @@ export async function googleApiFetch(
 
   let res = await fetch(url, {
     ...options,
+    cache: 'no-store',
     headers: {
       ...((options.headers as Record<string, string>) || {}),
       Authorization: `Bearer ${accessToken}`,
@@ -328,14 +340,15 @@ export async function googleApiFetch(
     )
     const rejectedToken = accessToken
     accessToken = await getValidAccessToken(true) // forceRefresh
-    // Subtilité Google : un refresh "forcé" alors que le token courant est
-    // encore valide à ses yeux renvoie souvent LE MÊME token — donc le retry
-    // repart avec le token déjà rejeté. On trace ce cas pour le diagnostic
-    // des 401 intermittents du 15/07.
+    // Si le refresh "forcé" renvoie LE MÊME token, le retry repart avec le
+    // token déjà rejeté. On trace ce cas : c'est lui qui a permis d'identifier
+    // le cache fetch de Next (voir le commentaire en tête de fichier), pris à
+    // tort pour un comportement de Google lors des 401 du 15/07.
     const sameTokenAfterRefresh = accessToken === rejectedToken
 
     res = await fetch(url, {
       ...options,
+      cache: 'no-store',
       headers: {
         ...((options.headers as Record<string, string>) || {}),
         Authorization: `Bearer ${accessToken}`,
@@ -352,6 +365,7 @@ export async function googleApiFetch(
       accessToken = await getValidAccessToken(true)
       res = await fetch(url, {
         ...options,
+        cache: 'no-store',
         headers: {
           ...((options.headers as Record<string, string>) || {}),
           Authorization: `Bearer ${accessToken}`,
@@ -370,6 +384,7 @@ export async function googleApiFetch(
         accessToken = await getValidAccessToken(true)
         res = await fetch(url, {
           ...options,
+          cache: 'no-store',
           headers: {
             ...((options.headers as Record<string, string>) || {}),
             Authorization: `Bearer ${accessToken}`,

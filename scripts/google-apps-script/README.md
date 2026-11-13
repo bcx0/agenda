@@ -1,6 +1,12 @@
 # Relais Google Calendar (Apps Script)
 
-## Pourquoi
+> **Mise à jour du 14/11/2026 : ce relais n'est plus nécessaire.** La vraie
+> cause des coupures a été trouvée et corrigée dans l'app (le refresh du jeton
+> Google était servi depuis le cache de Next.js, voir `lib/google-calendar.ts`).
+> Ce dossier est conservé comme solution de repli : n'installer le relais que
+> si Google refusait un jour réellement les jetons de l'app.
+
+## Pourquoi (diagnostic initial du 08/11/2026)
 
 Depuis le 03/11/2026, Google rejette par intermittence les tokens d'accès que
 l'app obtient en rafraîchissant son refresh token (401 « Invalid Credentials »),

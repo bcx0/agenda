@@ -37,6 +37,10 @@ let lastRefreshMintedNewToken: boolean | null = null
 // le callback OAuth). Observation empirique : les anciennes familles restent
 // fonctionnelles quand la famille active est tuée. L'échange (l'actuel
 // devient le secours) permet de re-basculer au prochain incident.
+// (Relecture du 13/11/2026 : ces 401 venaient du cache fetch de Next, voir
+// plus haut. Changer de refresh token changeait la clé de cache, d'où
+// l'impression que « l'ancienne famille marche ». Le failover reste utile si
+// Google révoque réellement le refresh token actif.)
 async function promoteBackupRefreshToken(): Promise<boolean> {
   const token = await prisma.googleToken.findFirst()
   if (!token?.backupRefreshToken || token.backupRefreshToken === token.refreshToken) {
@@ -117,6 +121,8 @@ async function logAuthError(
 // compte Google de l'agenda (scripts/google-apps-script/) exécute la requête
 // Calendar avec le token que Google gère lui-même pour ce script, et renvoie
 // { status, body }. Toute la logique de sync reste inchangée.
+// (Depuis le 13/11/2026 la vraie cause est corrigée, voir plus haut : le
+// relais n'est plus nécessaire. Il reste disponible comme solution de repli.)
 
 const PROXY_NO_BODY_STATUSES = new Set([204, 205, 304])
 

@@ -4,6 +4,7 @@ import {
   pullFromGoogle,
   reconcileDeletionsFromGoogle,
 } from "../../../../lib/sync-engine";
+import { shouldAdvanceSyncToken } from "../../../../lib/sync-guards.mjs";
 import {
   fetchChangedEvents,
   type GoogleCalendarEvent,
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
           // Persist the syncToken only AFTER processing: if the function dies
           // mid-loop (timeout), the old token stays and the next notification
           // re-fetches the missed events (pullFromGoogle is idempotent).
-          if (nextSyncToken) {
+          if (nextSyncToken && shouldAdvanceSyncToken(results)) {
             await prisma.googleToken.update({
               where: { id: token.id },
               data: { syncToken: nextSyncToken },
@@ -178,7 +179,8 @@ export async function POST(req: NextRequest) {
 
     // Persist the syncToken only AFTER processing (see comment above): a crash
     // mid-loop keeps the old token so missed events are re-fetched next time.
-    if (finalSyncToken) {
+    // Un événement en erreur garde l'ancien jeton : il sera rejoué.
+    if (finalSyncToken && shouldAdvanceSyncToken(results)) {
       await prisma.googleToken.update({
         where: { id: token.id },
         data: { syncToken: finalSyncToken },

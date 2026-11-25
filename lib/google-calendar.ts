@@ -452,6 +452,31 @@ export async function createGoogleEvent(
   return res.json()
 }
 
+// ─── findAppEventByRecord ───────────────────────────────────────────
+// Retrouve l'événement créé par l'app pour un enregistrement (étiquettes
+// privées appSource/recordType/recordId). Sert à rendre la création
+// idempotente : pas de second événement si le premier existe déjà.
+
+export async function findAppEventByRecord(
+  appSource: string,
+  recordType: 'booking' | 'block',
+  recordId: number
+): Promise<GoogleCalendarEvent | null> {
+  const params = new URLSearchParams({ maxResults: '10', singleEvents: 'true' })
+  params.append('privateExtendedProperty', `appSource=${appSource}`)
+  params.append('privateExtendedProperty', `recordType=${recordType}`)
+  params.append('privateExtendedProperty', `recordId=${recordId}`)
+  const res = await googleApiFetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`
+  )
+  if (!res.ok) {
+    const errText = await res.text().catch(() => 'no body')
+    throw new Error(`Google findAppEventByRecord failed: ${res.status} ${errText}`)
+  }
+  const data = (await res.json()) as { items?: GoogleCalendarEvent[] }
+  return (data.items ?? []).find((event) => event.status !== 'cancelled') ?? null
+}
+
 // ─── updateGoogleEvent ──────────────────────────────────────────────
 
 export async function updateGoogleEvent(

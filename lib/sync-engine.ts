@@ -4,8 +4,10 @@ import {
   createGoogleEvent,
   updateGoogleEvent,
   deleteGoogleEvent,
+  findAppEventByRecord,
   GoogleCalendarEvent,
 } from './google-calendar'
+import { localChangeWins } from './sync-guards.mjs'
 import { parseGoogleEventSummary } from './parse-google-event'
 import { matchClientNameIndex } from './fuzzy-match'
 
@@ -387,10 +389,23 @@ async function pullFromGoogleOnce(
       if (recordType === 'booking') {
         const existing = await prisma.booking.findUnique({
           where: { id: parseInt(recordId) },
-          select: { googleEtag: true, clientId: true, status: true, cancelReason: true },
+          select: {
+            googleEtag: true,
+            clientId: true,
+            status: true,
+            cancelReason: true,
+            syncStatus: true,
+            updatedAt: true,
+          },
         })
         if (!existing) {
           throw { code: 'P2025' }
+        }
+        // Modification locale plus récente pas encore poussée : on ne
+        // l'écrase pas avec l'ancienne version Google (elle sera repoussée).
+        if (existing.status === 'CONFIRMED' && localChangeWins(existing, googleEvent)) {
+          logSync('Booking', parseInt(recordId), 'pull_skip_local_newer', 'google_to_app')
+          return { action: 'local_newer_kept', skipped: true }
         }
         // Résurrection : l'événement est VIVANT côté Google alors que le
         // booking avait été annulé PAR la sync (suppression Google puis
@@ -468,6 +483,10 @@ async function pullFromGoogleOnce(
   ])
 
   if (existingBooking) {
+    if (existingBooking.status === 'CONFIRMED' && localChangeWins(existingBooking, googleEvent)) {
+      logSync('Booking', existingBooking.id, 'pull_skip_local_newer', 'google_to_app')
+      return { action: 'local_newer_kept', skipped: true }
+    }
     // Résurrection (voir chemin app-tag ci-dessus) : événement vivant côté
     // Google + booking annulé PAR la sync → on restaure, même à etag identique.
     const restoreFromCancel =
@@ -960,6 +979,20 @@ export async function repushUnsyncedBookings(
   let failed = 0
   for (const b of unsynced) {
     try {
+      // Idempotence : si une tentative précédente a créé l'événement Google
+      // mais n'a pas pu enregistrer son id (fonction coupée, erreur base),
+      // on le RATTACHE au lieu d'en créer un second (doublon).
+      const already = await findAppEventByRecord(APP_SOURCE_TAG, 'booking', b.id)
+      if (already) {
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: { googleEventId: already.id, googleEtag: already.etag, syncStatus: 'pending' },
+        })
+        await pushBookingToGoogle(b.id, 'update')
+        logSync('Booking', b.id, 'repush_relinked', 'app_to_google', { googleEventId: already.id })
+        pushed++
+        continue
+      }
       await pushBookingToGoogle(b.id, 'create')
       pushed++
     } catch (err) {
@@ -972,6 +1005,41 @@ export async function repushUnsyncedBookings(
 
   if (unsynced.length > 0) {
     console.log(`[Sync:repush] ${pushed}/${unsynced.length} réservations repoussées vers Google (${failed} échecs)`)
+  }
+  return { pushed, failed }
+}
+
+// ─── RE-PUSH des modifications locales non confirmées ─────────────
+// Un RDV déplacé dans l'app (admin, client, série) passe en "pending" dans la
+// même écriture. Si la mise à jour Google échoue ou est coupée, il reste
+// "pending"/"error" : ce filet le repousse à chaque passage du cron, jusqu'à
+// confirmation par Google ("synced"). Une synchro n'est jamais considérée
+// comme réussie sans réponse positive de Google.
+export async function retryPendingUpdates(
+  limit = 25
+): Promise<{ pushed: number; failed: number }> {
+  const pending = await prisma.booking.findMany({
+    where: {
+      status: 'CONFIRMED',
+      googleEventId: { not: null },
+      syncStatus: { in: ['pending', 'error'] },
+      startAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true },
+    orderBy: { updatedAt: 'asc' },
+    take: limit,
+  })
+  let pushed = 0
+  let failed = 0
+  for (const b of pending) {
+    try {
+      await pushBookingToGoogle(b.id, 'update')
+      pushed++
+    } catch (err) {
+      failed++
+      console.error(`[Sync:retry-update] Booking #${b.id} failed:`, err instanceof Error ? err.message : err)
+      if (failed >= 3) break
+    }
   }
   return { pushed, failed }
 }

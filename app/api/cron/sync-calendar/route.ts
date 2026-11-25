@@ -5,7 +5,9 @@ import {
   repushUnsyncedBookings,
   reconcileDeletionsFromGoogle,
   retryFailedCancellations,
+  retryPendingUpdates,
 } from '../../../../lib/sync-engine'
+import { shouldAdvanceSyncToken } from '../../../../lib/sync-guards.mjs'
 import { fetchChangedEvents } from '../../../../lib/google-calendar'
 import { isReauthError } from '../../../../lib/google-errors'
 import { checkSyncAlerts } from '../../../../lib/admin-alerts'
@@ -81,7 +83,11 @@ export async function GET(req: NextRequest) {
     // conservé et le prochain run re-fetche les événements manqués
     // (pullFromGoogle est idempotent). L'ancien ordre — token sauvé AVANT le
     // traitement — perdait des événements à chaque 504.
-    if (finalSyncToken) {
+    // Le jeton n'avance que si TOUS les événements ont été traités : un
+    // événement en erreur sera rejoué au prochain passage (traitement
+    // idempotent). Avant, ses changements étaient perdus définitivement.
+    const syncComplete = shouldAdvanceSyncToken(results)
+    if (finalSyncToken && syncComplete) {
       await prisma.googleToken.update({
         where: { id: token.id },
         data: { syncToken: finalSyncToken },
@@ -105,6 +111,13 @@ export async function GET(req: NextRequest) {
     // Auto-guérison inverse : retente la SUPPRESSION Google des RDV annulés
     // dans l'app dont le push_delete a échoué (l'événement restait sur le
     // calendrier de Geoffrey).
+    let updateRetries = { pushed: 0, failed: 0 }
+    try {
+      updateRetries = await retryPendingUpdates()
+    } catch (err) {
+      console.error('[Cron sync] Retry-update failed:', err instanceof Error ? err.message : err)
+    }
+
     let cancelRetries = { retried: 0, failed: 0 }
     try {
       cancelRetries = await retryFailedCancellations()
@@ -174,9 +187,18 @@ export async function GET(req: NextRequest) {
       .create({
         data: {
           table: 'GoogleToken',
-          action: 'sync_ok',
+          // "sync_partial" : au moins un événement en erreur, le jeton n'a pas
+          // avancé (rejoué au prochain passage). Ne compte PAS comme une
+          // synchro réussie pour les alertes (lib/admin-alerts.ts).
+          action: syncComplete ? 'sync_ok' : 'sync_partial',
           direction: 'google_to_app',
-          details: { processed: events.length, repushed: repushed.pushed },
+          details: {
+            processed: events.length,
+            errors,
+            repushed: repushed.pushed,
+            updatesRepushed: updateRetries.pushed,
+            updatesFailed: updateRetries.failed,
+          },
         },
       })
       .catch(() => {})

@@ -27,6 +27,10 @@ import { getAvailability } from "../../../lib/booking";
 import { prisma } from "../../../lib/prisma";
 import { getServerLocale, t, translateStatus, type Locale } from "../../../lib/i18n";
 import AdminGeneralAvailability from "./AdminGeneralAvailability";
+import { RecurringSeriesManager, type ReleasedOccurrence, type SeriesSummary } from "./ScheduleControls";
+import { loadAvailabilityData } from "../../../lib/availability-data.mjs";
+import { expandSeries, isoDateInZone, seriesLabel, seriesZone } from "../../../lib/availability-engine.mjs";
+import { DateTime } from "luxon";
 import AutoRefresh from "../../../components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
@@ -143,6 +147,53 @@ export default async function AdminAvailabilityPage({
 
   const weekDays = [1, 2, 3, 4, 5, 6, 7].map(v => ({ value: v, label: t(`dayName.${v}` as any, locale) }));
 
+  // Séries : occurrences libérées/déplacées (panneau jour) et prochaines
+  // occurrences avec leur état (onglet RDV réguliers). Même moteur et mêmes
+  // données que les créneaux affichés.
+  const horizonStart = DateTime.now().setZone(BRUSSELS_TZ).startOf("day").toUTC().toJSDate();
+  const horizonEnd = new Date(horizonStart.getTime() + 366 * 24 * 60 * 60 * 1000);
+  const scheduleData = await loadAvailabilityData(prisma, horizonStart, horizonEnd);
+  const releasedOccurrences: ReleasedOccurrence[] = scheduleData.recurringBlocks.flatMap((block) =>
+    expandSeries(block, scheduleData, horizonStart, horizonEnd)
+      .filter((o) => o.state === "released" || o.state === "moved")
+      .map((o) => ({
+        recurringBlockId: block.id,
+        dateIso: o.dateIso,
+        start: o.startUtc.toISOString(),
+        end: o.endUtc.toISOString(),
+        label: seriesLabel(block),
+        reason: o.reason,
+        movedTo: o.movedTo ? { start: o.movedTo.startUtc.toISOString(), end: o.movedTo.endUtc.toISOString() } : null,
+        dayKey: isoDateInZone(o.startUtc, BRUSSELS_TZ)
+      }))
+  );
+  const seriesHorizonEnd = new Date(horizonStart.getTime() + 26 * 7 * 24 * 60 * 60 * 1000);
+  const seriesSummaries = new Map<number, SeriesSummary>(
+    scheduleData.recurringBlocks.map((block) => [
+      block.id,
+      {
+        id: block.id,
+        dayOfWeek: block.dayOfWeek,
+        startTime: block.startTime,
+        endTime: block.endTime,
+        timeZone: seriesZone(block),
+        note: block.note,
+        clientName: block.clientName,
+        startDate: block.startDate,
+        endDate: block.endDate,
+        occurrences: expandSeries(block, scheduleData, horizonStart, seriesHorizonEnd).map((o) => ({
+          dateIso: o.dateIso,
+          start: o.startUtc.toISOString(),
+          end: o.endUtc.toISOString(),
+          state: o.state as SeriesSummary["occurrences"][number]["state"],
+          reason: o.reason,
+          bookingId: o.bookingId,
+          movedTo: o.movedTo ? { start: o.movedTo.startUtc.toISOString(), end: o.movedTo.endUtc.toISOString() } : null
+        }))
+      }
+    ])
+  );
+
   return (
     <section className="space-y-6">
       <AutoRefresh intervalMs={10000} />
@@ -187,6 +238,7 @@ export default async function AdminAvailabilityPage({
             endAt: b.endAt,
             reason: b.reason,
           }))}
+          releasedOccurrences={releasedOccurrences}
         />
       ) : null}
 
@@ -556,9 +608,9 @@ export default async function AdminAvailabilityPage({
                 {recurringBlocks.map((block: any) => (
                   <div
                     key={block.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm md:flex-row md:items-center md:justify-between"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-background-elevated px-3 py-3 text-sm md:flex-row md:items-start md:justify-between"
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="font-semibold">
                         {weekDays.find((d) => d.value === block.dayOfWeek)?.label} ·{" "}
                         {block.startTime} → {block.endTime} (
@@ -574,6 +626,14 @@ export default async function AdminAvailabilityPage({
                       )}
                       {block.note ? (
                         <div className="text-xs text-white/60">{t("avail.note", locale)}: {block.note}</div>
+                      ) : null}
+                      <div className="text-xs text-white/50">
+                        {block.startDate || block.endDate
+                          ? `Période : ${block.startDate ? `du ${formatInZone(block.startDate, "dd LLL yyyy", "UTC")}` : "depuis toujours"} ${block.endDate ? `au ${formatInZone(block.endDate, "dd LLL yyyy", "UTC")}` : "sans fin"}`
+                          : "Période : sans limite"}
+                      </div>
+                      {seriesSummaries.get(block.id) ? (
+                        <RecurringSeriesManager series={seriesSummaries.get(block.id)!} />
                       ) : null}
                     </div>
                     <form action={deleteRecurringBlockAction}>

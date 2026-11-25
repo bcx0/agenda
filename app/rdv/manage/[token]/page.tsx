@@ -45,7 +45,7 @@ export default async function ManageBookingPage({ params, searchParams }: PagePr
 
   // Only offer slots that respect the 48h advance rule (same as /book)
   const minStartTime = Date.now() + 48 * 60 * 60 * 1000;
-  const slots = await getAvailability();
+  const slots = await getAvailability({ audience: "public" });
   const availableSlots = slots.filter(
     (slot) =>
       slot.status === "available" &&

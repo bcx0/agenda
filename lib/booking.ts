@@ -3,19 +3,11 @@ import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import { addDays } from "date-fns";
 import { DateTime } from "luxon";
-import {
-  BRUSSELS_TZ,
-  BRUSSELS_WORK_START,
-  BRUSSELS_WORK_END,
-  MIAMI_WORK_START,
-  MIAMI_WORK_END,
-  MIAMI_TZ,
-  formatInZone,
-  formatSlotBothTZ,
-  monthBoundsUtc
-} from "./time";
+import { BRUSSELS_TZ, formatInZone, formatSlotBothTZ, monthBoundsUtc } from "./time";
 import { getSettings } from "./settings";
-import { recurringBlockOverlapsSlot, recurringBlockLabel } from "./recurring.mjs";
+import { checkInterval, computeSlots, isBrusselsPeriodDate } from "./availability-engine.mjs";
+import { loadAvailabilityData } from "./availability-data.mjs";
+import { lockSchedule } from "./schedule-ops.mjs";
 import {
   sendBookingCancelledEmail,
   sendBookingConfirmationEmail
@@ -40,13 +32,23 @@ export type SlotView = {
   presentielNote?: string | null;
   /** Cause du blocage quand status === "blocked" (diagnostic admin). */
   blockReason?: string | null;
+  /** Tout ce qui occupe le créneau, par priorité (admin uniquement). */
+  blockers?: SlotBlocker[];
 };
 
-type AvailabilityRuleRow = {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  location: string;
+/** Élément qui occupe un créneau (cf. findBlockers, lib/availability-engine.mjs). */
+export type SlotBlocker = {
+  kind: "booking" | "manual_block" | "calendar_block" | "recurring";
+  priority: number;
+  label: string;
+  bookingId?: number;
+  overrideId?: number;
+  blockId?: number;
+  fromGoogle?: boolean;
+  recurringBlockId?: number;
+  occurrenceDate?: string;
+  movedOccurrence?: boolean;
+  clientId?: number | null;
 };
 
 type LocationPeriodRow = {
@@ -60,176 +62,20 @@ type LocationPeriodRow = {
 // converties en UTC (app/admin/actions.ts) : 14/12 00:00 Bruxelles devient
 // 13/12 23:00 UTC. Il faut donc relire la date dans le fuseau de Bruxelles ;
 // la lecture en UTC faisait commencer chaque période un jour trop tôt.
-function brusselsIsoDate(date: Date): string | null {
-  return DateTime.fromJSDate(date, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
-}
-
 function isDateInBrusselsPeriod(day: DateTime, periods: LocationPeriodRow[]): boolean {
   const dayIso = day.toISODate();
   if (!dayIso) return false;
-  for (const period of periods) {
-    const start = brusselsIsoDate(period.startDate);
-    const end = brusselsIsoDate(period.endDate);
-    if (start && end && dayIso >= start && dayIso <= end) return true;
-  }
-  return false;
+  return isBrusselsPeriodDate(dayIso, periods);
 }
-
-function getBrusselsPeriodForDate(day: DateTime, periods: LocationPeriodRow[]): LocationPeriodRow | null {
-  const dayIso = day.toISODate();
-  if (!dayIso) return null;
-  for (const period of periods) {
-    const start = brusselsIsoDate(period.startDate);
-    const end = brusselsIsoDate(period.endDate);
-    if (start && end && dayIso >= start && dayIso <= end) return period;
-  }
-  return null;
-}
-
-type AvailabilityOverrideRow = {
-  date: Date;
-  startTime: string;
-  endTime: string;
-  type: "BLOCK" | "OPEN";
-};
-
-type RecurringBlockRow = {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  timeZone: string | null;
-  clientId: number | null;
-  note: string | null;
-};
 
 type SlotCheckOptions = { excludeBookingId?: number };
 
-function parseTimeToMinutes(value: string) {
-  const [hourStr, minuteStr = "0"] = value.split(":");
-  const hour = Number(hourStr);
-  const minute = Number(minuteStr);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  return hour * 60 + minute;
-}
-
-function buildFallbackRules(location: "MIAMI" | "BELGIUM"): AvailabilityRuleRow[] {
-  const start = location === "MIAMI" ? MIAMI_WORK_START : BRUSSELS_WORK_START;
-  const end = location === "MIAMI" ? MIAMI_WORK_END + 1 : BRUSSELS_WORK_END + 1;
-  return Array.from({ length: 7 }, (_, index) => ({
-    dayOfWeek: index + 1,
-    startTime: `${start.toString().padStart(2, "0")}:00`,
-    endTime: `${end.toString().padStart(2, "0")}:00`,
-    location
-  }));
-}
-
-function sameBrusselsDate(date: Date, day: DateTime) {
-  return (
-    DateTime.fromJSDate(date, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate() ===
-    day.toISODate()
-  );
-}
-
-function overlaps(startA: Date, endA: Date, startB: Date, endB: Date) {
-  return startA < endB && endA > startB;
-}
-
-function slotMinutesInBrussels(startUtc: Date, endUtc: Date) {
-  return slotMinutesInZone(startUtc, endUtc, BRUSSELS_TZ);
-}
-
-// Les règles de disponibilité sont exprimées en heure LOCALE du lieu :
-// Belgique = Bruxelles, Miami = Miami. (Avant le 10/11/2026, les règles
-// Miami étaient lues en heure de Bruxelles : 15:00-22:00 Bruxelles visait
-// 9h-16h Miami, mais l'Europe et les États-Unis ne changent pas d'heure le
-// même jour → ~3 semaines par an, 9h Miami disparaissait et 16h apparaissait.)
-// Les exceptions ponctuelles (AvailabilityOverride) restent en heure de
-// Bruxelles.
-function ruleZone(location: "MIAMI" | "BELGIUM"): string {
-  return location === "MIAMI" ? MIAMI_TZ : BRUSSELS_TZ;
-}
-
-function slotMinutesInZone(startUtc: Date, endUtc: Date, zone: string) {
-  const startBrussels = DateTime.fromJSDate(startUtc, { zone: "utc" }).setZone(zone);
-  const endBrussels = DateTime.fromJSDate(endUtc, { zone: "utc" }).setZone(zone);
-  // Un créneau qui finit pile à minuit (23:00-00:00) est valide : sa fin
-  // vaut 1440 minutes du jour de début. Au-delà, il chevauche deux jours.
-  const endsAtMidnight =
-    endBrussels.hour === 0 &&
-    endBrussels.minute === 0 &&
-    endBrussels.toISODate() === startBrussels.plus({ days: 1 }).toISODate();
-  if (startBrussels.toISODate() !== endBrussels.toISODate() && !endsAtMidnight) return null;
-  return {
-    start: startBrussels.hour * 60 + startBrussels.minute,
-    end: endsAtMidnight ? 24 * 60 : endBrussels.hour * 60 + endBrussels.minute,
-    day: startBrussels
-  };
-}
-
-function slotWithinRule(minutes: { start: number; end: number }, rule: AvailabilityRuleRow) {
-  const ruleStart = parseTimeToMinutes(rule.startTime);
-  const ruleEnd = parseTimeToMinutes(rule.endTime);
-  if (ruleStart === null || ruleEnd === null) return false;
-  return minutes.start >= ruleStart && minutes.end <= ruleEnd;
-}
-
-
-function slotWithinOverride(
-  minutes: { start: number; end: number },
-  override: AvailabilityOverrideRow
-) {
-  const start = parseTimeToMinutes(override.startTime);
-  const end = parseTimeToMinutes(override.endTime);
-  if (start === null || end === null) return false;
-  return minutes.start >= start && minutes.end <= end;
-}
-
-function slotOverlapsOverride(
-  minutes: { start: number; end: number },
-  override: AvailabilityOverrideRow
-) {
-  const start = parseTimeToMinutes(override.startTime);
-  const end = parseTimeToMinutes(override.endTime);
-  if (start === null || end === null) return false;
-  return minutes.start < end && minutes.end > start;
-}
-
-// NB : le chevauchement avec un RecurringBlock est désormais calculé par
-// recurringBlockOverlapsSlot (lib/recurring.mjs), qui respecte la colonne
-// `timeZone` du bloc (root cause du bug "13h jamais disponible" : des blocs
-// stockés en UTC étaient lus comme de l'heure de Bruxelles, et un bloc Miami
-// aurait bloqué l'heure de Bruxelles).
-
-function legacyBlocksWhere(rangeStart: Date, rangeEnd: Date) {
-  return {
-    startAt: { lt: rangeEnd },
-    endAt: { gt: rangeStart }
-  };
-}
-
-async function getAvailabilityData(rangeStart: Date, rangeEnd: Date) {
-  const [rules, overrides, recurringBlocks, legacyBlocks, bookings, locationPeriods] = await Promise.all([
-    prisma.availabilityRule.findMany({ orderBy: { dayOfWeek: "asc" } }),
-    prisma.availabilityOverride.findMany({
-      where: { date: { gte: rangeStart, lt: rangeEnd } },
-      orderBy: [{ date: "asc" }, { startTime: "asc" }]
-    }),
-    prisma.recurringBlock.findMany({ orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] }),
-    prisma.block.findMany({
-      where: legacyBlocksWhere(rangeStart, rangeEnd),
-      orderBy: { startAt: "asc" }
-    }),
-    prisma.booking.findMany({
-      where: {
-        status: "CONFIRMED",
-        startAt: { lt: rangeEnd },
-        endAt: { gt: rangeStart }
-      }
-    }),
-    prisma.locationPeriod.findMany({ orderBy: { startDate: "asc" } })
-  ]);
-  return { rules, overrides, recurringBlocks, legacyBlocks, bookings, locationPeriods };
-}
+// ─── Disponibilités : moteur UNIQUE (lib/availability-engine.mjs) ─────────
+// Avant le 25/11/2026, getAvailability() et checkSlotAvailability() avaient
+// chacun leur propre calcul (et le bloc récurrent n'avait aucune exception
+// possible) : un créneau pouvait être affiché puis refusé, et l'ancien créneau
+// d'un RDV régulier déplacé restait bloqué pour toujours. Les deux passent
+// désormais par les mêmes fonctions pures, sur les mêmes données.
 
 export async function getQuotaStatus(clientId: number, targetDate?: Date) {
   const client = await prisma.client.findUnique({ where: { id: clientId } });
@@ -248,201 +94,60 @@ export async function getQuotaStatus(clientId: number, targetDate?: Date) {
   };
 }
 
-export async function getAvailability() {
+/** Cause lisible d'un blocage (admin uniquement). */
+function blockerSummary(blockers: SlotBlocker[]): string | null {
+  const first = blockers[0];
+  return first ? first.label : null;
+}
+
+function toSlotView(
+  slot: { start: Date; end: Date; status: AvailabilityStatus; activeLocation: "MIAMI" | "BELGIUM"; blockers: SlotBlocker[] },
+  settings: { defaultMode: string; presentielLocation: string; presentielNote: string | null }
+): SlotView {
+  const mode: "VISIO" | "PRESENTIEL" =
+    slot.activeLocation === "BELGIUM"
+      ? "PRESENTIEL"
+      : settings.defaultMode === "PRESENTIEL"
+        ? "PRESENTIEL"
+        : "VISIO";
+  return {
+    start: slot.start,
+    end: slot.end,
+    status: slot.status,
+    label: formatInZone(slot.start, "EEEE dd MMM", BRUSSELS_TZ),
+    ...formatSlotBothTZ(slot.start),
+    mode,
+    location: "MIAMI",
+    activeLocation: slot.activeLocation,
+    presentielLocation: settings.presentielLocation,
+    presentielNote: settings.presentielNote,
+    blockReason: slot.status === "blocked" ? blockerSummary(slot.blockers) : null,
+    blockers: slot.status === "available" ? [] : slot.blockers
+  };
+}
+
+/**
+ * Créneaux des 365 prochains jours.
+ * `audience: "public"` (pages client) retire la cause des blocages : elle
+ * peut contenir le nom d'un autre client (note de série, réservation).
+ */
+export async function getAvailability(options: { audience?: "admin" | "public" } = {}) {
   const settings = await getSettings();
-  const baseLocation = "MIAMI" as const; // Miami is always the base
   const daysAhead = 365;
   const todayBrussels = DateTime.now().setZone(BRUSSELS_TZ).startOf("day");
   const rangeStart = todayBrussels.toUTC().toJSDate();
   const rangeEnd = todayBrussels.plus({ days: daysAhead + 1 }).toUTC().toJSDate();
 
-  const { rules, overrides, recurringBlocks, legacyBlocks, bookings, locationPeriods } =
-    await getAvailabilityData(rangeStart, rangeEnd);
+  const data = await loadAvailabilityData(prisma, rangeStart, rangeEnd);
+  const slots = computeSlots(data, { startDateIso: todayBrussels.toISODate() ?? "", days: daysAhead });
 
-  // Pre-index rules by location and dayOfWeek for O(1) lookup
-  const ruleIndex = new Map<string, AvailabilityRuleRow[]>();
-  for (const rule of rules) {
-    const key = `${rule.location}:${rule.dayOfWeek}`;
-    const arr = ruleIndex.get(key);
-    if (arr) arr.push(rule);
-    else ruleIndex.set(key, [rule]);
-  }
-
-  // Pre-index OPEN overrides by Brussels date
-  const openOverridesByDate = new Map<string, AvailabilityOverrideRow[]>();
-  for (const override of overrides) {
-    if (override.type !== "OPEN") continue;
-    const key = DateTime.fromJSDate(override.date, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
-    if (key) {
-      const arr = openOverridesByDate.get(key);
-      if (arr) arr.push(override);
-      else openOverridesByDate.set(key, [override]);
+  return slots.map((slot) => {
+    const view = toSlotView(slot as Parameters<typeof toSlotView>[0], settings);
+    if (options.audience === "public") {
+      return { ...view, blockReason: null, blockers: [] };
     }
-  }
-
-  const hasMiamiRules = rules.some((r: AvailabilityRuleRow) => r.location === "MIAMI");
-  const hasBrusselsRules = rules.some((r: AvailabilityRuleRow) => r.location === "BELGIUM");
-
-  // Pre-build fallback rules indexed by dayOfWeek
-  const miamiFallback = !hasMiamiRules ? buildFallbackRules("MIAMI") : [];
-  const brusselsFallback = !hasBrusselsRules ? buildFallbackRules("BELGIUM") : [];
-  const fallbackIndex = new Map<string, AvailabilityRuleRow[]>();
-  for (const rule of [...miamiFallback, ...brusselsFallback]) {
-    const key = `${rule.location}:${rule.dayOfWeek}`;
-    const arr = fallbackIndex.get(key);
-    if (arr) arr.push(rule);
-    else fallbackIndex.set(key, [rule]);
-  }
-
-  // Track which slots belong to which location
-  const slots = new Map<string, { start: Date; end: Date; activeLocation: "MIAMI" | "BELGIUM" }>();
-
-  for (let i = 0; i <= daysAhead; i++) {
-    const day = todayBrussels.plus({ days: i });
-    const isBrussels = isDateInBrusselsPeriod(day, locationPeriods);
-    const activeLocation = isBrussels ? "BELGIUM" : "MIAMI";
-    const hasLocationRules = isBrussels ? hasBrusselsRules : hasMiamiRules;
-    const ruleKey = `${activeLocation === "BELGIUM" ? "BELGIUM" : "MIAMI"}:${day.weekday}`;
-
-    const dayRules = hasLocationRules
-      ? (ruleIndex.get(ruleKey) ?? [])
-      : (fallbackIndex.get(ruleKey) ?? []);
-
-    const dateKey = day.toISODate() ?? "";
-    const openOverrides = openOverridesByDate.get(dateKey) ?? [];
-    const activeRanges: { startTime: string; endTime: string }[] = openOverrides.length ? openOverrides : dayRules;
-    // Exceptions OPEN : heure de Bruxelles. Règles : heure locale du lieu, sur
-    // la même date calendaire.
-    const rangeZone = openOverrides.length ? BRUSSELS_TZ : ruleZone(activeLocation);
-    const rangeDay = DateTime.fromObject(
-      { year: day.year, month: day.month, day: day.day },
-      { zone: rangeZone }
-    );
-
-    const addSlotsFromRange = (startTime: string, endTime: string) => {
-      const startMinutes = parseTimeToMinutes(startTime);
-      const endMinutes = parseTimeToMinutes(endTime);
-      if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) return;
-      for (let cursor = startMinutes; cursor + 60 <= endMinutes; cursor += 60) {
-        const start = rangeDay.set({
-          hour: Math.floor(cursor / 60),
-          minute: cursor % 60,
-          second: 0,
-          millisecond: 0
-        });
-        // Nuit du passage à l'heure d'été : 02:00 n'existe pas localement et
-        // Luxon le décale à 03:00. Ce créneau décalé serait affiché puis
-        // refusé à la réservation (« hors disponibilités ») : on l'ignore.
-        if (start.hour * 60 + start.minute !== cursor) continue;
-        const end = start.plus({ minutes: 60 });
-        const startUtc = start.toUTC().toJSDate();
-        const endUtc = end.toUTC().toJSDate();
-        const key = startUtc.toISOString();
-        if (!slots.has(key)) {
-          slots.set(key, { start: startUtc, end: endUtc, activeLocation });
-        }
-      }
-    };
-
-    activeRanges.forEach((range: { startTime: string; endTime: string }) => addSlotsFromRange(range.startTime, range.endTime));
-  }
-
-  const slotEntries = Array.from(slots.values()).sort(
-    (a, b) => a.start.getTime() - b.start.getTime()
-  );
-
-  // Pre-index overrides by Brussels date for O(1) lookup
-  const overridesByDate = new Map<string, AvailabilityOverrideRow[]>();
-  for (const override of overrides) {
-    const key = DateTime.fromJSDate(override.date, { zone: "utc" }).setZone(BRUSSELS_TZ).toISODate();
-    if (key) {
-      const arr = overridesByDate.get(key);
-      if (arr) arr.push(override);
-      else overridesByDate.set(key, [override]);
-    }
-  }
-
-  // Blocs récurrents : liste courte (~10 lignes) parcourue par créneau via
-  // recurringBlockOverlapsSlot — l'indexation par jour "Bruxelles" est
-  // volontairement supprimée car le jour d'un bloc se juge dans SA timezone
-  // (un bloc lundi 22:00 Miami tombe mardi 04:00 à Bruxelles).
-
-  // Pre-index bookings by Brussels date for O(1) lookup.
-  // Index under EVERY Brussels day the booking spans (start day .. end day), so a
-  // booking that crosses midnight still blocks slots on the following day(s).
-  const bookingsByDate = new Map<string, { startAt: Date; endAt: Date }[]>();
-  for (const booking of bookings) {
-    const startDay = DateTime.fromJSDate(booking.startAt, { zone: "utc" })
-      .setZone(BRUSSELS_TZ)
-      .startOf("day");
-    const endDay = DateTime.fromJSDate(booking.endAt, { zone: "utc" })
-      .setZone(BRUSSELS_TZ)
-      .startOf("day");
-    // Guard against malformed ranges; cap the span to a sane number of days.
-    for (let d = startDay, i = 0; d <= endDay && i < 370; d = d.plus({ days: 1 }), i++) {
-      const key = d.toISODate();
-      if (!key) continue;
-      const arr = bookingsByDate.get(key);
-      if (arr) arr.push(booking);
-      else bookingsByDate.set(key, [booking]);
-    }
-  }
-
-  const slotViews = slotEntries.map<SlotView>((slot) => {
-    const minutes = slotMinutesInBrussels(slot.start, slot.end);
-    const day =
-      minutes?.day ??
-      DateTime.fromJSDate(slot.start, { zone: "utc" }).setZone(BRUSSELS_TZ);
-    const dateKey = day.toISODate() ?? "";
-    const dayOverrides = overridesByDate.get(dateKey) ?? [];
-    const blockOverrides = dayOverrides.filter((override: AvailabilityOverrideRow) => override.type === "BLOCK");
-    const dayBookings = bookingsByDate.get(dateKey) ?? [];
-
-    const matchedOverride = minutes
-      ? blockOverrides.find((override: AvailabilityOverrideRow) => slotOverlapsOverride(minutes, override))
-      : undefined;
-    const matchedRecurring = recurringBlocks.find((block: RecurringBlockRow) =>
-      recurringBlockOverlapsSlot(slot.start, slot.end, block)
-    );
-    const matchedLegacy = legacyBlocks.find((block: { startAt: Date; endAt: Date; reason?: string | null }) =>
-      overlaps(block.startAt, block.endAt, slot.start, slot.end)
-    );
-
-    const isBlocked = !!(matchedOverride || matchedRecurring || matchedLegacy);
-
-    const blockReason = matchedOverride
-      ? `Exception ${matchedOverride.startTime}-${matchedOverride.endTime}`
-      : matchedRecurring
-        ? recurringBlockLabel(matchedRecurring)
-        : matchedLegacy
-          ? (matchedLegacy.reason ?? "Bloc importé du calendrier")
-          : null;
-
-    const isBooked = dayBookings.some((booking: { startAt: Date; endAt: Date }) =>
-      overlaps(booking.startAt, booking.endAt, slot.start, slot.end)
-    );
-
-    const status: AvailabilityStatus = isBlocked || isBooked ? "blocked" : "available";
-
-    const mode: "VISIO" | "PRESENTIEL" =
-      slot.activeLocation === "BELGIUM" ? "PRESENTIEL" : (settings.defaultMode === "PRESENTIEL" ? "PRESENTIEL" : "VISIO");
-
-    return {
-      start: slot.start,
-      end: slot.end,
-      status: isBooked ? "booked" : status,
-      label: formatInZone(slot.start, "EEEE dd MMM", BRUSSELS_TZ),
-      ...formatSlotBothTZ(slot.start),
-      mode,
-      location: baseLocation,
-      activeLocation: slot.activeLocation,
-      presentielLocation: settings.presentielLocation,
-      presentielNote: settings.presentielNote,
-      blockReason: isBooked ? null : blockReason
-    };
+    return view;
   });
-
-  return slotViews;
 }
 
 /** Returns all LocationPeriod entries (for display in settings/calendar) */
@@ -453,94 +158,22 @@ export async function getLocationPeriods() {
 export async function checkSlotAvailability(
   startUtc: Date,
   endUtc: Date,
-  options: SlotCheckOptions = {}
+  options: SlotCheckOptions = {},
+  db: Prisma.TransactionClient | typeof prisma = prisma
 ) {
-  // Garde structurelle : durée nulle ou négative (fin avant début). Sans elle,
-  // un créneau inversé passait slotWithinRule ET la détection de conflit
-  // (aucun chevauchement possible avec une plage vide) → ligne corrompue.
+  // Garde structurelle : durée nulle ou négative (fin avant début).
   if (endUtc.getTime() <= startUtc.getTime()) {
     return { ok: false as const, error: "Créneau invalide." };
   }
-  const minutes = slotMinutesInBrussels(startUtc, endUtc);
-  if (!minutes) {
-    return { ok: false as const, error: "Créneau invalide." };
+  const data = await loadAvailabilityData(
+    db,
+    new Date(startUtc.getTime() - 24 * 60 * 60 * 1000),
+    new Date(endUtc.getTime() + 24 * 60 * 60 * 1000)
+  );
+  const result = checkInterval(startUtc, endUtc, data, options);
+  if (!result.ok) {
+    return { ok: false as const, error: result.error, code: result.code };
   }
-
-  const dayStart = minutes.day.startOf("day").toUTC().toJSDate();
-  const dayEnd = minutes.day.plus({ days: 1 }).startOf("day").toUTC().toJSDate();
-
-  const [allRules, overrides, recurringBlocks, legacyBlocks, conflicts, locationPeriods] = await Promise.all([
-    prisma.availabilityRule.findMany(),
-    prisma.availabilityOverride.findMany({ where: { date: { gte: dayStart, lt: dayEnd } } }),
-    // TOUS les blocs récurrents : le jour d'un bloc se juge dans SA timezone
-    // (recurringBlockOverlapsSlot), pas dans le jour Bruxelles du créneau.
-    prisma.recurringBlock.findMany(),
-    prisma.block.findMany({
-      where: legacyBlocksWhere(startUtc, endUtc)
-    }),
-    prisma.booking.findMany({
-      where: {
-        status: "CONFIRMED",
-        id: options.excludeBookingId ? { not: options.excludeBookingId } : undefined,
-        startAt: { lt: endUtc },
-        endAt: { gt: startUtc }
-      }
-    }),
-    prisma.locationPeriod.findMany()
-  ]);
-
-  // Determine active location for this day
-  const isBrussels = isDateInBrusselsPeriod(minutes.day, locationPeriods);
-  const activeLocation = isBrussels ? "BELGIUM" : "MIAMI";
-
-  const openOverrides = overrides.filter((override: AvailabilityOverrideRow) => override.type === "OPEN");
-  const hasOpenOverrides = openOverrides.length > 0;
-  const blockOverrides = overrides.filter((override: AvailabilityOverrideRow) => override.type === "BLOCK");
-  const inOpenOverride = openOverrides.some((override: AvailabilityOverrideRow) => slotWithinOverride(minutes, override));
-
-  // Règles : heure locale du lieu (même calcul que getAvailableSlots). Pour
-  // Miami, minutes, jour de semaine et date de période se lisent à Miami.
-  const zone = ruleZone(activeLocation);
-  const localMinutes = activeLocation === "MIAMI" ? slotMinutesInZone(startUtc, endUtc, zone) : minutes;
-  const locationRules = allRules.filter((r: AvailabilityRuleRow) => r.location === activeLocation);
-  const hasRules = locationRules.length > 0;
-  const effectiveRules = localMinutes
-    ? (hasRules ? locationRules : buildFallbackRules(activeLocation)).filter(
-        (rule: AvailabilityRuleRow) => rule.dayOfWeek === localMinutes.day.weekday
-      )
-    : [];
-  const inRule =
-    !!localMinutes &&
-    (activeLocation === "BELGIUM" || !isDateInBrusselsPeriod(localMinutes.day, locationPeriods)) &&
-    effectiveRules.some((rule: AvailabilityRuleRow) => slotWithinRule(localMinutes, rule));
-
-  const withinRule = hasOpenOverrides ? inOpenOverride : inRule;
-
-  if (!withinRule) {
-    return { ok: false as const, error: "Créneau hors disponibilités." };
-  }
-
-  const blocked =
-    blockOverrides.some((override: AvailabilityOverrideRow) => slotOverlapsOverride(minutes, override)) ||
-    recurringBlocks.some((block: RecurringBlockRow) =>
-      recurringBlockOverlapsSlot(startUtc, endUtc, block)
-    ) ||
-    legacyBlocks.some((block: { startAt: Date; endAt: Date }) => overlaps(block.startAt, block.endAt, startUtc, endUtc));
-
-  if (blocked) {
-    return { ok: false as const, error: "Ce créneau est bloqué." };
-  }
-
-  if (conflicts.length > 0) {
-    return { ok: false as const, error: "Ce créneau vient d'être pris." };
-  }
-
-  // NOTE: the fallback rules used above are generated on the Brussels clock,
-  // exactly like the slots displayed by getAvailability(). Re-checking the
-  // Miami/Brussels wall-clock window here rejected slots that the UI offered
-  // (e.g. 07:00 Brussels = 01:00 Miami), so the display and booking paths
-  // now share the single slotWithinRule check.
-
   return { ok: true as const };
 }
 
@@ -650,6 +283,10 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
       // FOR UPDATE relâché en fin de transaction — compatible pgbouncer
       // (transaction pooling Supabase).
       await tx.$queryRaw`SELECT id FROM "Client" WHERE id = ${clientId} FOR UPDATE`;
+      // Verrou de l'agenda (le même que les actions admin sur les séries et
+      // les disponibilités) : un créneau rebloqué par l'admin pendant la
+      // réservation ne peut plus être réservé en même temps.
+      await lockSchedule(tx);
 
       const conflict = await tx.booking.findFirst({
         where: {
@@ -660,6 +297,11 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
       });
       if (conflict) {
         throw new Error("SLOT_TAKEN");
+      }
+      // Re-vérification complète dans la transaction (moteur unique).
+      const recheck = await checkSlotAvailability(startUtc, endUtc, {}, tx);
+      if (!recheck.ok) {
+        throw new Error(recheck.code === "TAKEN" ? "SLOT_TAKEN" : "SLOT_UNAVAILABLE");
       }
 
       const { startUtc: monthStart, endUtc: monthEnd } = monthBoundsUtc(startUtc);
@@ -689,6 +331,7 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
     })
     .catch((err: unknown) => {
       if (err instanceof Error && err.message === "SLOT_TAKEN") return "SLOT_TAKEN" as const;
+      if (err instanceof Error && err.message === "SLOT_UNAVAILABLE") return "SLOT_UNAVAILABLE" as const;
       if (err instanceof Error && err.message === "QUOTA_REACHED") return "QUOTA_REACHED" as const;
       // Unique index violation (two truly simultaneous requests)
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
@@ -699,6 +342,9 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
 
   if (booking === "SLOT_TAKEN") {
     return { error: "Ce créneau vient d'être pris." };
+  }
+  if (booking === "SLOT_UNAVAILABLE") {
+    return { error: "Ce créneau n'est plus disponible." };
   }
   if (booking === "QUOTA_REACHED") {
     return { error: QUOTA_ERROR };

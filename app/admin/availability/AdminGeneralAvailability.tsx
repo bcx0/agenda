@@ -8,9 +8,14 @@ import type { SlotView } from "../../../lib/booking";
 import { BRUSSELS_TZ, MIAMI_TZ, CALENDAR_TZ } from "../../../lib/time";
 import { CalendarViewToggle, type ViewMode } from "../../../components/CalendarViewToggle";
 import { MonthCalendar } from "../../../components/MonthCalendar";
-import { SubmitButton } from "../../../components/SubmitButton";
 import { useLanguage } from "../../../components/LanguageProvider";
-import { mergeRanges, subtractRange } from "../../../lib/ranges.mjs";
+import { subtractRange } from "../../../lib/ranges.mjs";
+import {
+  AddSlotForm,
+  BlockedSlotDetails,
+  ReleasedOccurrencesList,
+  type ReleasedOccurrence
+} from "./ScheduleControls";
 import {
   setGeneralAvailabilityForDateAction,
   setGeneralRecurringForDayAction,
@@ -60,6 +65,8 @@ type Props = {
   rules: AvailabilityRule[];
   overrides: AvailabilityOverride[];
   noAccountBlocks?: NoAccountBlock[];
+  /** Occurrences de séries libérées ou déplacées (365 jours). */
+  releasedOccurrences?: ReleasedOccurrence[];
 };
 
 const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
@@ -94,14 +101,6 @@ function toRangeJson(ranges: Range[]) {
   return JSON.stringify(
     ranges.filter((range) => range.startTime && range.endTime)
   );
-}
-
-const HOUR_START_OPTIONS = Array.from({ length: 23 }, (_, h) => `${String(h).padStart(2, "0")}:00`); // 00:00 → 22:00
-const HOUR_END_OPTIONS = Array.from({ length: 23 }, (_, h) => `${String(h + 1).padStart(2, "0")}:00`); // 01:00 → 23:00
-
-function plusOneHour(time: string): string {
-  const hour = Number(time.split(":")[0]);
-  return `${String(Math.min(hour + 1, 23)).padStart(2, "0")}:00`;
 }
 
 /**
@@ -184,111 +183,7 @@ function RemoveSlotButton({
   );
 }
 
-/**
- * Formulaire "Ajouter un créneau" du panneau jour.
- *
- * Soumet à setGeneralAvailabilityForDateAction l'UNION des plages effectives
- * du jour (reconstruites depuis les créneaux affichés) + la nouvelle plage +
- * les plages des RDV existants (arrondies à l'heure). Sans cette union, un
- * override OPEN REMPLACERAIT les dispos du jour (lib/booking.ts) et l'ajout
- * ferait disparaître les autres créneaux ; sans les plages des RDV, l'action
- * refuserait tout jour ayant un RDV hors plages (ex. imports Google).
- */
-function AddSlotForm({
-  dayKey,
-  isPast,
-  slots,
-  dayBookings,
-  hasOverrides
-}: {
-  dayKey: string;
-  isPast: boolean;
-  slots: SlotView[];
-  dayBookings: { startDate: Date; endDate: Date }[];
-  hasOverrides: boolean;
-}) {
-  const { t } = useLanguage();
-  const [state, formAction] = useFormState(setGeneralAvailabilityForDateAction, null);
-  const [startTime, setStartTime] = useState("18:00");
-  const [endTime, setEndTime] = useState("19:00");
-
-  const invalid = endTime <= startTime;
-
-  const rangesJson = useMemo(
-    () =>
-      JSON.stringify(
-        mergeRanges([...buildDayRanges(slots, dayBookings), { startTime, endTime }])
-      ),
-    [slots, dayBookings, startTime, endTime]
-  );
-
-  if (isPast) return null;
-
-  return (
-    <div className="space-y-3 rounded-xl border border-[#C8A060]/30 bg-[#0F0F0F] p-4">
-      <h4 className="text-sm font-semibold uppercase tracking-widest text-primary">
-        {t("availability.addSlotTitle")}
-      </h4>
-      <form action={formAction} className="flex flex-wrap items-end gap-3">
-        <input type="hidden" name="date" value={dayKey} />
-        <input type="hidden" name="ranges" value={rangesJson} />
-        <div className="space-y-1">
-          <label className="block text-[11px] uppercase tracking-widest text-white/50">
-            {t("availability.addSlotStart")}
-          </label>
-          <select
-            className="input"
-            value={startTime}
-            onChange={(e) => {
-              setStartTime(e.target.value);
-              setEndTime(plusOneHour(e.target.value));
-            }}
-          >
-            {HOUR_START_OPTIONS.map((time) => (
-              <option key={`add-start-${time}`} value={time}>
-                {time}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-[11px] uppercase tracking-widest text-white/50">
-            {t("availability.addSlotEnd")}
-          </label>
-          <select
-            className="input"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-          >
-            {HOUR_END_OPTIONS.map((time) => (
-              <option key={`add-end-${time}`} value={time}>
-                {time}
-              </option>
-            ))}
-          </select>
-        </div>
-        <SubmitButton className="btn btn-primary" disabled={invalid}>
-          {t("availability.addSlotSubmit")}
-        </SubmitButton>
-      </form>
-      {invalid ? (
-        <p className="text-xs text-red-400">{t("availability.addSlotInvalid")}</p>
-      ) : null}
-      {state && "error" in state && state.error ? (
-        <p className="text-xs text-red-400">{state.error}</p>
-      ) : null}
-      {state && "success" in state && state.success ? (
-        <p className="text-xs text-green-400">{state.message}</p>
-      ) : null}
-      {hasOverrides ? (
-        <p className="text-[11px] text-white/40">{t("availability.customDay")}</p>
-      ) : null}
-    </div>
-  );
-}
-
-
-export default function AdminGeneralAvailability({ slots, bookings, rules, overrides, noAccountBlocks = [] }: Props) {
+export default function AdminGeneralAvailability({ slots, bookings, rules, overrides, noAccountBlocks = [], releasedOccurrences = [] }: Props) {
   const { t, translateSlotStatus, locale } = useLanguage();
   const normalized = useMemo(() => normalizeSlots(slots), [slots]);
   const dayMap = useMemo(() => groupSlotsByDay(normalized, locale), [normalized, locale]);
@@ -667,8 +562,6 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
         key={mobileSelectedKey}
         dayKey={mobileSelectedKey}
         isPast={mobileSelectedKey < todayKey}
-        slots={mobileSelectedData.slots}
-        dayBookings={mobileBookingsForDay}
         hasOverrides={overrideDayKeys.has(mobileSelectedKey)}
       />
 
@@ -690,10 +583,10 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                       : "border-[#C8A060]/30 bg-[#0F0F0F]"
                     : slot.status === "booked"
                     ? "border-green-800 bg-green-900/10"
-                    : "border-gray-800 bg-[#0F0F0F] opacity-50"
+                    : "border-gray-800 bg-[#0F0F0F]"
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className={`flex items-center justify-between gap-2 ${slot.status === "blocked" ? "opacity-60" : ""}`}>
                   <span className="text-sm font-semibold">
                     {isBrusselsSlot ? `${slot.brussels} Brussels` : `${slot.miami} Miami`}
                   </span>
@@ -726,8 +619,10 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                     <span className="text-[11px] font-medium text-blue-400">Belgique</span>
                   </div>
                 )}
-                {slot.status === "blocked" && slot.blockReason ? (
-                  <div className="mt-1 text-[11px] text-white/45">{slot.blockReason}</div>
+                {slot.status === "blocked" ? (
+                  <div className="mt-2">
+                    <BlockedSlotDetails slot={slot} compact />
+                  </div>
                 ) : null}
               </div>
             );
@@ -740,6 +635,8 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
           <span className="text-[11px]">Sélectionnez un jour avec un point.</span>
         </div>
       )}
+
+      <ReleasedOccurrencesList items={releasedOccurrences.filter((o) => o.dayKey === mobileSelectedKey)} />
 
       {/* Reservations for day (bookings + no-account blocks) */}
       {mobileReservations.length > 0 && (
@@ -1013,8 +910,6 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                 key={selectedDay.key}
                 dayKey={selectedDay.key}
                 isPast={selectedDay.key < todayKey}
-                slots={selectedDay.slots}
-                dayBookings={bookingsForDay}
                 hasOverrides={overrideDayKeys.has(selectedDay.key)}
               />
 
@@ -1063,27 +958,20 @@ export default function AdminGeneralAvailability({ slots, bookings, rules, overr
                   </h4>
                   <div className="space-y-2">
                     {blockedForDay.map((slot) => (
-                      <div
-                        key={slot.start.toISOString()}
-                        className="rounded-lg border border-white/10 bg-[#0F0F0F] px-3 py-2 text-sm opacity-80"
-                      >
-                        <p className="font-semibold text-white/80">
-                          {slot.brussels} Brussels · {slot.miami} Miami
-                        </p>
-                        <p className="text-xs text-white/50">
-                          {slot.blockReason ??
-                            (locale === "fr" ? "Bloqué" : "Blocked")}
-                        </p>
-                      </div>
+                      <BlockedSlotDetails key={slot.start.toISOString()} slot={slot} />
                     ))}
                   </div>
                   <p className="text-[11px] text-white/40">
                     {locale === "fr"
-                      ? "Ces heures apparaissent « Complet » côté client. Blocs récurrents : onglet RDV réguliers · Exceptions : onglet Exceptions."
-                      : "These hours show as “Full” on the client side. Recurring blocks: Recurring tab · Exceptions: Overrides tab."}
+                      ? "Ces heures apparaissent « Complet » côté client. Priorité : réservation > indisponibilité manuelle ou Google > récurrence."
+                      : "These hours show as “Full” on the client side. Priority: booking > manual or Google block > recurring."}
                   </p>
                 </div>
               ) : null}
+
+              <ReleasedOccurrencesList
+                items={releasedOccurrences.filter((o) => o.dayKey === selectedDay.key)}
+              />
 
               {/* Unified list: bookings + NO_ACCOUNT blocks, sorted by start time */}
               <div className="space-y-3">

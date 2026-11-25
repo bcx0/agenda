@@ -31,7 +31,9 @@ import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../lib/makeWe
 import { mergeRanges } from "../../lib/ranges.mjs";
 import { pushBookingToGoogle, pushBlockToGoogle, reconcileNoAccountBlocksForClient } from "@/lib/sync-engine";
 import { cancelBooking, computeModeForSlotSync, getModeContext } from "../../lib/booking";
+import { cancelBookingsWithNotifications, findSeriesFutureBookings } from "../../lib/series-bookings";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import type { Prisma } from "@prisma/client";
 
 function assertAdmin() {
   const session = getAdminSession();
@@ -349,9 +351,13 @@ export async function deleteBlockAction(formData: FormData) {
   assertAdmin();
   const blockId = Number(formData.get("blockId"));
   if (!blockId) redirect("/admin/availability?error=Blocage%20introuvable");
-  await deleteBlock(blockId);
+  const result = await deleteBlock(blockId);
+  if (!result.ok) {
+    redirect(`/admin/availability?tab=overrides&error=${encodeURIComponent(result.error)}`);
+  }
   revalidatePath("/admin/availability");
-  redirect("/admin/availability?success=Blocage%20supprime");
+  revalidatePath("/book");
+  redirect("/admin/availability?tab=overrides&success=Blocage%20supprime");
 }
 
 export async function setGeneralAvailabilityForDateAction(
@@ -715,7 +721,7 @@ export async function createRecurringBlockAction(formData: FormData) {
     monthlyUsage.set(key, (monthlyUsage.get(key) ?? 0) + 1);
   }
 
-  const candidates: { startAt: Date; endAt: Date; monthKey: string }[] = [];
+  const candidates: { startAt: Date; endAt: Date; monthKey: string; occurrenceDate: string }[] = [];
   for (
     let day = horizonStart;
     day.toMillis() <= horizonEnd.toMillis();
@@ -738,7 +744,9 @@ export async function createRecurringBlockAction(formData: FormData) {
     candidates.push({
       startAt: startBrussels.toUTC().toJSDate(),
       endAt: endBrussels.toUTC().toJSDate(),
-      monthKey: toMonthKey(startBrussels.toUTC().toJSDate())
+      monthKey: toMonthKey(startBrussels.toUTC().toJSDate()),
+      // Date de l'occurrence dans le fuseau de la série (lien réservation → série)
+      occurrenceDate: day.toISODate() ?? ""
     });
   }
 
@@ -773,6 +781,7 @@ export async function createRecurringBlockAction(formData: FormData) {
     timeZone: string;
     rescheduleReason: string;
     bookedBy: string;
+    occurrenceDate: Date;
   }[] = [];
 
   // Même logique de mode que le parcours client (périodes Belgique, SessionMode,
@@ -803,7 +812,8 @@ export async function createRecurringBlockAction(formData: FormData) {
       rescheduleReason: note
         ? `${ADMIN_BLOCK_NOTE_PREFIX} ${note}`
         : ADMIN_BLOCK_NOTE_PREFIX,
-      bookedBy: "admin"
+      bookedBy: "admin",
+      occurrenceDate: new Date(`${candidate.occurrenceDate}T00:00:00.000Z`)
     });
     monthlyUsage.set(candidate.monthKey, currentUsage + 1);
   }
@@ -815,18 +825,24 @@ export async function createRecurringBlockAction(formData: FormData) {
   // Trace de la série : sans cette ligne RecurringBlock, la série était
   // invisible dans "RDV réguliers" et impossible à supprimer en bloc
   // (bug signalé le 04/07 — série Jeanine Dirosa).
-  await prisma.recurringBlock.create({
-    data: {
-      dayOfWeek,
-      startTime,
-      endTime,
-      timeZone,
-      clientId,
-      note: note || `RDV hebdo — ${client.name}`
-    }
+  // Série + réservations dans UNE transaction (tout ou rien), chaque
+  // réservation liée à son occurrence : si un RDV est ensuite déplacé ou
+  // annulé, son créneau d'origine est libéré automatiquement.
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const series = await tx.recurringBlock.create({
+      data: {
+        dayOfWeek,
+        startTime,
+        endTime,
+        timeZone,
+        clientId,
+        note: note || `RDV hebdo — ${client.name}`
+      }
+    });
+    await tx.booking.createMany({
+      data: toCreate.map((row) => ({ ...row, recurringBlockId: series.id }))
+    });
   });
-
-  await prisma.booking.createMany({ data: toCreate });
 
   // Push vers Google Calendar : jamais fait auparavant pour les séries
   // récurrentes (bug signalé le 04/07). On pousse un maximum dans le budget
@@ -888,60 +904,21 @@ export async function deleteRecurringBlockAction(formData: FormData) {
   assertAdmin();
   const blockId = Number(formData.get("recurringBlockId"));
   if (!blockId) redirect("/admin/availability?error=Bloc%20introuvable");
-  const block = await prisma.recurringBlock.findUnique({
-    where: { id: blockId },
-    select: {
-      dayOfWeek: true,
-      startTime: true,
-      endTime: true,
-      timeZone: true,
-      clientId: true
-    }
-  });
+  const block = await prisma.recurringBlock.findUnique({ where: { id: blockId } });
   if (!block) redirect("/admin/availability?error=Bloc%20introuvable");
 
-  if (block.clientId) {
-    const startMinutes = parseTimeToMinutes(block.startTime);
-    const endMinutes = parseTimeToMinutes(block.endTime);
-    if (startMinutes !== null && endMinutes !== null) {
-      const tz = block.timeZone ?? BRUSSELS_TZ;
-      const candidates = await prisma.booking.findMany({
-        where: {
-          clientId: block.clientId,
-          status: "CONFIRMED",
-          rescheduleReason: { startsWith: ADMIN_BLOCK_NOTE_PREFIX },
-          startAt: { gte: new Date() }
-        },
-        select: {
-          id: true,
-          startAt: true,
-          endAt: true
-        }
-      });
-
-      const matchingBookingIds = candidates
-        .filter((booking: any) => {
-          const startInZone = DateTime.fromJSDate(booking.startAt, { zone: "utc" }).setZone(tz);
-          const endInZone = DateTime.fromJSDate(booking.endAt, { zone: "utc" }).setZone(tz);
-          const bookingStartMinutes = startInZone.hour * 60 + startInZone.minute;
-          const bookingEndMinutes = endInZone.hour * 60 + endInZone.minute;
-          return (
-            startInZone.weekday === block.dayOfWeek &&
-            bookingStartMinutes === startMinutes &&
-            bookingEndMinutes === endMinutes
-          );
-        })
-        .map((booking: any) => booking.id);
-
-      if (matchingBookingIds.length > 0) {
-        // Cancel each booking individually to trigger email notifications & Google Calendar sync
-        await Promise.allSettled(
-          matchingBookingIds.map((id: any) =>
-            cancelBooking(id, "Annulé via suppression du bloc récurrent")
-          )
-        );
-      }
-    }
+  // Réservations à venir de la série (liées, ou anciennes créées par la
+  // série) : annulées une par une (emails + suppression Google). Si une
+  // annulation échoue, la série n'est PAS supprimée (sinon des RDV orphelins
+  // resteraient confirmés sans que l'admin le sache).
+  const ids = await findSeriesFutureBookings(block, new Date());
+  const { failed } = await cancelBookingsWithNotifications(ids, "Annulé via suppression du bloc récurrent");
+  if (failed > 0) {
+    redirect(
+      `/admin/availability?tab=recurring&error=${encodeURIComponent(
+        `${failed} rendez-vous de la série n'ont pas pu être annulés : la série n'a pas été supprimée. Réessayez.`
+      )}`
+    );
   }
 
   await deleteRecurringBlock(blockId);
@@ -949,7 +926,14 @@ export async function deleteRecurringBlockAction(formData: FormData) {
   revalidatePath("/admin/bookings");
   revalidatePath("/admin");
   revalidatePath("/manage");
-  redirect("/admin/availability?success=Bloc%20recurrent%20supprime");
+  revalidatePath("/book");
+  redirect(
+    `/admin/availability?tab=recurring&success=${encodeURIComponent(
+      ids.length > 0
+        ? `Série supprimée — ${ids.length} rendez-vous à venir annulé${ids.length > 1 ? "s" : ""}`
+        : "Série supprimée"
+    )}`
+  );
 }
 
 export async function cancelBookingAction(formData: FormData) {

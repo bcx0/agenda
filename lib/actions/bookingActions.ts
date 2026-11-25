@@ -41,6 +41,8 @@ export async function cancelClientBookingAction(formData: FormData) {
   }
 
   revalidatePath("/manage");
+  revalidatePath("/book");
+  revalidatePath("/admin/availability");
   redirect("/manage");
 }
 

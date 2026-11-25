@@ -6,6 +6,7 @@ import { sendBookingConfirmationEmail, sendBookingUpdatedEmail } from "./email/b
 import { checkSlotAvailability, cancelBooking } from "./booking";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "./makeWebhook";
 import { pushBookingToGoogle, pushBlockToGoogle } from "./sync-engine";
+import { lockSchedule } from "./schedule-ops.mjs";
 
 export async function listClients() {
   return prisma.client.findMany({
@@ -182,14 +183,31 @@ export async function createBlock(
   return newBlock;
 }
 
-export async function deleteBlock(blockId: number) {
+export async function deleteBlock(
+  blockId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
   // Pousser la suppression AVANT d'effacer la ligne : pushBlockToGoogle relit
   // le bloc en base — après le delete il jetait "Block introuvable" et
   // l'événement "Indisponible" restait sur Google Calendar.
-  await pushBlockToGoogle(blockId, "delete").catch((err) =>
-    console.error("[GoogleSync] Block delete failed:", err)
-  );
-  return prisma.block.delete({ where: { id: blockId } });
+  const block = await prisma.block.findUnique({ where: { id: blockId } });
+  if (!block) return { ok: true };
+  try {
+    await pushBlockToGoogle(blockId, "delete");
+  } catch (err) {
+    console.error("[GoogleSync] Block delete failed:", err);
+    // Si l'événement Google n'a pas pu être supprimé, on NE supprime PAS la
+    // ligne locale : sinon la synchro suivante réimporterait l'événement
+    // comme un nouveau blocage (blocage « fantôme » qui réapparaît).
+    if (block.googleEventId) {
+      return {
+        ok: false,
+        error:
+          "L'événement n'a pas pu être supprimé de Google Calendar : rien n'a été supprimé (sinon il réapparaîtrait à la prochaine synchro). Réessayez dans un instant."
+      };
+    }
+  }
+  await prisma.block.delete({ where: { id: blockId } }).catch(() => undefined);
+  return { ok: true };
 }
 
 export async function listUpcomingBookingsThisMonth() {
@@ -339,6 +357,8 @@ export async function adminRescheduleBooking(
   // (même protection que le reschedule côté client).
   const updated = await prisma
     .$transaction(async (tx: Prisma.TransactionClient) => {
+      // Même verrou que les réservations et les actions sur les séries.
+      await lockSchedule(tx);
       const conflict = await tx.booking.findFirst({
         where: {
           status: "CONFIRMED",
@@ -349,27 +369,44 @@ export async function adminRescheduleBooking(
         select: { id: true }
       });
       if (conflict) throw new Error("SLOT_TAKEN");
+      const recheck = await checkSlotAvailability(startUtc, endUtc, { excludeBookingId: booking.id }, tx);
+      if (!recheck.ok) throw new Error(recheck.code === "TAKEN" ? "SLOT_TAKEN" : "SLOT_UNAVAILABLE");
       return tx.booking.update({
         where: { id },
         data: {
           startAt: startUtc,
           endAt: endUtc,
           status: "CONFIRMED",
-          rescheduleReason: reason ?? booking.rescheduleReason
+          rescheduleReason: reason ?? booking.rescheduleReason,
+          // Changement local pas encore confirmé par Google : la synchro ne
+          // l'écrasera pas avec l'ancienne version et le repoussera si besoin.
+          syncStatus: "pending"
         }
       });
     })
     .catch((err: unknown) => {
-      if (err instanceof Error && err.message === "SLOT_TAKEN") return null;
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return null;
+      if (err instanceof Error && err.message === "SLOT_TAKEN") return "SLOT_TAKEN" as const;
+      if (err instanceof Error && err.message === "SLOT_UNAVAILABLE") return "SLOT_UNAVAILABLE" as const;
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return "SLOT_TAKEN" as const;
       throw err;
     });
-  if (!updated) {
+  if (updated === "SLOT_TAKEN") {
     return { error: "Ce créneau vient d'être pris." };
   }
-  pushBookingToGoogle(updated.id, "update").catch((err) =>
-    console.error("[GoogleSync] Booking update failed:", err)
-  );
+  if (updated === "SLOT_UNAVAILABLE") {
+    return { error: "Ce créneau n'est plus disponible." };
+  }
+  // Attendu (et non plus « fire-and-forget ») : sur Vercel, une promesse non
+  // attendue peut être coupée après la réponse, et l'app croyait le RDV
+  // synchronisé alors que Google gardait l'ancien horaire. En cas d'échec, le
+  // RDV reste "pending"/"error" et le cron de synchro le repousse.
+  let googleSynced = false;
+  try {
+    await pushBookingToGoogle(updated.id, "update");
+    googleSynced = true;
+  } catch (err) {
+    console.error("[GoogleSync] Booking update failed:", err);
+  }
 
   void sendMakeBookingWebhook(
     makePayloadFromBooking({
@@ -392,6 +429,6 @@ export async function adminRescheduleBooking(
     timeZone: "Europe/Brussels"
   });
 
-  return { ok: true };
+  return { ok: true, googleSynced };
 }
 

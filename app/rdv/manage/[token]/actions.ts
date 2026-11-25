@@ -15,6 +15,7 @@ import { toMonthKey } from "../../../../lib/time";
 import { sendBookingUpdatedEmail } from "../../../../lib/email/booking";
 import { makePayloadFromBooking, sendMakeBookingWebhook } from "../../../../lib/makeWebhook";
 import { pushBookingToGoogle } from "@/lib/sync-engine";
+import { lockSchedule } from "@/lib/schedule-ops.mjs";
 
 const TOKEN_ERROR = "Lien expiré ou invalide.";
 // Same business rule as /manage (lib/actions/bookingActions.ts): no self-service
@@ -65,6 +66,8 @@ export async function cancelAppointmentAction(formData: FormData) {
   }
 
   revalidatePath("/admin/bookings");
+  revalidatePath("/admin/availability");
+  revalidatePath("/book");
   redirect(buildRedirect(token, { success: "cancelled" }));
 }
 
@@ -148,6 +151,10 @@ export async function rescheduleAppointmentAction(formData: FormData) {
         }
       });
       if (conflict) throw new Error("SLOT_TAKEN");
+      // Même verrou + re-vérification que la réservation (moteur unique).
+      await lockSchedule(tx);
+      const recheck = await checkSlotAvailability(startUtc, endUtc, { excludeBookingId: booking.id }, tx);
+      if (!recheck.ok) throw new Error("SLOT_TAKEN");
 
       return tx.booking.update({
         where: { id: booking.id },
@@ -156,7 +163,9 @@ export async function rescheduleAppointmentAction(formData: FormData) {
           endAt: endUtc,
           status: "CONFIRMED",
           mode: newMode,
-          rescheduleReason: null
+          rescheduleReason: null,
+          // Pas encore confirmé par Google (cf. lib/admin.ts).
+          syncStatus: "pending"
         }
       });
     })
@@ -169,7 +178,9 @@ export async function rescheduleAppointmentAction(formData: FormData) {
   if (!updated) {
     redirect(buildRedirect(token, { error: "Ce créneau vient d'être pris." }));
   }
-  pushBookingToGoogle(updated.id, "update").catch((err) =>
+  // Attendu : une promesse non attendue peut être coupée par Vercel après la
+  // réponse. En cas d'échec, le cron de synchro repousse ce RDV ("pending").
+  await pushBookingToGoogle(updated.id, "update").catch((err) =>
     console.error("[GoogleSync] Booking update failed:", err)
   );
 
@@ -195,6 +206,10 @@ export async function rescheduleAppointmentAction(formData: FormData) {
   });
 
   revalidatePath("/admin/bookings");
+  revalidatePath("/admin/availability");
+  revalidatePath("/admin");
+  revalidatePath("/book");
+  revalidatePath("/manage");
   redirect(buildRedirect(token, { success: "rescheduled" }));
 }
 

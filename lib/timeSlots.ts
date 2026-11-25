@@ -30,7 +30,7 @@ function sameBrusselsDay(slotDate: Date, targetDate: Date) {
 }
 
 export async function getAvailableTimeSlots(date?: Date, _prisma?: unknown): Promise<TimeSlot[]> {
-  const slots = await getAvailability();
+  const slots = await getAvailability({ audience: "public" });
   const filteredSlots = date ? slots.filter((slot) => sameBrusselsDay(slot.start, date)) : slots;
 
   return filteredSlots

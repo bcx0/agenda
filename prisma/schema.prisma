@@ -41,6 +41,13 @@ model Booking {
   syncSource            String    @default("app")
   lastSyncedAt          DateTime?
   bookedBy              String    @default("client") @map("booked_by")
+  // Lien vers la série (RDV régulier) et la date d'origine de l'occurrence
+  // dans le fuseau de la série. Permet de libérer automatiquement l'ancien
+  // créneau quand la réservation est déplacée ou annulée (cf.
+  // lib/availability-engine.mjs). NULL pour une réservation ponctuelle.
+  recurringBlockId      Int?
+  recurringBlock        RecurringBlock? @relation(fields: [recurringBlockId], references: [id], onDelete: SetNull)
+  occurrenceDate        DateTime? @db.Date
 
 
   @@index([clientId])
@@ -48,6 +55,7 @@ model Booking {
   @@index([startAt])
   @@index([clientId, status])
   @@index([status, startAt])
+  @@index([recurringBlockId, occurrenceDate])
 }
 
 model Block {
@@ -108,6 +116,35 @@ model RecurringBlock {
   client    Client?  @relation(fields: [clientId], references: [id])
   note      String?
   createdAt DateTime @default(now())
+  // Période de validité (dates dans le fuseau de la série, bornes incluses).
+  // NULL = sans limite. Sert à « modifier cette occurrence et les suivantes »
+  // (la série d'origine s'arrête la veille) et à borner une série.
+  startDate DateTime? @db.Date
+  endDate   DateTime? @db.Date
+  exceptions RecurringBlockException[]
+  bookings   Booking[]
+}
+
+/// Exception sur UNE occurrence d'une série (RecurringBlock) :
+///  - SKIP : l'occurrence est libérée ce jour-là ;
+///  - MOVE : l'occurrence est déplacée (newStartAt/newEndAt bloqués à la place).
+/// Une seule exception par occurrence (contrainte unique) : les écritures sont
+/// idempotentes (upsert).
+model RecurringBlockException {
+  id               Int            @id @default(autoincrement())
+  recurringBlockId Int
+  recurringBlock   RecurringBlock @relation(fields: [recurringBlockId], references: [id], onDelete: Cascade)
+  occurrenceDate   DateTime       @db.Date
+  type             String // "SKIP" | "MOVE"
+  newStartAt       DateTime?
+  newEndAt         DateTime?
+  bookingId        Int?
+  note             String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+
+  @@unique([recurringBlockId, occurrenceDate])
+  @@index([newStartAt])
 }
 
 model EmailLog {

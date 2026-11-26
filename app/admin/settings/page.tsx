@@ -15,6 +15,7 @@ import {
 } from "../actions";
 import { prisma } from "../../../lib/prisma";
 import { GoogleCalendarConnect } from "../../../components/GoogleCalendarConnect";
+import { GoogleAccountLive } from "../../../components/GoogleAccountLive";
 import { getServerLocale, t, Locale } from "../../../lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -258,6 +259,7 @@ export default async function AdminSettingsPage() {
       <div className="card space-y-4 p-6">
         <div className="text-xs uppercase tracking-widest text-white/60">{t("settings.googleCalendar", locale)}</div>
         <div className="text-lg font-semibold">{t("settings.connectionAndSync", locale)}</div>
+        <GoogleAccountLive />
         <GoogleCalendarConnect
           isConnected={Boolean(googleToken)}
           googleEmail={googleToken?.googleEmail ?? null}

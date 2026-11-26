@@ -11,6 +11,9 @@ import { prisma } from "../../lib/prisma";
 import { getGoogleSyncHealth } from "../../lib/google-health";
 import PasswordInput from "../../components/PasswordInput";
 import AutoRefresh from "../../components/AutoRefresh";
+import { GoogleAccountLive } from "../../components/GoogleAccountLive";
+import { PendingSeriesMovesBanner, type PendingSeriesMove } from "./availability/ScheduleControls";
+import { listPendingMovedOccurrences } from "../../lib/schedule-ops.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +66,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
   const todayStartUtc = todayBrussels.startOf("day").toUTC().toJSDate();
   const todayEndUtc = todayBrussels.endOf("day").toUTC().toJSDate();
 
-  const [todayBookings, settings, googleHealth] = await Promise.all([
+  const [todayBookings, settings, googleHealth, pendingMoves] = await Promise.all([
     prisma.booking.findMany({
       where: {
         status: { not: "CANCELLED" },
@@ -73,8 +76,19 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
       include: { client: true }
     }),
     prisma.settings.findUnique({ where: { id: 1 } }),
-    getGoogleSyncHealth()
+    getGoogleSyncHealth(),
+    listPendingMovedOccurrences(prisma)
   ]);
+  // RDV réguliers déplacés dont le créneau d'origine attend une décision.
+  const pendingSeriesMoves: PendingSeriesMove[] = pendingMoves.map((p) => ({
+    recurringBlockId: p.recurringBlockId,
+    dateIso: p.dateIso,
+    start: p.startUtc.toISOString(),
+    end: p.endUtc.toISOString(),
+    label: p.label,
+    clientName: p.clientName,
+    movedTo: p.movedTo ? { start: p.movedTo.startUtc.toISOString(), end: p.movedTo.endUtc.toISOString() } : null
+  }));
 
   const bookingLocked = settings?.bookingLocked ?? false;
 
@@ -107,7 +121,11 @@ export default async function AdminPage({ searchParams }: { searchParams?: Searc
         </form>
       </div>
 
+      <PendingSeriesMovesBanner items={pendingSeriesMoves} />
+
       <StatCard label={t("dashboard.appointments", locale)} value={todayBookings.length} />
+
+      <GoogleAccountLive compact />
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="card space-y-3 p-5">

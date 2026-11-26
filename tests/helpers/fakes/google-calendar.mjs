@@ -42,7 +42,7 @@ export async function createGoogleEvent(payload) {
   state.calls.push({ op: "create", payload });
   maybeFail("create");
   const id = `evt${state.nextId++}`;
-  const event = stamp({ id, status: "confirmed", ...JSON.parse(JSON.stringify(payload)) });
+  const event = stamp({ id, status: "confirmed", created: new Date().toISOString(), ...JSON.parse(JSON.stringify(payload)) });
   state.events.set(id, event);
   return publicCopy(event);
 }
@@ -66,9 +66,10 @@ export async function deleteGoogleEvent(id) {
   stamp(event);
 }
 
-export async function findAppEventByRecord(appSource, recordType, recordId) {
+export async function findAppEventsByRecord(appSource, recordType, recordId) {
   state.calls.push({ op: "find", recordType, recordId });
   maybeFail("find");
+  const found = [];
   for (const event of state.events.values()) {
     const p = event.extendedProperties?.private;
     if (
@@ -77,10 +78,19 @@ export async function findAppEventByRecord(appSource, recordType, recordId) {
       p?.recordType === recordType &&
       p?.recordId === String(recordId)
     ) {
-      return publicCopy(event);
+      found.push(publicCopy(event));
     }
   }
-  return null;
+  return found;
+}
+
+export async function findAppEventByRecord(appSource, recordType, recordId) {
+  return (await findAppEventsByRecord(appSource, recordType, recordId))[0] ?? null;
+}
+
+export async function getConnectedGoogleAccount() {
+  maybeFail("account");
+  return { email: state.accountEmail ?? "agenda-test@example.com", timeZone: "Europe/Brussels" };
 }
 
 export async function fetchChangedEvents(syncToken) {
@@ -119,7 +129,7 @@ export const fake = {
   /** Événement créé directement dans Google (pas par l'app). */
   addFromGoogle(payload) {
     const id = `gcal${state.nextId++}`;
-    const event = stamp({ id, status: "confirmed", ...JSON.parse(JSON.stringify(payload)) });
+    const event = stamp({ id, status: "confirmed", created: new Date().toISOString(), ...JSON.parse(JSON.stringify(payload)) });
     state.events.set(id, event);
     return publicCopy(event);
   },
@@ -141,7 +151,7 @@ export const fake = {
   /** Simule « l'événement a été créé chez Google mais la réponse est perdue ». */
   createSilently(payload) {
     const id = `evt${state.nextId++}`;
-    const event = stamp({ id, status: "confirmed", ...JSON.parse(JSON.stringify(payload)) });
+    const event = stamp({ id, status: "confirmed", created: new Date().toISOString(), ...JSON.parse(JSON.stringify(payload)) });
     state.events.set(id, event);
     return publicCopy(event);
   }

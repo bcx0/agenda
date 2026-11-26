@@ -5,9 +5,16 @@ import {
   updateGoogleEvent,
   deleteGoogleEvent,
   findAppEventByRecord,
+  findAppEventsByRecord,
   GoogleCalendarEvent,
 } from './google-calendar'
 import { localChangeWins } from './sync-guards.mjs'
+import {
+  eventOwnership,
+  isAppCancelled,
+  isWithinGhostScope,
+  planGhostSweep,
+} from './sync-ghosts.mjs'
 import { parseGoogleEventSummary } from './parse-google-event'
 import { matchClientNameIndex } from './fuzzy-match'
 
@@ -164,9 +171,27 @@ export async function pushBookingToGoogle(
       if (booking.googleEventId) {
         await deleteGoogleEvent(booking.googleEventId)
       }
+      // Un événement de cette réservation peut exister SANS que son
+      // identifiant soit en base (création coupée avant l'enregistrement, ou
+      // doublon créé en parallèle) : avant, il restait pour toujours dans
+      // Google Calendar après l'annulation (26/11/2026). On le retrouve par
+      // l'étiquette privée de l'app et on vérifie qu'il appartient bien à
+      // cette réservation (date de création + horaire) avant de le supprimer.
+      const tagged = await findAppEventsByRecord(APP_SOURCE_TAG, 'booking', bookingId)
+      for (const event of tagged) {
+        if (event.id === booking.googleEventId) continue
+        if (eventOwnership(booking, event, APP_SOURCE_TAG) !== 'tagged') continue
+        await deleteGoogleEvent(event.id)
+        logSync('Booking', bookingId, 'ghost_event_deleted', 'app_to_google', {
+          googleEventId: event.id,
+          reason: 'unlinked_event_on_cancel',
+          summary: event.summary ?? null,
+          start: event.start?.dateTime ?? null,
+        })
+      }
       await prisma.booking.update({
         where: { id: bookingId },
-        data: { syncStatus: 'cancelled' },
+        data: { syncStatus: 'cancelled', lastSyncedAt: new Date() },
       })
     } else if (action === 'create' || !booking.googleEventId) {
       const created = await createGoogleEvent(payload)
@@ -314,6 +339,59 @@ function isGoogleEventIdConflict(err: unknown): boolean {
     : String(target ?? '').includes('googleEventId')
 }
 
+// ─── Événement vivant d'une réservation ANNULÉE dans l'app ─────────
+// L'app fait foi pour une annulation faite chez elle (client, admin, série) :
+// l'événement ne doit plus exister dans Google Calendar. Avant, la synchro le
+// rattachait à la réservation annulée et le marquait « synced » : le RDV
+// annulé restait affiché chez Geoffrey (26/11/2026). Il est maintenant
+// supprimé par son identifiant exact ; en cas d'échec la réservation passe en
+// "error" et retryFailedCancellations retente à chaque cron.
+type GhostCandidate = {
+  id: number
+  status: string
+  cancelReason: string | null
+  googleEventId: string | null
+  createdAt: Date
+  startAt: Date
+}
+
+async function removeGhostEventIfAny(
+  booking: GhostCandidate,
+  googleEvent: GoogleCalendarEvent
+): Promise<{ action: string; [key: string]: any } | null> {
+  if (!isAppCancelled(booking)) return null
+  const ownership = eventOwnership(booking, googleEvent, APP_SOURCE_TAG)
+  if (!ownership) return null
+  // Passé de plus de 24 h : on ne réécrit pas l'historique du calendrier,
+  // mais on ne « resynchronise » pas non plus la réservation annulée.
+  if (!isWithinGhostScope(googleEvent)) {
+    return { action: 'cancelled_booking_past_event_ignored', skipped: true }
+  }
+  try {
+    await deleteGoogleEvent(googleEvent.id)
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { syncStatus: 'cancelled', lastSyncedAt: new Date() },
+    })
+    logSync('Booking', booking.id, 'ghost_event_deleted', 'app_to_google', {
+      googleEventId: googleEvent.id,
+      reason: ownership === 'linked' ? 'cancelled_booking' : 'cancelled_booking_unlinked_event',
+      summary: googleEvent.summary ?? null,
+      start: googleEvent.start?.dateTime ?? null,
+    })
+    return { action: 'ghost_event_deleted', bookingId: booking.id }
+  } catch (err: unknown) {
+    await prisma.booking
+      .update({ where: { id: booking.id }, data: { syncStatus: 'error' } })
+      .catch(() => {})
+    logSync('Booking', booking.id, 'error', 'app_to_google', {
+      error: `ghost delete failed: ${err instanceof Error ? err.message : String(err)}`,
+      googleEventId: googleEvent.id,
+    })
+    return { action: 'ghost_event_delete_failed', bookingId: booking.id }
+  }
+}
+
 export async function pullFromGoogle(
   googleEvent: GoogleCalendarEvent | null,
   googleEventId: string
@@ -390,16 +468,29 @@ async function pullFromGoogleOnce(
         const existing = await prisma.booking.findUnique({
           where: { id: parseInt(recordId) },
           select: {
+            id: true,
             googleEtag: true,
+            googleEventId: true,
             clientId: true,
             status: true,
             cancelReason: true,
             syncStatus: true,
             updatedAt: true,
+            createdAt: true,
+            startAt: true,
           },
         })
         if (!existing) {
           throw { code: 'P2025' }
+        }
+        // Réservation annulée dans l'app : son événement est supprimé, il
+        // n'est plus jamais « resynchronisé » sur la réservation annulée.
+        if (isAppCancelled(existing)) {
+          const ghost = await removeGhostEventIfAny(existing, googleEvent)
+          if (ghost) return ghost
+          // Étiquette sans certitude (copie manuelle, ancienne base) : on ne
+          // touche ni à l'événement ni à la réservation annulée.
+          return { action: 'cancelled_booking_unowned_event_ignored', skipped: true }
         }
         // Modification locale plus récente pas encore poussée : on ne
         // l'écrase pas avec l'ancienne version Google (elle sera repoussée).
@@ -483,6 +574,12 @@ async function pullFromGoogleOnce(
   ])
 
   if (existingBooking) {
+    // Même règle que le chemin étiqueté : un événement vivant lié (par son
+    // identifiant exact) à une réservation annulée dans l'app est supprimé.
+    if (isAppCancelled(existingBooking)) {
+      const ghost = await removeGhostEventIfAny(existingBooking, googleEvent)
+      if (ghost) return ghost
+    }
     if (existingBooking.status === 'CONFIRMED' && localChangeWins(existingBooking, googleEvent)) {
       logSync('Booking', existingBooking.id, 'pull_skip_local_newer', 'google_to_app')
       return { action: 'local_newer_kept', skipped: true }
@@ -960,6 +1057,8 @@ export async function reconcileNoAccountBlocksForClient(
 // Après une panne d'auth Google, les RDV créés dans l'app n'ont pas de
 // googleEventId et ne sont jamais retentés. Cette fonction les repousse
 // (appelée à chaque cron de sync — auto-guérison).
+const REPUSH_GRACE_MS = 2 * 60 * 1000
+
 export async function repushUnsyncedBookings(
   limit = 50
 ): Promise<{ pushed: number; failed: number }> {
@@ -969,6 +1068,10 @@ export async function repushUnsyncedBookings(
       googleEventId: null,
       startAt: { gte: new Date() },
       syncSource: { not: 'google' },
+      // Laisse 2 minutes à la requête qui vient de créer la réservation pour
+      // finir son propre push : sans ce délai, le cron et la requête
+      // pouvaient créer chacun un événement (doublon dans Google Calendar).
+      createdAt: { lt: new Date(Date.now() - REPUSH_GRACE_MS) },
     },
     select: { id: true },
     orderBy: { startAt: 'asc' },
@@ -1177,6 +1280,185 @@ export async function reconcileDeletionsFromGoogle(
   return result
 }
 
+// ─── BALAYAGE des événements fantômes et des doublons ────────────
+// À partir d'un listing COMPLET : supprime de Google Calendar les événements
+// encore vivants des réservations annulées dans l'app, supprime les doublons
+// d'une même réservation, et rattache une réservation confirmée à son
+// événement réel quand l'identifiant en base est absent ou mort. Chaque
+// événement est désigné par son identifiant exact (lib/sync-ghosts.mjs), jamais
+// par son seul horaire. Idempotent : un second passage ne trouve plus rien.
+export type GhostSweepResult = {
+  scanned: number
+  deleted: number
+  relinked: number
+  failed: number
+  uncertain: number
+  aborted: string | null
+}
+
+export async function sweepGhostEvents(
+  events: GoogleCalendarEvent[]
+): Promise<GhostSweepResult> {
+  const result: GhostSweepResult = {
+    scanned: 0,
+    deleted: 0,
+    relinked: 0,
+    failed: 0,
+    uncertain: 0,
+    aborted: null,
+  }
+  const live = events.filter((e) => e && e.id && e.status !== 'cancelled')
+  result.scanned = live.length
+  if (live.length === 0) return result
+
+  const eventIds = live.map((e) => e.id)
+  const taggedIds = Array.from(
+    new Set(
+      live
+        .map((e) => e.extendedProperties?.private)
+        .filter((tag) => tag?.appSource === APP_SOURCE_TAG && tag?.recordType === 'booking')
+        .map((tag) => Number(tag?.recordId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  )
+
+  const select = {
+    id: true,
+    status: true,
+    cancelReason: true,
+    googleEventId: true,
+    createdAt: true,
+    startAt: true,
+    endAt: true,
+  } as const
+  const [byEvent, byTag, blocks] = await Promise.all([
+    prisma.booking.findMany({ where: { googleEventId: { in: eventIds } }, select }),
+    taggedIds.length > 0
+      ? prisma.booking.findMany({ where: { id: { in: taggedIds } }, select })
+      : Promise.resolve([]),
+    prisma.block.findMany({
+      where: { googleEventId: { in: eventIds } },
+      select: { googleEventId: true },
+    }),
+  ])
+  const bookings = Array.from(
+    new Map([...byEvent, ...byTag].map((b) => [b.id, b])).values()
+  )
+
+  const plan = planGhostSweep({
+    events: live,
+    bookings,
+    blockEventIds: blocks
+      .map((b: { googleEventId: string | null }) => b.googleEventId)
+      .filter((id: string | null): id is string => !!id),
+    appSource: APP_SOURCE_TAG,
+  })
+  result.uncertain = plan.uncertain.length
+
+  if (plan.aborted) {
+    result.aborted = plan.aborted
+    logSync('GoogleToken', undefined, 'ghost_sweep_aborted', 'app_to_google', {
+      reason: plan.aborted,
+      wouldDelete: plan.deletions.length,
+      sample: plan.deletions.slice(0, 10),
+    })
+    return result
+  }
+
+  for (const relink of plan.relinks) {
+    try {
+      if (relink.restore) {
+        // Restauration d'un RDV annulé par la synchro : jamais par-dessus une
+        // autre réservation qui aurait pris le créneau entre-temps.
+        const target = bookings.find((b) => b.id === relink.bookingId)
+        const taken = target
+          ? await prisma.booking.findFirst({
+              where: {
+                status: 'CONFIRMED',
+                id: { not: target.id },
+                startAt: { lt: target.endAt },
+                endAt: { gt: target.startAt },
+              },
+              select: { id: true },
+            })
+          : null
+        if (!target || taken) {
+          result.uncertain++
+          logSync('Booking', relink.bookingId, 'ghost_event_uncertain', 'google_to_app', {
+            googleEventId: relink.eventId,
+            reason: 'restore_blocked_by_other_booking',
+            otherBookingId: taken?.id ?? null,
+          })
+          continue
+        }
+      }
+      await prisma.booking.update({
+        where: { id: relink.bookingId },
+        data: {
+          googleEventId: relink.eventId,
+          googleEtag: relink.etag,
+          syncStatus: 'synced',
+          lastSyncedAt: new Date(),
+          ...(relink.restore ? { status: 'CONFIRMED', cancelReason: null, syncSource: 'google' } : {}),
+        },
+      })
+      logSync('Booking', relink.bookingId, relink.restore ? 'ghost_sweep_restored' : 'ghost_sweep_relinked', 'google_to_app', {
+        googleEventId: relink.eventId,
+      })
+      result.relinked++
+    } catch (err: unknown) {
+      // Identifiant déjà pris par un autre enregistrement : on ne force rien.
+      result.failed++
+      console.error(
+        `[Sync:ghosts] Relink booking #${relink.bookingId} failed:`,
+        err instanceof Error ? err.message : err
+      )
+    }
+  }
+
+  for (const deletion of plan.deletions) {
+    try {
+      await deleteGoogleEvent(deletion.eventId)
+      if (deletion.reason !== 'duplicate_event') {
+        await prisma.booking.updateMany({
+          where: { id: deletion.bookingId, status: 'CANCELLED' },
+          data: { syncStatus: 'cancelled', lastSyncedAt: new Date() },
+        })
+      }
+      logSync('Booking', deletion.bookingId, 'ghost_event_deleted', 'app_to_google', {
+        googleEventId: deletion.eventId,
+        reason: deletion.reason,
+        summary: deletion.summary,
+        start: deletion.start,
+      })
+      result.deleted++
+    } catch (err: unknown) {
+      result.failed++
+      console.error(
+        `[Sync:ghosts] Delete event ${deletion.eventId} (booking #${deletion.bookingId}) failed:`,
+        err instanceof Error ? err.message : err
+      )
+      // Auth morte : inutile d'insister, le prochain passage reprendra.
+      if (result.failed >= 3) break
+    }
+  }
+
+  for (const item of plan.uncertain) {
+    logSync('Booking', item.bookingId, 'ghost_event_uncertain', 'google_to_app', {
+      googleEventId: item.eventId,
+      summary: item.summary,
+      start: item.start,
+    })
+  }
+
+  if (result.deleted > 0 || result.relinked > 0) {
+    console.log(
+      `[Sync:ghosts] ${result.deleted} événement(s) fantôme(s) supprimé(s), ${result.relinked} réservation(s) rattachée(s)`
+    )
+  }
+  return result
+}
+
 // ─── RE-TENTATIVE des suppressions Google échouées ───────────────
 // Un booking annulé dans l'app dont le push_delete a échoué (panne d'auth,
 // timeout) laisse l'événement sur le calendrier de Geoffrey. Ce filet
@@ -1184,14 +1466,20 @@ export async function reconcileDeletionsFromGoogle(
 export async function retryFailedCancellations(
   limit = 25
 ): Promise<{ retried: number; failed: number }> {
+  // Depuis le 26/11/2026 : toute annulation faite dans l'app passe en
+  // "pending" dans la MÊME écriture que le statut CANCELLED, et n'en sort que
+  // sur réponse positive de Google. Une annulation dont la suppression Google
+  // n'a jamais abouti (fonction coupée, panne) est donc toujours reprise ici,
+  // même sans identifiant d'événement en base (recherche par étiquette).
   const stuck = await prisma.booking.findMany({
     where: {
       status: 'CANCELLED',
-      googleEventId: { not: null },
       syncStatus: { in: ['error', 'pending'] },
-      startAt: { gte: new Date() },
+      startAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      NOT: { cancelReason: { contains: 'Google Calendar' } },
     },
     select: { id: true },
+    orderBy: { startAt: 'asc' },
     take: limit,
   })
 

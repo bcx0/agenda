@@ -1059,7 +1059,8 @@ export async function blockDateForClientAction(formData: FormData) {
       bookedBy: "admin"
     }
   });
-  pushBookingToGoogle(createdBooking.id, "create").catch((err) =>
+  // Attendu : voir bookSlot (une promesse non attendue peut être coupée).
+  await pushBookingToGoogle(createdBooking.id, "create").catch((err) =>
     console.error("[GoogleSync] Booking create failed:", err)
   );
 

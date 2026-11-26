@@ -191,6 +191,9 @@ export interface GoogleCalendarEvent {
   summary?: string
   description?: string
   updated: string
+  // Date de création côté Google (immuable). Sert à vérifier qu'un événement
+  // étiqueté appartient bien à la réservation visée (lib/sync-ghosts.mjs).
+  created?: string
   start: { dateTime?: string; date?: string; timeZone?: string }
   end: { dateTime?: string; date?: string; timeZone?: string }
   extendedProperties?: {
@@ -452,17 +455,22 @@ export async function createGoogleEvent(
   return res.json()
 }
 
-// ─── findAppEventByRecord ───────────────────────────────────────────
-// Retrouve l'événement créé par l'app pour un enregistrement (étiquettes
-// privées appSource/recordType/recordId). Sert à rendre la création
-// idempotente : pas de second événement si le premier existe déjà.
+// ─── findAppEventsByRecord ──────────────────────────────────────────
+// Retrouve les événements créés par l'app pour un enregistrement (étiquettes
+// privées appSource/recordType/recordId). Sert à :
+//  - rendre la création idempotente (pas de second événement si le premier
+//    existe déjà) ;
+//  - supprimer, à l'annulation, TOUS les événements de la réservation, y
+//    compris un événement dont l'identifiant n'a jamais pu être enregistré
+//    (fonction coupée après la création) : cause du RDV annulé dans l'app mais
+//    resté dans Google Calendar (26/11/2026).
 
-export async function findAppEventByRecord(
+export async function findAppEventsByRecord(
   appSource: string,
   recordType: 'booking' | 'block',
   recordId: number
-): Promise<GoogleCalendarEvent | null> {
-  const params = new URLSearchParams({ maxResults: '10', singleEvents: 'true' })
+): Promise<GoogleCalendarEvent[]> {
+  const params = new URLSearchParams({ maxResults: '50', singleEvents: 'true' })
   params.append('privateExtendedProperty', `appSource=${appSource}`)
   params.append('privateExtendedProperty', `recordType=${recordType}`)
   params.append('privateExtendedProperty', `recordId=${recordId}`)
@@ -471,10 +479,40 @@ export async function findAppEventByRecord(
   )
   if (!res.ok) {
     const errText = await res.text().catch(() => 'no body')
-    throw new Error(`Google findAppEventByRecord failed: ${res.status} ${errText}`)
+    throw new Error(`Google findAppEventsByRecord failed: ${res.status} ${errText}`)
   }
   const data = (await res.json()) as { items?: GoogleCalendarEvent[] }
-  return (data.items ?? []).find((event) => event.status !== 'cancelled') ?? null
+  return (data.items ?? []).filter((event) => event.status !== 'cancelled')
+}
+
+export async function findAppEventByRecord(
+  appSource: string,
+  recordType: 'booking' | 'block',
+  recordId: number
+): Promise<GoogleCalendarEvent | null> {
+  const events = await findAppEventsByRecord(appSource, recordType, recordId)
+  return events[0] ?? null
+}
+
+// ─── getConnectedGoogleAccount ──────────────────────────────────────
+// Interroge Google EN DIRECT pour savoir quel compte est réellement branché
+// à l'agenda (l'identifiant de l'agenda principal est l'adresse du compte).
+// Ne se fie pas à la valeur enregistrée à la connexion (GoogleToken.googleEmail).
+
+export async function getConnectedGoogleAccount(): Promise<{
+  email: string
+  timeZone: string | null
+}> {
+  const res = await googleApiFetch(
+    'https://www.googleapis.com/calendar/v3/calendars/primary'
+  )
+  if (!res.ok) {
+    const errText = await res.text().catch(() => 'no body')
+    throw new Error(`Google calendars.get failed: ${res.status} ${errText.slice(0, 200)}`)
+  }
+  const data = (await res.json()) as { id?: string; timeZone?: string }
+  if (!data.id) throw new Error('Google calendars.get : réponse sans identifiant')
+  return { email: data.id, timeZone: data.timeZone ?? null }
 }
 
 // ─── updateGoogleEvent ──────────────────────────────────────────────

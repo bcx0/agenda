@@ -5,6 +5,7 @@ import {
   repushUnsyncedBookings,
   reconcileDeletionsFromGoogle,
   retryFailedCancellations,
+  sweepGhostEvents,
   retryPendingUpdates,
 } from '../../../../lib/sync-engine'
 import { shouldAdvanceSyncToken } from '../../../../lib/sync-guards.mjs'
@@ -132,23 +133,60 @@ export async function GET(req: NextRequest) {
     //    Google qui aurait échappé aux deltas (webhook manqué, suppression
     //    plus vieille que la rétention showDeleted, etc.).
     let reconcile: Awaited<ReturnType<typeof reconcileDeletionsFromGoogle>> | null = null
+    // ── BALAYAGE des fantômes et doublons (sens app → Google) ──────────
+    // Même listing complet, sens inverse : un événement encore vivant d'une
+    // réservation ANNULÉE dans l'app, ou un doublon d'une même réservation,
+    // est supprimé de Google Calendar par son identifiant exact. Premier
+    // passage dès le déploiement (aucun "ghost_sweep_ok" en base), puis au
+    // plus une fois par 24h. Fait AVANT la réconciliation : une réservation
+    // confirmée est d'abord rattachée à son événement réel.
+    let ghostSweep: Awaited<ReturnType<typeof sweepGhostEvents>> | null = null
     try {
-      if (fullSyncRequired) {
-        reconcile = await reconcileDeletionsFromGoogle(events)
-      } else {
-        const lastReconcile = await prisma.syncLog.findFirst({
+      const [lastReconcile, lastSweep] = await Promise.all([
+        prisma.syncLog.findFirst({
           where: { table: 'GoogleToken', action: 'reconcile_ok' },
           orderBy: { createdAt: 'desc' },
           select: { createdAt: true },
-        })
-        const due =
-          !lastReconcile ||
-          Date.now() - lastReconcile.createdAt.getTime() > RECONCILE_INTERVAL_MS
-        if (due) {
-          // Listing complet frais, utilisé UNIQUEMENT pour le diff : on ne
-          // touche pas au syncToken incrémental (aucun delta perdu).
-          const full = await fetchChangedEvents(null)
-          reconcile = await reconcileDeletionsFromGoogle(full.items)
+        }),
+        prisma.syncLog.findFirst({
+          where: { table: 'GoogleToken', action: { in: ['ghost_sweep_ok', 'ghost_sweep_aborted'] } },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        }),
+      ])
+      const isDue = (last: { createdAt: Date } | null) =>
+        !last || Date.now() - last.createdAt.getTime() > RECONCILE_INTERVAL_MS
+      const reconcileDue = fullSyncRequired || isDue(lastReconcile)
+      const sweepDue = fullSyncRequired || isDue(lastSweep)
+
+      if (reconcileDue || sweepDue) {
+        // Listing complet frais, utilisé UNIQUEMENT pour le diff : on ne
+        // touche pas au syncToken incrémental (aucun delta perdu).
+        const listing = fullSyncRequired ? events : (await fetchChangedEvents(null)).items
+
+        if (sweepDue) {
+          ghostSweep = await sweepGhostEvents(listing)
+          if (!ghostSweep.aborted && ghostSweep.failed === 0) {
+            await prisma.syncLog
+              .create({
+                data: {
+                  table: 'GoogleToken',
+                  action: 'ghost_sweep_ok',
+                  direction: 'app_to_google',
+                  details: {
+                    scanned: ghostSweep.scanned,
+                    deleted: ghostSweep.deleted,
+                    relinked: ghostSweep.relinked,
+                    uncertain: ghostSweep.uncertain,
+                  },
+                },
+              })
+              .catch(() => {})
+          }
+        }
+
+        if (reconcileDue) {
+          reconcile = await reconcileDeletionsFromGoogle(listing)
         }
       }
       if (reconcile && !reconcile.aborted) {
@@ -176,6 +214,9 @@ export async function GET(req: NextRequest) {
       `[Cron sync] Done: ${events.length} events, ${imported} imported, ${errors} errors, ${repushed.pushed} repushed, ${cancelRetries.retried} cancel-retries` +
         (reconcile
           ? `, reconcile: ${reconcile.bookingsCancelled} bookings / ${reconcile.blocksDeleted} blocks${reconcile.aborted ? ` (ABORTED: ${reconcile.aborted})` : ''}`
+          : '') +
+        (ghostSweep
+          ? `, ghosts: ${ghostSweep.deleted} deleted / ${ghostSweep.relinked} relinked${ghostSweep.aborted ? ` (ABORTED: ${ghostSweep.aborted})` : ''}`
           : '')
     )
 
@@ -198,6 +239,9 @@ export async function GET(req: NextRequest) {
             repushed: repushed.pushed,
             updatesRepushed: updateRetries.pushed,
             updatesFailed: updateRetries.failed,
+            cancelRetries: cancelRetries.retried,
+            cancelRetriesFailed: cancelRetries.failed,
+            ghostsDeleted: ghostSweep?.deleted ?? 0,
           },
         },
       })
@@ -219,6 +263,14 @@ export async function GET(req: NextRequest) {
             bookingsCancelled: reconcile.bookingsCancelled,
             blocksDeleted: reconcile.blocksDeleted,
             aborted: reconcile.aborted,
+          }
+        : null,
+      ghostSweep: ghostSweep
+        ? {
+            deleted: ghostSweep.deleted,
+            relinked: ghostSweep.relinked,
+            failed: ghostSweep.failed,
+            aborted: ghostSweep.aborted,
           }
         : null,
     })

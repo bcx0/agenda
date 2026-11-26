@@ -177,7 +177,8 @@ export async function createBlock(
       reason
     }
   });
-  pushBlockToGoogle(newBlock.id, "create").catch((err) =>
+  // Attendu : voir bookSlot (une promesse non attendue peut être coupée).
+  await pushBlockToGoogle(newBlock.id, "create").catch((err) =>
     console.error("[GoogleSync] Block create failed:", err)
   );
   return newBlock;
@@ -253,12 +254,13 @@ export async function updateBookingStatus(id: number, status: string) {
     where: { id },
     data: { status }
   });
+  // Attendu : voir bookSlot (une promesse non attendue peut être coupée).
   if (status === 'CANCELLED') {
-    pushBookingToGoogle(updated.id, 'delete').catch((err) =>
+    await pushBookingToGoogle(updated.id, 'delete').catch((err) =>
       console.error('[GoogleSync] Booking delete failed:', err)
     )
   } else {
-    pushBookingToGoogle(updated.id, 'update').catch((err) =>
+    await pushBookingToGoogle(updated.id, 'update').catch((err) =>
       console.error('[GoogleSync] Booking update failed:', err)
     )
   }
@@ -296,9 +298,10 @@ export async function updateBookingMode(id: number, mode: string) {
 
   const updated = await prisma.booking.update({
     where: { id },
-    data: { mode }
+    // "pending" tant que Google n'a pas confirmé (repris par le cron).
+    data: { mode, syncStatus: "pending" }
   });
-  pushBookingToGoogle(updated.id, "update").catch((err) =>
+  await pushBookingToGoogle(updated.id, "update").catch((err) =>
     console.error("[GoogleSync] Booking update failed:", err)
   );
 

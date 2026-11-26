@@ -48,6 +48,8 @@ export type SlotBlocker = {
   recurringBlockId?: number;
   occurrenceDate?: string;
   movedOccurrence?: boolean;
+  /** RDV régulier déplacé : créneau d'origine encore bloqué, décision attendue. */
+  pendingDecision?: boolean;
   clientId?: number | null;
 };
 
@@ -349,7 +351,12 @@ export async function bookSlot(clientId: number, startUtc: Date, endUtc: Date) {
   if (booking === "QUOTA_REACHED") {
     return { error: QUOTA_ERROR };
   }
-  pushBookingToGoogle(booking.id, "create").catch((err: unknown) =>
+  // ATTENDU (26/11/2026) : une promesse non attendue peut être coupée par
+  // Vercel dès la réponse envoyée. L'événement était alors parfois créé chez
+  // Google SANS que son identifiant soit enregistré : le cron en créait un
+  // second (doublon) et l'annulation n'en supprimait aucun ou un seul. En
+  // cas d'échec, la réservation reste "pending"/"error" et le cron la repousse.
+  await pushBookingToGoogle(booking.id, "create").catch((err: unknown) =>
     console.error("[GoogleSync] Booking create failed:", err)
   );
 
@@ -408,7 +415,11 @@ export async function cancelBooking(bookingId: number, reason?: string) {
     // Google au lieu de deux.
     const { count } = await tx.booking.updateMany({
       where: { id: bookingId, status: "CONFIRMED" },
-      data: { status: "CANCELLED", cancelReason: reason ?? booking.cancelReason }
+      // "pending" dans la MÊME écriture que l'annulation : si la suppression
+      // Google ci-dessous échoue ou si la fonction est coupée avant, le cron
+      // (retryFailedCancellations) la reprend jusqu'à réponse positive de
+      // Google. Avant, le statut restait "synced" et rien ne la retentait.
+      data: { status: "CANCELLED", cancelReason: reason ?? booking.cancelReason, syncStatus: "pending" }
     });
     if (count === 0) {
       return { ok: true, alreadyCancelled: true } as const;

@@ -23,6 +23,7 @@ import { useLanguage } from "../../../components/LanguageProvider";
 import {
   addAvailabilitySlotAction,
   deleteOccurrenceAction,
+  keepOccurrenceAction,
   liftCalendarBlockAction,
   liftManualBlockAction,
   moveOccurrenceAction,
@@ -194,6 +195,81 @@ function BlockerActions({ blocker, fr }: { blocker: SlotBlocker; fr: boolean }) 
     );
   }
   return null;
+}
+
+export type PendingSeriesMove = {
+  recurringBlockId: number;
+  dateIso: string;
+  start: string;
+  end: string;
+  label: string;
+  clientName: string | null;
+  movedTo: { start: string; end: string } | null;
+};
+
+/**
+ * Avertissement « rendez-vous régulier déplacé » (26/11/2026).
+ * Quand un RDV d'une série est déplacé (depuis Google, par le client ou dans
+ * l'agenda), le créneau d'origine reste bloqué : Geoffrey choisit ici, date
+ * par date, de le libérer (un clic) ou de le garder bloqué.
+ */
+export function PendingSeriesMovesBanner({ items }: { items: PendingSeriesMove[] }) {
+  const { locale } = useLanguage();
+  const fr = locale === "fr";
+  if (items.length === 0) return null;
+  const when = (iso: string) => {
+    const d = DateTime.fromISO(iso, { zone: "utc" });
+    const brussels = d.setZone(BRUSSELS_TZ).setLocale(fr ? "fr" : "en");
+    return `${brussels.toFormat("ccc dd LLL yyyy HH:mm")} Bruxelles (${d.setZone(MIAMI_TZ).toFormat("HH:mm")} Miami)`;
+  };
+  return (
+    <div role="alert" className="space-y-3 rounded-lg border border-amber-400/60 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+      <p className="font-semibold">
+        ⚠️{" "}
+        {fr
+          ? items.length > 1
+            ? `${items.length} rendez-vous réguliers ont été déplacés : leurs créneaux d'origine sont toujours bloqués`
+            : "Un rendez-vous régulier a été déplacé : son créneau d'origine est toujours bloqué"
+          : items.length > 1
+            ? `${items.length} regular appointments were moved: their original slots are still blocked`
+            : "A regular appointment was moved: its original slot is still blocked"}
+      </p>
+      <ul className="space-y-3">
+        {items.map((item) => (
+          <li key={`${item.recurringBlockId}-${item.dateIso}`} className="space-y-2 rounded-md border border-amber-400/30 bg-black/20 px-3 py-2">
+            <p className="text-amber-50">
+              <span className="font-semibold">{item.clientName ?? item.label}</span>
+              {" · "}
+              {fr ? "créneau d'origine" : "original slot"} : {when(item.start)}
+            </p>
+            {item.movedTo ? (
+              <p className="text-xs text-amber-100/80">
+                {fr ? "Déplacé au" : "Moved to"} {when(item.movedTo.start)}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-start gap-2">
+              <InlineActionForm
+                action={releaseOccurrenceAction}
+                fields={{ recurringBlockId: item.recurringBlockId, occurrenceDate: item.dateIso }}
+                label={fr ? "Libérer ce créneau" : "Free this slot"}
+                tone="primary"
+              />
+              <InlineActionForm
+                action={keepOccurrenceAction}
+                fields={{ recurringBlockId: item.recurringBlockId, occurrenceDate: item.dateIso }}
+                label={fr ? "Garder bloqué" : "Keep blocked"}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-amber-100/70">
+        {fr
+          ? "Seule cette date est concernée : les autres semaines de la série ne changent pas."
+          : "Only this date is affected: the other weeks of the series are unchanged."}
+      </p>
+    </div>
+  );
 }
 
 export type ReleasedOccurrence = {
@@ -464,8 +540,10 @@ export function RecurringSeriesManager({ series }: { series: SeriesSummary }) {
             </div>
             {scope === "this" ? (
               <label className="flex items-center gap-2 text-xs text-white/70">
-                <input type="checkbox" name="keepOriginalBlocked" />
-                {fr ? "Garder l'ancien créneau bloqué (sinon il est libéré)" : "Keep the old slot blocked (otherwise it is freed)"}
+                <input type="checkbox" name="releaseOriginal" />
+                {fr
+                  ? "Libérer l'ancien créneau pour cette date (sinon il reste bloqué)"
+                  : "Free the old slot for this date (otherwise it stays blocked)"}
               </label>
             ) : (
               <p className="text-[11px] text-white/45">

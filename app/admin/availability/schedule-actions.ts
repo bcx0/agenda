@@ -20,8 +20,8 @@ import { getAdminSession } from "../../../lib/session";
 import { adminRescheduleBooking, deleteBlock } from "../../../lib/admin";
 import {
   addAvailability,
-  addManualBlock,
   endSeriesFrom,
+  keepOccurrence,
   moveOccurrence,
   restoreOccurrence,
   setSeriesPeriod,
@@ -31,8 +31,6 @@ import {
 import {
   BRUSSELS_TZ,
   MIAMI_TZ,
-  occurrenceInterval,
-  toIsoDateOnly,
   toMinutes,
   wallTimeToUtc,
   weekdayOfIso
@@ -126,6 +124,25 @@ export async function restoreOccurrenceAction(
   return toState(result);
 }
 
+/**
+ * « Garder bloqué » : après le déplacement d'un rendez-vous régulier, confirme
+ * que le créneau d'origine reste indisponible (l'avertissement disparaît).
+ */
+export async function keepOccurrenceAction(
+  _prev: ScheduleActionState,
+  formData: FormData
+): Promise<ScheduleActionState> {
+  if (!getAdminSession()) return SESSION_ERROR;
+  const recurringBlockId = seriesIdFrom(formData);
+  if (!recurringBlockId) return { ok: false, error: "Série introuvable." };
+  const result = (await keepOccurrence(prisma, {
+    recurringBlockId,
+    occurrenceDate: str(formData, "occurrenceDate")
+  })) as OpsResult;
+  if (result.ok) revalidateAgenda();
+  return toState(result);
+}
+
 // ─── Indisponibilités explicites ───────────────────────────────────────────
 
 export async function liftManualBlockAction(
@@ -195,7 +212,11 @@ export async function moveOccurrenceAction(
     const newStartUtc = wallTimeToUtc(newDate, startMin, zone);
     const newEndUtc = wallTimeToUtc(newDate, endMin, zone);
     if (!newStartUtc || !newEndUtc) return { ok: false, error: "Cette heure n'existe pas ce jour-là (changement d'heure)." };
-    const keepOriginalBlocked = formData.get("keepOriginalBlocked") === "on";
+    // Choix laissé à Geoffrey au moment du déplacement (26/11/2026) : par
+    // défaut l'ancien créneau RESTE bloqué ; il n'est libéré, pour cette
+    // date uniquement, que si la case « Libérer l'ancien créneau » est cochée.
+    const releaseOriginal = formData.get("releaseOriginal") === "on";
+    const keepOriginalBlocked = !releaseOriginal;
     const result = (await moveOccurrence(prisma, {
       recurringBlockId,
       occurrenceDate,
@@ -207,30 +228,19 @@ export async function moveOccurrenceAction(
 
     if (!result.ok && result.code === "BOOKING_BACKED" && typeof result.bookingId === "number") {
       // Occurrence portée par une vraie réservation : on reprogramme LA
-      // réservation (emails + Google) ; l'ancien créneau se libère seul.
+      // réservation (emails + Google), puis on enregistre le choix fait pour
+      // l'ancien créneau (libéré pour cette date, ou conservé bloqué).
       const startLocal = DateTime.fromJSDate(newStartUtc, { zone: "utc" }).setZone(BRUSSELS_TZ).toFormat("yyyy-LL-dd'T'HH:mm");
       const resched = await adminRescheduleBooking(result.bookingId, startLocal, "Occurrence déplacée depuis la série");
       if ("error" in resched && resched.error) return { ok: false, error: resched.error };
-      let extra = "";
-      if (keepOriginalBlocked) {
-        const original = occurrenceInterval(
-          { ...series, startDate: toIsoDateOnly(series.startDate), endDate: toIsoDateOnly(series.endDate) },
-          occurrenceDate
-        );
-        if (original) {
-          const local = DateTime.fromJSDate(original.startUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
-          const localEnd = DateTime.fromJSDate(original.endUtc, { zone: "utc" }).setZone(BRUSSELS_TZ);
-          const block = (await addManualBlock(prisma, {
-            dateIso: local.toISODate() ?? occurrenceDate,
-            startTime: local.toFormat("HH:mm"),
-            endTime: localEnd.toISODate() !== local.toISODate() ? "24:00" : localEnd.toFormat("HH:mm"),
-            note: `Ancien créneau conservé bloqué — ${series.note ?? "série"}`
-          })) as OpsResult;
-          extra = block.ok ? " L'ancien créneau reste bloqué (blocage manuel)." : ` Attention : l'ancien créneau n'a pas pu être bloqué (${block.error}).`;
-        }
-      } else {
-        extra = " L'ancien créneau est libéré.";
-      }
+      const decision = (releaseOriginal
+        ? await skipOccurrence(prisma, { recurringBlockId, occurrenceDate, note: "Libérée lors du déplacement du rendez-vous" })
+        : await keepOccurrence(prisma, { recurringBlockId, occurrenceDate })) as OpsResult;
+      const extra = decision.ok
+        ? releaseOriginal
+          ? " L'ancien créneau est libéré (cette date uniquement)."
+          : " L'ancien créneau reste bloqué."
+        : ` Attention : le choix pour l'ancien créneau n'a pas pu être enregistré (${decision.error}). Il reste bloqué : un avertissement permet de le libérer.`;
       revalidateAgenda();
       const synced = "googleSynced" in resched && resched.googleSynced;
       return {

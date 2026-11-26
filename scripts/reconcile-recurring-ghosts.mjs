@@ -16,7 +16,9 @@
  *       (annulation prouvée) → ces créneaux redeviennent libres.
  *   node scripts/reconcile-recurring-ghosts.mjs --link <serie>:<date>:<reservation> [...]
  *       Lie une réservation déplacée à son occurrence d'origine (cas
- *       « probable » validé par l'admin) → l'ancien créneau est libéré.
+ *       « probable » validé par l'admin) → un RDV annulé libère son créneau ;
+ *       un RDV déplacé garde son ancien créneau bloqué et fait apparaître
+ *       l'avertissement admin (Libérer ce créneau / Garder bloqué).
  *   node scripts/reconcile-recurring-ghosts.mjs --release <serie>:<date> [...]
  *       Libère une occurrence précise (exception SKIP).
  *

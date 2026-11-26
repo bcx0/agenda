@@ -148,30 +148,42 @@ test("déplacement d'un RDV simple : ancien créneau libéré, nouveau bloqué, 
 
 // ─── 2. Déplacement d'une occurrence récurrente ────────────────────────────
 
-test("déplacement d'une occurrence (série sans client) : exception créée, 15/02 libéré, 24/02 bloqué, autres lundis bloqués", { skip: SKIP }, async () => {
+test("déplacement d'une occurrence (série sans client) : par défaut l'ancien créneau reste bloqué, libéré seulement si choisi", { skip: SKIP }, async () => {
   await resetDb();
   const series = await createSeries({ note: "All-in" });
-  const state = await mods.actions.moveOccurrenceAction(
-    null,
-    fd({ recurringBlockId: series.id, occurrenceDate: "2027-02-15", scope: "this", newDate: "2027-02-24", newStartTime: "21:00", newEndTime: "22:00", timeZone: BRUSSELS_TZ })
-  );
+  const move = (occurrenceDate, newDate, extra = {}) =>
+    mods.actions.moveOccurrenceAction(
+      null,
+      fd({ recurringBlockId: series.id, occurrenceDate, scope: "this", newDate, newStartTime: "21:00", newEndTime: "22:00", timeZone: BRUSSELS_TZ, ...extra })
+    );
+
+  // Choix par défaut : l'ancien créneau (15/02) reste bloqué.
+  const state = await move("2027-02-15", "2027-02-24");
   assert.equal(state.ok, true, state.error);
-  const map = await availabilityMap();
-  assert.equal(await statusAt("2027-02-15T21:00", map), "available");
+  assert.match(state.message, /reste bloqué/);
+  let map = await availabilityMap();
+  assert.equal(await statusAt("2027-02-15T21:00", map), "blocked", "ancien créneau conservé");
   assert.equal(await statusAt("2027-02-24T21:00", map), "blocked");
   assert.equal(await statusAt("2027-02-22T21:00", map), "blocked");
   assert.equal(await statusAt("2027-02-08T21:00", map), "blocked");
   const exception = await env.prisma.recurringBlockException.findFirst();
   assert.equal(exception.type, "MOVE");
-  // Idempotence : rejouer la même action ne crée pas de seconde exception.
-  await mods.actions.moveOccurrenceAction(
-    null,
-    fd({ recurringBlockId: series.id, occurrenceDate: "2027-02-15", scope: "this", newDate: "2027-02-24", newStartTime: "21:00", newEndTime: "22:00", timeZone: BRUSSELS_TZ })
-  );
+  // Idempotence : rejouer la même action ne crée ni seconde exception ni second blocage.
+  await move("2027-02-15", "2027-02-24");
   assert.equal(await env.prisma.recurringBlockException.count(), 1);
+  assert.equal(await env.prisma.availabilityOverride.count({ where: { type: "BLOCK" } }), 1);
+
+  // Choix « Libérer l'ancien créneau » : cette date uniquement.
+  const freed = await move("2027-03-01", "2027-03-03", { releaseOriginal: "on" });
+  assert.equal(freed.ok, true, freed.error);
+  assert.match(freed.message, /libéré/);
+  map = await availabilityMap();
+  assert.equal(await statusAt("2027-03-01T21:00", map), "available", "ancien créneau libéré sur demande");
+  assert.equal(await statusAt("2027-03-03T21:00", map), "blocked");
+  assert.equal(await statusAt("2027-03-08T21:00", map), "blocked", "les autres semaines ne changent pas");
 });
 
-test("déplacement d'une occurrence de RDV régulier client : la réservation bouge, l'ancien créneau se libère, Google et email suivent", { skip: SKIP }, async () => {
+test("déplacement d'une occurrence de RDV régulier client depuis l'agenda : la réservation bouge, le choix pour l'ancien créneau est respecté, Google et email suivent", { skip: SKIP }, async () => {
   await resetDb();
   const client = await newClient("All-in");
   const series = await createSeries({ clientId: client.id });
@@ -180,19 +192,36 @@ test("déplacement d'une occurrence de RDV régulier client : la réservation bo
   const eventId = original.googleEventId;
   assert.ok(eventId);
 
+  // Choix par défaut : l'ancien créneau reste bloqué, sans avertissement
+  // (la décision a été prise au moment du déplacement).
   const state = await mods.actions.moveOccurrenceAction(
     null,
     fd({ recurringBlockId: series.id, occurrenceDate: "2027-02-15", scope: "this", newDate: "2027-02-24", newStartTime: "21:00", newEndTime: "22:00" })
   );
   assert.equal(state.ok, true, state.error);
-  const map = await availabilityMap();
-  assert.equal(await statusAt("2027-02-15T21:00", map), "available", "plus de bloc fantôme le 15/02");
+  assert.match(state.message, /reste bloqué/);
+  let map = await availabilityMap();
+  assert.equal(await statusAt("2027-02-15T21:00", map), "blocked", "ancien créneau conservé");
   assert.equal(await statusAt("2027-02-24T21:00", map), "booked");
   assert.equal(await statusAt("2027-02-22T21:00", map), "booked");
+  assert.equal((await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"))).length, 0, "décision déjà prise : pas d'avertissement");
   const moved = await env.prisma.booking.findUnique({ where: { id: original.id } });
   assert.equal(moved.startAt.getTime(), B("2027-02-24T21:00").getTime());
   assert.equal(new Date(mods.google.fake.get(eventId).start.dateTime).getTime(), B("2027-02-24T21:00").getTime());
   assert.ok(mods.emails.sentEmails.some((e) => e.type === "updated" && e.bookingId === original.id));
+
+  // Choix « Libérer l'ancien créneau » : seul ce créneau est retiré.
+  const freed = await mods.actions.moveOccurrenceAction(
+    null,
+    fd({ recurringBlockId: series.id, occurrenceDate: "2027-03-01", scope: "this", newDate: "2027-03-03", newStartTime: "21:00", newEndTime: "22:00", releaseOriginal: "on" })
+  );
+  assert.equal(freed.ok, true, freed.error);
+  assert.match(freed.message, /libéré/);
+  map = await availabilityMap();
+  assert.equal(await statusAt("2027-03-01T21:00", map), "available", "ancien créneau libéré sur demande");
+  assert.equal(await statusAt("2027-03-03T21:00", map), "booked");
+  assert.equal(await statusAt("2027-03-08T21:00", map), "booked", "les autres semaines ne changent pas");
+  assert.equal((await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"))).length, 0);
 });
 
 // ─── 3. Modification d'une série complète / et des suivantes ───────────────
@@ -353,8 +382,20 @@ test("synchronisation dans les deux directions (déplacement, suppression, bloca
   const pulled = await mods.sync.pullFromGoogle(edited, edited.id);
   assert.equal(pulled.action, "booking_updated_from_google");
   let map = await availabilityMap();
-  assert.equal(await statusAt("2027-03-08T21:00", map), "available", "ancienne occurrence libérée automatiquement");
+  // Déplacement depuis Google d'un RDV régulier : le créneau d'origine reste
+  // bloqué et l'admin est averti (un clic pour le libérer).
+  assert.equal(await statusAt("2027-03-08T21:00", map), "blocked", "créneau d'origine toujours bloqué");
   assert.equal(await statusAt("2027-03-10T21:00", map), "booked");
+  let pending = await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"));
+  assert.deepEqual(pending.map((p) => p.dateIso), ["2027-03-08"], "avertissement « RDV régulier déplacé »");
+  assert.equal(pending[0].movedTo.startUtc.getTime(), B("2027-03-10T21:00").getTime());
+  assert.equal(pending[0].clientName, "All-in");
+  const freed = await mods.actions.releaseOccurrenceAction(null, fd({ recurringBlockId: pending[0].recurringBlockId, occurrenceDate: "2027-03-08" }));
+  assert.equal(freed.ok, true, freed.error);
+  map = await availabilityMap();
+  assert.equal(await statusAt("2027-03-08T21:00", map), "available", "libéré en un clic, cette date uniquement");
+  assert.equal(await statusAt("2027-03-01T21:00", map), "booked", "les autres semaines ne changent pas");
+  assert.equal((await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"))).length, 0, "avertissement disparu");
 
   // Google → app : suppression.
   mods.google.fake.deleteFromGoogle(occ.googleEventId);
@@ -380,7 +421,19 @@ test("synchronisation dans les deux directions (déplacement, suppression, bloca
   const res = await mods.admin.adminRescheduleBooking(other.id, "2027-04-06T21:00");
   assert.equal(res.ok, true, res.error);
   assert.equal(new Date(mods.google.fake.get(other.googleEventId).start.dateTime).getTime(), B("2027-04-06T21:00").getTime());
-  assert.equal(await statusAt("2027-04-05T21:00"), "available", "ancien créneau libéré");
+  // Déplacement depuis la fiche du RDV (sans choix proposé) : même
+  // avertissement, et « Garder bloqué » le fait disparaître sans rien libérer.
+  assert.equal(await statusAt("2027-04-05T21:00"), "blocked", "créneau d'origine toujours bloqué");
+  pending = await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"));
+  assert.deepEqual(pending.map((p) => p.dateIso), ["2027-04-05"]);
+  const kept = await mods.actions.keepOccurrenceAction(null, fd({ recurringBlockId: pending[0].recurringBlockId, occurrenceDate: "2027-04-05" }));
+  assert.equal(kept.ok, true, kept.error);
+  assert.equal(await statusAt("2027-04-05T21:00"), "blocked", "conservé bloqué");
+  assert.equal((await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"))).length, 0, "avertissement disparu");
+  // Double clic : idempotent.
+  const again = await mods.actions.keepOccurrenceAction(null, fd({ recurringBlockId: pending[0].recurringBlockId, occurrenceDate: "2027-04-05" }));
+  assert.equal(again.ok, true, again.error);
+  assert.equal(await env.prisma.recurringBlockException.count({ where: { type: "KEEP" } }), 1);
 });
 
 test("modification locale non encore poussée : jamais écrasée par l'ancienne version Google, puis repoussée", { skip: SKIP }, async () => {
@@ -427,7 +480,15 @@ test("prévention des doublons : même événement reçu deux fois, création Go
 
   // Réservation créée dans l'app, événement créé chez Google mais réponse perdue.
   const local = await env.prisma.booking.create({
-    data: { clientId: client.id, startAt: B("2027-02-20T17:00"), endAt: B("2027-02-20T18:00"), updatedAt: new Date() }
+    data: {
+      clientId: client.id,
+      startAt: B("2027-02-20T17:00"),
+      endAt: B("2027-02-20T18:00"),
+      updatedAt: new Date(),
+      // Le cron laisse 2 minutes à la requête de réservation pour finir son
+      // propre push : ici la création date de 5 minutes.
+      createdAt: new Date(Date.now() - 5 * 60 * 1000)
+    }
   });
   mods.google.fake.createSilently({
     summary: "RDV — Hugo",
@@ -562,6 +623,8 @@ test("changements d'heure Belgique et États-Unis : 21h Bruxelles reste 21h, Mia
 // ─── Reproduction exacte du cas de Geoffrey ────────────────────────────────
 
 test("cas Geoffrey (RDV régulier client « All-in ») : déplacé du 15 au 24/02, créneau libéré sauf 15 et 22/02", { skip: SKIP }, async () => {
+  // Aucune date n'est codée en dur dans le code : le cas se règle avec les
+  // outils généraux (avertissement, « Garder bloqué », période de la série).
   await resetDb();
   const allIn = await newClient("All-in");
   const series = await createSeries({ clientId: allIn.id, note: "All-in" });
@@ -571,8 +634,10 @@ test("cas Geoffrey (RDV régulier client « All-in ») : déplacé du 15 au 24/0
   const moved = await mods.admin.adminRescheduleBooking(feb15.id, "2027-02-24T21:00");
   assert.equal(moved.ok, true, moved.error);
   let map = await availabilityMap();
-  assert.equal(await statusAt("2027-02-15T21:00", map), "available", "plus de bloc fantôme le 15/02");
+  assert.equal(await statusAt("2027-02-15T21:00", map), "blocked", "créneau d'origine conservé tant que Geoffrey n'a pas choisi");
   assert.equal(await statusAt("2027-02-24T21:00", map), "booked");
+  const warning = await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"));
+  assert.deepEqual(warning.map((p) => p.dateIso), ["2027-02-15"], "avertissement affiché à Geoffrey");
 
   // 2. Libérer le créneau All-in, sauf les 15 et 22/02 : série bornée au 15-22/02.
   const period = await mods.actions.setSeriesPeriodAction(
@@ -581,9 +646,10 @@ test("cas Geoffrey (RDV régulier client « All-in ») : déplacé du 15 au 24/0
   );
   assert.equal(period.ok, true, period.error);
   // 3. Le 15/02 doit rester bloqué (demande explicite, alors que son RDV a été
-  //    déplacé au 24/02) : blocage volontaire de cette occurrence.
-  const keep15 = await mods.actions.restoreOccurrenceAction(null, fd({ recurringBlockId: series.id, occurrenceDate: "2027-02-15" }));
+  //    déplacé au 24/02) : Geoffrey clique « Garder bloqué » dans l'avertissement.
+  const keep15 = await mods.actions.keepOccurrenceAction(null, fd({ recurringBlockId: series.id, occurrenceDate: "2027-02-15" }));
   assert.equal(keep15.ok, true, keep15.error);
+  assert.equal((await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"))).length, 0);
 
   map = await availabilityMap();
   const pub = await availabilityMap("public");
@@ -667,6 +733,17 @@ test("migration + réconciliation : liens sûrs automatiques, fantômes prouvés
 
   await reconcile.applyOccurrenceLinks(env.prisma, findings.verified.map((f) => ({ ...f })));
   await reconcile.applyOccurrenceLinks(env.prisma, findings.probable.map((f) => ({ ...f })));
+  map = await availabilityMap();
+  // RDV déplacé lié à sa série : le créneau d'origine reste bloqué et l'admin
+  // reçoit l'avertissement ; il le libère lui-même en un clic.
+  assert.equal(await statusAt("2027-02-15T21:00", map), "blocked");
+  const warned = await mods.ops.listPendingMovedOccurrences(env.prisma, B("2026-12-01T00:00"));
+  assert.deepEqual(warned.map((p) => p.dateIso), ["2027-02-15"]);
+  const again0 = await reconcile.analyzeRecurringGhosts(env.prisma);
+  assert.equal(again0.probable.length, 0, "déjà lié : plus listé comme fantôme");
+  assert.equal(again0.noBooking.filter((f) => f.occurrenceDate === "2027-02-15").length, 0);
+  const click = await mods.actions.releaseOccurrenceAction(null, fd({ recurringBlockId: series.id, occurrenceDate: "2027-02-15" }));
+  assert.equal(click.ok, true, click.error);
   map = await availabilityMap();
   assert.equal(await statusAt("2027-02-15T21:00", map), "available");
   assert.equal(await statusAt("2027-04-12T21:00", map), "available");

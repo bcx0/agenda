@@ -27,7 +27,14 @@ import { getAvailability } from "../../../lib/booking";
 import { prisma } from "../../../lib/prisma";
 import { getServerLocale, t, translateStatus, type Locale } from "../../../lib/i18n";
 import AdminGeneralAvailability from "./AdminGeneralAvailability";
-import { RecurringSeriesManager, type ReleasedOccurrence, type SeriesSummary } from "./ScheduleControls";
+import {
+  PendingSeriesMovesBanner,
+  RecurringSeriesManager,
+  type PendingSeriesMove,
+  type ReleasedOccurrence,
+  type SeriesSummary
+} from "./ScheduleControls";
+import { listPendingMovedOccurrences } from "../../../lib/schedule-ops.mjs";
 import { loadAvailabilityData } from "../../../lib/availability-data.mjs";
 import { expandSeries, isoDateInZone, seriesLabel, seriesZone } from "../../../lib/availability-engine.mjs";
 import { DateTime } from "luxon";
@@ -167,6 +174,16 @@ export default async function AdminAvailabilityPage({
         dayKey: isoDateInZone(o.startUtc, BRUSSELS_TZ)
       }))
   );
+  // RDV réguliers déplacés dont le créneau d'origine attend une décision.
+  const pendingSeriesMoves: PendingSeriesMove[] = (await listPendingMovedOccurrences(prisma)).map((p) => ({
+    recurringBlockId: p.recurringBlockId,
+    dateIso: p.dateIso,
+    start: p.startUtc.toISOString(),
+    end: p.endUtc.toISOString(),
+    label: p.label,
+    clientName: p.clientName,
+    movedTo: p.movedTo ? { start: p.movedTo.startUtc.toISOString(), end: p.movedTo.endUtc.toISOString() } : null
+  }));
   const seriesHorizonEnd = new Date(horizonStart.getTime() + 26 * 7 * 24 * 60 * 60 * 1000);
   const seriesSummaries = new Map<number, SeriesSummary>(
     scheduleData.recurringBlocks.map((block) => [
@@ -209,6 +226,7 @@ export default async function AdminAvailabilityPage({
 
       {errorMessage ? <div className="alert-error">{errorMessage}</div> : null}
       {successMessage ? <div className="alert-success">{successMessage}</div> : null}
+      <PendingSeriesMovesBanner items={pendingSeriesMoves} />
 
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {tabLink("general", t("avail.tabAgenda", locale), tab === "general")}

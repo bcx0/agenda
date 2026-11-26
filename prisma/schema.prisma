@@ -42,9 +42,10 @@ model Booking {
   lastSyncedAt          DateTime?
   bookedBy              String    @default("client") @map("booked_by")
   // Lien vers la série (RDV régulier) et la date d'origine de l'occurrence
-  // dans le fuseau de la série. Permet de libérer automatiquement l'ancien
-  // créneau quand la réservation est déplacée ou annulée (cf.
-  // lib/availability-engine.mjs). NULL pour une réservation ponctuelle.
+  // dans le fuseau de la série. Quand la réservation est déplacée, l'ancien
+  // créneau reste bloqué et l'admin est averti (il le libère en un clic) ;
+  // quand elle est annulée, il est libéré (cf. lib/availability-engine.mjs).
+  // NULL pour une réservation ponctuelle.
   recurringBlockId      Int?
   recurringBlock        RecurringBlock? @relation(fields: [recurringBlockId], references: [id], onDelete: SetNull)
   occurrenceDate        DateTime? @db.Date
@@ -127,7 +128,9 @@ model RecurringBlock {
 
 /// Exception sur UNE occurrence d'une série (RecurringBlock) :
 ///  - SKIP : l'occurrence est libérée ce jour-là ;
-///  - MOVE : l'occurrence est déplacée (newStartAt/newEndAt bloqués à la place).
+///  - MOVE : l'occurrence est déplacée (newStartAt/newEndAt bloqués à la place) ;
+///  - KEEP : le rendez-vous de l'occurrence a été déplacé et l'admin a choisi
+///    de garder le créneau d'origine bloqué (plus d'avertissement).
 /// Une seule exception par occurrence (contrainte unique) : les écritures sont
 /// idempotentes (upsert).
 model RecurringBlockException {
@@ -135,7 +138,7 @@ model RecurringBlockException {
   recurringBlockId Int
   recurringBlock   RecurringBlock @relation(fields: [recurringBlockId], references: [id], onDelete: Cascade)
   occurrenceDate   DateTime       @db.Date
-  type             String // "SKIP" | "MOVE"
+  type             String // "SKIP" | "MOVE" | "KEEP"
   newStartAt       DateTime?
   newEndAt         DateTime?
   bookingId        Int?

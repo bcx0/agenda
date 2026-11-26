@@ -138,7 +138,7 @@ test("période de série : rien avant startDate ni après endDate", () => {
   assert.equal(findBlockers(...slot("2027-03-01T21:00"), c).length, 0);
 });
 
-test("état dérivé : réservation liée déplacée ou annulée → occurrence libérée", () => {
+test("état dérivé : réservation liée déplacée → créneau d'origine CONSERVÉ en attente de décision ; annulée → libérée", () => {
   const series = { ...ALL_IN, clientId: 7 };
   const movedBooking = {
     id: 10, recurringBlockId: 1, occurrenceDate: "2027-02-15", status: "CONFIRMED",
@@ -157,7 +157,24 @@ test("état dérivé : réservation liée déplacée ou annulée → occurrence 
     seriesBookings: [movedBooking, cancelled, onPlace],
     bookings: [movedBooking, onPlace].map((b) => ({ ...b, clientName: "All-in" }))
   });
-  assert.equal(findBlockers(...slot("2027-02-15T21:00"), c).length, 0, "ancien créneau du RDV déplacé : libre");
+  // Décision du 26/11/2026 : le créneau d'origine d'un RDV régulier déplacé
+  // reste bloqué tant que l'admin n'a pas choisi (avertissement + bouton).
+  const origin = findBlockers(...slot("2027-02-15T21:00"), c);
+  assert.equal(origin.length, 1, "ancien créneau du RDV déplacé : toujours bloqué");
+  assert.equal(origin[0].kind, "recurring");
+  assert.equal(origin[0].pendingDecision, true, "décision attendue");
+  const feb15 = expandSeries(series, c, ...slot("2027-02-15T21:00"))[0];
+  assert.equal(feb15.state, "active");
+  assert.equal(feb15.pendingDecision, true);
+  assert.equal(feb15.movedTo.startUtc.getTime(), brussels("2027-02-24T21:00").getTime());
+  // « Libérer ce créneau » = exception SKIP : libre, cette date uniquement.
+  const released = ctx({ ...c, exceptions: [{ recurringBlockId: 1, occurrenceDate: "2027-02-15", type: "SKIP" }] });
+  assert.equal(findBlockers(...slot("2027-02-15T21:00"), released).length, 0, "libéré après le clic");
+  // « Garder bloqué » = exception KEEP : bloqué, plus de décision attendue.
+  const kept = ctx({ ...c, exceptions: [{ recurringBlockId: 1, occurrenceDate: "2027-02-15", type: "KEEP" }] });
+  const keptBlockers = findBlockers(...slot("2027-02-15T21:00"), kept);
+  assert.equal(keptBlockers.length, 1);
+  assert.equal(keptBlockers[0].pendingDecision, false, "décision prise : plus d'avertissement");
   assert.equal(statusFromBlockers(findBlockers(...slot("2027-02-24T21:00"), c)), "booked", "nouveau créneau : réservé");
   assert.equal(findBlockers(...slot("2027-02-22T21:00"), c).length, 0, "occurrence annulée : libre");
   const onPlaceBlockers = findBlockers(...slot("2027-03-01T21:00"), c);

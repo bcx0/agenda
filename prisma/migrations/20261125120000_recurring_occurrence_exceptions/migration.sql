@@ -26,7 +26,9 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Exceptions sur une occurrence précise (SKIP = libérée, MOVE = déplacée).
+-- 2. Exceptions sur une occurrence précise (SKIP = libérée, MOVE = déplacée,
+--    KEEP = créneau d'origine volontairement conservé après le déplacement du
+--    rendez-vous, ajouté le 26/11/2026).
 CREATE TABLE IF NOT EXISTS "RecurringBlockException" (
   "id" SERIAL PRIMARY KEY,
   "recurringBlockId" INTEGER NOT NULL
@@ -39,12 +41,23 @@ CREATE TABLE IF NOT EXISTS "RecurringBlockException" (
   "note" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT recurring_exception_type_valid CHECK ("type" IN ('SKIP', 'MOVE')),
+  CONSTRAINT recurring_exception_type_valid CHECK ("type" IN ('SKIP', 'MOVE', 'KEEP')),
   CONSTRAINT recurring_exception_move_valid CHECK (
-    "type" = 'SKIP'
+    "type" IN ('SKIP', 'KEEP')
     OR ("newStartAt" IS NOT NULL AND "newEndAt" IS NOT NULL AND "newEndAt" > "newStartAt")
   )
 );
+-- Si la table existait déjà avec les contraintes du 25/11 (SKIP/MOVE
+-- seulement), on les remplace : rejouable sans effet.
+ALTER TABLE "RecurringBlockException" DROP CONSTRAINT IF EXISTS recurring_exception_type_valid;
+ALTER TABLE "RecurringBlockException"
+  ADD CONSTRAINT recurring_exception_type_valid CHECK ("type" IN ('SKIP', 'MOVE', 'KEEP'));
+ALTER TABLE "RecurringBlockException" DROP CONSTRAINT IF EXISTS recurring_exception_move_valid;
+ALTER TABLE "RecurringBlockException"
+  ADD CONSTRAINT recurring_exception_move_valid CHECK (
+    "type" IN ('SKIP', 'KEEP')
+    OR ("newStartAt" IS NOT NULL AND "newEndAt" IS NOT NULL AND "newEndAt" > "newStartAt")
+  );
 -- Une seule exception par occurrence : les écritures sont des upserts
 -- idempotents (double-clic, requête rejouée, deux onglets).
 CREATE UNIQUE INDEX IF NOT EXISTS "RecurringBlockException_recurringBlockId_occurrenceDate_key"
@@ -79,9 +92,10 @@ CREATE INDEX IF NOT EXISTS "Booking_recurringBlockId_occurrenceDate_idx"
 --    par une série admin ([ADMIN_BLOCK]) qui tombent EXACTEMENT sur le motif
 --    d'UNE seule série du même client (jour + heures dans le fuseau de la
 --    série). Pour ces lignes, la disponibilité affichée ne change pas (la
---    réservation bloquait déjà le créneau) ; le lien permet seulement de
---    libérer automatiquement l'ancien créneau si ce RDV est déplacé ou
---    annulé plus tard. Les cas ambigus (RDV déjà déplacés, deux séries
+--    réservation bloquait déjà le créneau) ; le lien permet seulement, si ce
+--    RDV est déplacé plus tard, d'avertir l'admin que l'ancien créneau est
+--    encore bloqué (bouton « Libérer ce créneau »), et de le libérer s'il
+--    est annulé. Les cas ambigus (RDV déjà déplacés, deux séries
 --    candidates) sont laissés à scripts/reconcile-recurring-ghosts.mjs, qui
 --    les liste et n'agit qu'après validation.
 WITH candidates AS (
